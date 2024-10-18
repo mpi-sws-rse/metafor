@@ -1,5 +1,6 @@
 import argparse
 
+from analysis.analyzer import Analyzer
 from utils.plot_parameters import PlotParameters
 from model.multi_server.multi_server_ctmc import MultiServerCTMC
 
@@ -80,7 +81,8 @@ def main():
     ctmc = MultiServerCTMC(server_num, main_queue_sizes, retry_queue_sizes, lambda0s, mu0_p, timeouts, max_retries,
                            thread_pools, parent_list, sub_tree_list, q_min_list, q_max_list, o_min_list, o_max_list)
     file_name = 'multi_server_results.png'
-    ctmc.fault_scenario_analysis(file_name, plot_params)
+    analyzer = Analyzer(ctmc, file_name)
+    analyzer.fault_scenario_analysis(plot_params)
 
 
 if __name__ == '__main__':
