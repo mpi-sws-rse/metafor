@@ -1,15 +1,15 @@
 from typing import List
 
-import copy
-import math
 import numpy as np
+import math
+import copy
 import scipy
-import time
 import matplotlib.pyplot as plt
 from scipy.sparse.linalg import eigs
 
 from model.ctmc import CTMC
 from model.multi_server.generator_matrix import GeneratorMatrix
+import time
 from scipy.sparse.linalg import gmres
 import itertools
 
@@ -20,18 +20,28 @@ from utils.plot_parameters import PlotParameters
 class MultiServerCTMC(CTMC):
     def __init__(self, server_num: int, main_queue_sizes: List[int], retry_queue_sizes: List[int],
                  lambdaas: List[float], mu0_ps: List[float], timeouts: List[int], max_retries: List[int],
-                 thread_pools: List[int], config_set: List[List[float]], lambda_fault: List[float], fault_time: float,
-                 lambda_reset: List[float], reset_time: float, parent_list: List[List[int]],
-                 sub_tree_list: List[List[int]], q_min_list: List[int],
-                 q_max_list: List[int], o_min_list: List[int], o_max_list: List[int]):
+                 thread_pools: List[int], parent_list: List[List[int]], sub_tree_list: List[List[int]],
+                 q_min_list: List[int] = None, q_max_list: List[int] = None,
+                 o_min_list: List[int] = None, o_max_list: List[int] = None):
+        assert len(main_queue_sizes) == len(retry_queue_sizes) == len(lambdaas) == len(mu0_ps) == len(timeouts) \
+               == len(max_retries) == len(thread_pools) == server_num
         state_num = []
         state_num_prod = 1
         for i in range(len(mu0_ps)):
             state_num.append(main_queue_sizes[i] * retry_queue_sizes[i])
             state_num_prod *= state_num[i]
+
+        if q_min_list is None:
+            q_min_list = [int(main_queue_sizes[i] * .9) for i in range(server_num)]
+        if o_min_list is None:
+            o_min_list = [retry_queue_sizes[i] // 2 for i in range(server_num)]
+        if q_max_list is None:
+            q_max_list = [main_queue_sizes[i] * .1 for i in range(server_num)]
+        if o_max_list is None:
+            o_max_list = [2 for _ in range(server_num)]
+
         self.params = MultiServerCTMCParameters(server_num, main_queue_sizes, retry_queue_sizes, lambdaas, mu0_ps,
-                                                timeouts, max_retries, thread_pools, config_set, lambda_fault,
-                                                fault_time, lambda_reset, reset_time, sub_tree_list, parent_list,
+                                                timeouts, max_retries, thread_pools, sub_tree_list, parent_list,
                                                 q_min_list, q_max_list, o_min_list, o_max_list, state_num,
                                                 state_num_prod)
 
@@ -366,11 +376,11 @@ class MultiServerCTMC(CTMC):
         stable_configs = []
         unstable_configs = []
         metastable_configs = []
-        lambda_reset = self.params.lambda_reset
+        lambda_reset = plot_params.lambda_reset
         lambda_init = self.params.lambda_init
-        fault_time = self.params.fault_time
-        reset_time = self.params.reset_time
-        lambda_fault = self.params.lambda_fault
+        fault_time = plot_params.start_time_fault
+        reset_time = plot_params.reset_time
+        lambda_fault = plot_params.lambda_fault
         step_time = plot_params.step_time
         main_queue_size = self.params.main_queue_sizes
         retry_queue_size = self.params.retry_queue_sizes
@@ -391,7 +401,7 @@ class MultiServerCTMC(CTMC):
         row_ind_reset = 0
         col_ind_reset = 0
 
-        for lambda_config in self.params.config_set:
+        for lambda_config in plot_params.config_set:
             # Computing the generator matrices
             start1 = time.time()
             row_ind, col_ind, data = self.sparse_info_calculator(lambda_config, -1, [0, 0], [0, 0])
@@ -455,7 +465,7 @@ class MultiServerCTMC(CTMC):
             pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
             if pi_ss[0] < -.00000001:
                 pi_ss = -pi_ss
-            if lambda_config == self.params.config_set[0]:
+            if lambda_config == plot_params.config_set[0]:
                 np.save("pi_ss", pi_ss)
             print("time taken to compute pi_ss is", time.time() - start)
 
@@ -493,7 +503,7 @@ class MultiServerCTMC(CTMC):
             start = time.time()
             eigenvalues_Q_sorted, eigenvectors_Q_sorted = eigs(Q_op, k=2, which='LR')
             print(eigenvalues_Q_sorted)
-            if lambda_config == self.params.config_set[0]:
+            if lambda_config == plot_params.config_set[0]:
                 np.save("eigenvectors_Q_sorted", eigenvectors_Q_sorted)
             print("time taken to compute clustering is", time.time() - start)
             if len(clusters) == 1:
@@ -573,7 +583,9 @@ class MultiServerCTMC(CTMC):
             print(t)
         return [pi_q_seq, main_queue_ave_len_seq, lambda_seq]
 
-    def fault_analysis(self, file_name: str, plot_params: PlotParameters):
+    def fault_scenario_analysis(self, file_name: str, plot_params: PlotParameters):
+        print('Started the fault scenario analysis')
+
         pi_q_new = np.zeros(self.params.state_num_prod)
         pi_q_new[0] = 1  # Initially the queue is empty
         lambda_seq = []
@@ -582,6 +594,7 @@ class MultiServerCTMC(CTMC):
 
         self.fault_simulation_data_generator(pi_q_seq, main_queue_ave_len_seq, lambda_seq, plot_params)
 
+        print('Creating the plots')
         timee = [i * plot_params.step_time for i in list(range(0, len(main_queue_ave_len_seq) - 1))]
         # Create 4x1 sub plots
         plt.rcParams["figure.figsize"] = [6, 10]
@@ -606,6 +619,4 @@ class MultiServerCTMC(CTMC):
 
         plt.savefig("good_policy_output_" + file_name)
         plt.close()
-
-    def analyze(self, file_name: str, plot_params: PlotParameters, job_types: List[int] = None):
-        self.fault_analysis(file_name, plot_params)
+        print('Finished the fault scenario analysis\n')

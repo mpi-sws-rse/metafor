@@ -1,7 +1,7 @@
 import argparse
 
-from plot_parameters import PlotParameters
-from multi_server_ctmc import MultiServerCTMC
+from utils.plot_parameters import PlotParameters
+from model.multi_server.multi_server_ctmc import MultiServerCTMC
 
 
 def main():
@@ -9,13 +9,13 @@ def main():
     parser.add_argument('-sim_time', type=int, help='maximum simulation time (in ms) for an individual simulation',
                         default=500)
     parser.add_argument('-step_time', type=int, help='step time used for plots', default=50)
-    parser.add_argument('-fault_time', type=float, help='The first time point (in ms) at which fault occurs',
+    parser.add_argument('-start_time_fault', type=float, help='The first time point (in ms) at which fault occurs',
                         default=150)
     parser.add_argument('-reset_time', type=float,
                         help='The time duration (in ms) between occurrence and diagnosis of fault',
                         default=150)
-    parser.add_argument('-lambda0s', nargs='+', help='job arrival rate(s) determined by the throttling scheme '
-                                                     '(can be different for different job types)', default=[8, .5])
+    parser.add_argument('-lambda0s', nargs='+', help='job arrival rate(s) determined by the throttling scheme ',
+                        default=[8, .5])
     parser.add_argument('-lambda_fault', nargs='+',
                         help='job arrival rate during the fault scenario (may be determined by the throttling scheme)',
                         default=[8, 4.5])
@@ -36,8 +36,8 @@ def main():
                         help='The entry i denotes the list of parent servers for the i-th server',
                         default=[[], [0], [1]])
     parser.add_argument('-sub_tree_list', nargs='+',
-                        help='The entry i denotes the list of parent servers for the i-th server',
-                        default=[[0, 1], [1]])
+                        help='The entry i denotes the list of servers that belong to the sub-tree of the i-th server '
+                             '(the i-th server is included in its own sub-tree)', default=[[0, 1], [1]])
     parser.add_argument('-server_num', type=int, help='number of servers', default=2)
     parser.add_argument('-q_min_list', nargs='+', help='list of minimum number of requests associated to high mode',
                         default=[int(parser.parse_args().main_queue_sizes[i] * .9) for i in
@@ -54,7 +54,7 @@ def main():
     args = parser.parse_args()
     sim_time = args.sim_time
     step_time = args.step_time
-    fault_time = args.fault_time
+    start_time_fault = args.start_time_fault
     reset_time = args.reset_time
     lambda0s = args.lambda0s
     lambda_fault = args.lambda_fault
@@ -75,12 +75,12 @@ def main():
     o_max_list = args.o_max_list
 
     print('\nCTMC')
-    plot_params = PlotParameters(step_time, sim_time)
+    plot_params = PlotParameters(step_time, sim_time, lambda_fault=lambda_fault, start_time_fault=start_time_fault,
+                                 lambda_reset=lambda_reset, reset_time=reset_time, config_set=config_set)
     ctmc = MultiServerCTMC(server_num, main_queue_sizes, retry_queue_sizes, lambda0s, mu0_p, timeouts, max_retries,
-                           thread_pools, config_set, lambda_fault, fault_time, lambda_reset, reset_time, parent_list,
-                           sub_tree_list, q_min_list, q_max_list, o_min_list, o_max_list)
+                           thread_pools, parent_list, sub_tree_list, q_min_list, q_max_list, o_min_list, o_max_list)
     file_name = 'multi_server_results.png'
-    ctmc.analyze(file_name, plot_params)
+    ctmc.fault_scenario_analysis(file_name, plot_params)
 
 
 if __name__ == '__main__':

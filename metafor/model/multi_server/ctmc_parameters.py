@@ -12,11 +12,6 @@ class MultiServerCTMCParameters:
     timeouts: List[int]
     max_retries: List[int]
     thread_pools: List[int]
-    config_set: List[List[float]]
-    lambda_fault: List[float]
-    fault_time: float
-    lambda_reset: List[float]
-    reset_time: float
     sub_tree_list: List[List[int]]
     parent_list: List[List[int]]
     q_min_list: List[int]
@@ -25,5 +20,3 @@ class MultiServerCTMCParameters:
     o_max_list: List[int]
     state_num: List[int]
     state_num_prod: int
-
-
