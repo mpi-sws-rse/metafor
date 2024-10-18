@@ -1,6 +1,7 @@
 import functools
 from typing import List, Set, Tuple
 
+from analysis.analyzer import Analyzer
 from model.ctmc import CTMC
 from model.multi_server.multi_server_ctmc import MultiServerCTMC
 #from model.single_server.ctmc import SingleServerCTMC
@@ -177,16 +178,19 @@ class Program:
     def average_lengths_analysis(self, plot_params: PlotParameters):
         ctmc: CTMC = self.build()
         file_name = self.name + '.png'
-        ctmc.average_lengths_analysis(file_name, plot_params)
+        analyzer: Analyzer = Analyzer(ctmc, file_name)
+        analyzer.average_lengths_analysis(plot_params)
 
     def fault_scenario_analysis(self, plot_params: PlotParameters):
         ctmc: CTMC = self.build()
         file_name = self.name + '.png'
-        ctmc.fault_scenario_analysis(file_name, plot_params)
+        analyzer: Analyzer = Analyzer(ctmc, file_name)
+        analyzer.fault_scenario_analysis(plot_params)
 
     def latency_analysis(self, plot_params: PlotParameters):
         ctmc: CTMC = self.build()
         file_name = self.name + '.png'
+        analyzer: Analyzer = Analyzer(ctmc, file_name)
 
         _, server_name = self.connections[0]
         server: Server = self.servers[server_name]
@@ -195,4 +199,4 @@ class Program:
         job_types = [job_type for job_type in range(0, len(jobs))]
 
         for job_type in job_types:
-            ctmc.latency_analysis(file_name, plot_params, job_type)
+            analyzer.latency_analysis(plot_params, job_type)

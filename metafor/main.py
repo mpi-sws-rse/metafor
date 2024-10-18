@@ -2,7 +2,7 @@ import argparse
 import os
 from typing import List
 
-from analysis.ctmc_analysis import average_lengths_analysis, latency_analysis, fault_scenario_analysis
+from analysis.analyzer import Analyzer
 from utils.plot_parameters import PlotParameters
 from simulator.simulate import run_discrete_experiment
 from model.single_server.single_server_ctmc import SingleServerCTMC
@@ -141,9 +141,10 @@ def main():
         ctmc = SingleServerCTMC(main_queue_size, retry_queue_size, lambda0s, mu0_ps, timeouts, retries, thread_pool,
                                 alpha)
         file_name = 'single_server_results.png'
-        average_lengths_analysis(ctmc, file_name, plot_params)
-        latency_analysis(ctmc, file_name, plot_params)
-        fault_scenario_analysis(ctmc, file_name, plot_params)
+        analyzer = Analyzer(ctmc, file_name)
+        analyzer.average_lengths_analysis(plot_params)
+        analyzer.latency_analysis(plot_params)
+        analyzer.fault_scenario_analysis(plot_params)
 
 
 if __name__ == '__main__':
