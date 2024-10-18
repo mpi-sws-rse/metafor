@@ -1,7 +1,7 @@
 import argparse
 
 from plot_parameters import PlotParameters
-from vulnerability_identification import MultiServerCTMC
+from multi_server_ctmc import MultiServerCTMC
 
 
 def main():
