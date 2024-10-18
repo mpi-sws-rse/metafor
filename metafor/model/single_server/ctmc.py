@@ -44,6 +44,11 @@ class SingleServerCTMC(CTMC):
         self.timeout = timeout
         self.max_retries = max_retries
 
+        print("main qsize = ", self.main_queue_size, " retry qsize = ", self.retry_queue_size)
+        print("lambdaas = ", self.lambdaas)
+        print("lambdaa = ", self.lambdaa)
+        print("mu = ", self.mu0_ps)
+
         # the rate of retrying jobs in the retry queue
         self.mu_retry_base = max_retries * self.lambdaa / ((max_retries + 1) * timeout)
         # the rate of dropping jobs in the retry queue
@@ -53,8 +58,14 @@ class SingleServerCTMC(CTMC):
         self.alpha = alpha
 
         self.Q = self.generator_mat_exact(transition_matrix=False)
+
+        # Debug: check that each row sums to 0 (approximately)
+        for row in self.Q:
+            assert(abs(sum(row)) < 0.00001)
+
         self.pi: Optional[npt.NDArray[np.float64]] = None
 
+    # compute the stationary distribution and cache it
     def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
         if self.pi is None:
             # calculate the stationary distribution

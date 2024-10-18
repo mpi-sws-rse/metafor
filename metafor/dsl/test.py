@@ -4,7 +4,9 @@ import numpy as np
 
 from dsl import Work, Server, Source, Program, DependentCall, Constants
 from utils.plot_parameters import PlotParameters
-from model.single_server.single_server_ctmc import SingleServerCTMC
+#from model.single_server.single_server_ctmc import SingleServerCTMC
+from model.single_server.ctmc import SingleServerCTMC
+
 
 def timed_call(f, *args, **kwargs):
     start = time.time()
@@ -35,7 +37,6 @@ class TestCTMC(unittest.TestCase):
         print(pi)
         print("Average queue size = ", ctmc.main_queue_size_average(pi))
         print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
-        print("Computing stationary distribution took ", end - start, " seconds")
 
     def test_single_server_multiple_requests(self):
         """A single server and two sources processing API call `rd`: the first source sends requests at rate 5 and the second at rate 2,
