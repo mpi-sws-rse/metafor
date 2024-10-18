@@ -3,6 +3,7 @@ from typing import List, Set, Tuple
 
 from model.ctmc import CTMC
 from model.multi_server.multi_server_ctmc import MultiServerCTMC
+#from model.single_server.ctmc import SingleServerCTMC
 from model.single_server.single_server_ctmc import SingleServerCTMC
 from utils.plot_parameters import PlotParameters
 
@@ -82,14 +83,17 @@ class Program:
         self.connections = []
 
     def add_server(self, server: Server):
+        assert(not(server.name in self.servers))
         self.servers[server.name] = server
 
     def add_source(self, source: Source):
+        assert(not(source.name in self.sources))
         self.sources[source.name] = source
 
     def connect(self, source_name: str, server_name: str):
         assert (source_name in self.sources)
         assert (server_name in self.servers)
+        assert(self.sources[source_name].api_name in self.servers[server_name].apis)
         self.connections.append((source_name, server_name))
 
     def transition(self, state, Q):

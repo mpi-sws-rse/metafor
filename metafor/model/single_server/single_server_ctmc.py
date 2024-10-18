@@ -109,6 +109,13 @@ class SingleServerCTMC(CTMC):
                 Q[total_ind, total_ind] = - np.sum(Q[total_ind, :])
         return Q
 
+    def get_stationary_distribution(self):
+        Q = self.generator_mat_exact()
+        QT = np.transpose(Q)
+        ns = scipy.linalg.null_space(QT)
+        self.pi = ns / np.linalg.norm(ns, ord=1)
+        return self.pi
+    
     def main_queue_average_size(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
         main_queue_size = self.params.main_queue_size
