@@ -2,8 +2,8 @@ import functools
 from typing import List, Set, Tuple
 
 from model.ctmc import CTMC
-from model.multi_server.vulnerability_identification import MultiServerCTMC
-from model.single_server.msf_ctmc import SingleServerCTMC
+from model.multi_server.multi_server_ctmc import MultiServerCTMC
+from model.single_server.single_server_ctmc import SingleServerCTMC
 from utils.plot_parameters import PlotParameters
 
 
