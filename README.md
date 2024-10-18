@@ -1,2 +1,2 @@
-# metaphor
-Metastability analysis
+# metafor
+Metastability analysis for systems
