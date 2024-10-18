@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metaphor"
+version = "0.1.0"
+dependencies = [
+  "numpy",
+  "scipy",
+  "pandas",
+  "matplotlib"
+]
+requires-python = ">=3.8"
+authors = [
+  {name = "Alexandra Bugariu", email = "bugariua@mpi-sws.org"},
+  {name = "Rupak Majumdar", email = "rupak@mpi-sws.org"},
+  {name = "Mahmoud Salamati", email="msalamati@mpi-sws.org"},
+  {name = "Sadegh Soudjani", email = "sadegh@mpi-sws.org"},
+]
+maintainers = [
+  {name = "Mahmoud Salamati", email = "msalamati@mpi-sws.org"}
+]
+description = "A CTMC-based analysis tool for software systems"
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["CTMC", "queueing systems", "metastability" ]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python"
+]
+
+[project.optional-dependencies]
+cli = [
+  "click",
+]
+
+#[project.urls]
+#Homepage = "https://example.com"
+#Documentation = "https://readthedocs.org"
+Repository = "https://github.com/mpi-sws-rse/metaphor.git"
+"Bug Tracker" = "https://github.com/mpi-sws-rse/metaphor/issues"
+#Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
+
+#[project.scripts]
+#spam-cli = "spam:main_cli"
+#
+#[project.entry-points."spam.magical"]
+#tomatoes = "spam:main_tomatoes"
