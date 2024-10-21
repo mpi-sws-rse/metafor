@@ -1,10 +1,10 @@
 import time
 import unittest
-import numpy as np
 
 from dsl import Work, Server, Source, Program, DependentCall, Constants
 from utils.plot_parameters import PlotParameters
 from model.single_server.single_server_ctmc import SingleServerCTMC
+
 
 def timed_call(f, *args, **kwargs):
     start = time.time()
@@ -12,6 +12,7 @@ def timed_call(f, *args, **kwargs):
     end = time.time()
     print("Time: ", end - start, " seconds")
     return v
+
 
 class TestCTMC(unittest.TestCase):
     def test_single_server_single_request(self):
@@ -35,7 +36,6 @@ class TestCTMC(unittest.TestCase):
         print(pi)
         print("Average queue size = ", ctmc.main_queue_size_average(pi))
         print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
-        print("Computing stationary distribution took ", end - start, " seconds")
 
     def test_single_server_multiple_requests(self):
         """A single server and two sources processing API call `rd`: the first source sends requests at rate 5 and the second at rate 2,
@@ -55,7 +55,7 @@ class TestCTMC(unittest.TestCase):
 
         # p.average_lengths_analysis(PlotParameters(step_time=100, sim_time=1000))
         start = time.time()
-        #p.latency_analysis(PlotParameters())
+        # p.latency_analysis(PlotParameters())
         # ctmc = p.build()
         end = time.time()
         print("Latency analysis took ", end - start, " seconds")
@@ -75,7 +75,7 @@ class TestCTMC(unittest.TestCase):
         p.connect("reader", "server")
         # p.average_lengths_analysis(PlotParameters())
         start = time.time()
-        #p.latency_analysis(PlotParameters())
+        # p.latency_analysis(PlotParameters())
         end = time.time()
         print("Latency analysis took ", end - start, " seconds")
 
@@ -100,7 +100,7 @@ class TestCTMC(unittest.TestCase):
         p.connect("client2", "server")
         p.connect("client3", "server")
         start = time.time()
-        #p.latency_analysis(PlotParameters())
+        # p.latency_analysis(PlotParameters())
         end = time.time()
         print("Latency analysis took ", end - start, " seconds")
 
@@ -124,8 +124,6 @@ class TestCTMC(unittest.TestCase):
         p.add_source(rd_src)
         p.connect("client", "server")
         p.fault_scenario_analysis(PlotParameters())
-
-    
 
 
 if __name__ == "__main__":
