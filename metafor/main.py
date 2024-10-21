@@ -5,7 +5,7 @@ from typing import List
 from analysis.analyzer import Analyzer
 from utils.plot_parameters import PlotParameters
 from simulator.simulate import run_discrete_experiment
-from model.single_server.single_server_ctmc import SingleServerCTMC
+from model.single_server.ctmc import SingleServerCTMC
 
 
 def delete_files(folder: str, extension: str):

@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from scipy.sparse.linalg import eigs
 
 from model.multi_server.generator_matrix import GeneratorMatrix
-from model.multi_server.multi_server_ctmc import MultiServerCTMC
+from model.multi_server.ctmc import MultiServerCTMC
 from utils.plot_parameters import PlotParameters
 
 

@@ -2,7 +2,7 @@ import argparse
 
 from analysis.analyzer import Analyzer
 from utils.plot_parameters import PlotParameters
-from model.multi_server.multi_server_ctmc import MultiServerCTMC
+from model.multi_server.ctmc import MultiServerCTMC
 
 
 def main():

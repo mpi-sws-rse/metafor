@@ -3,7 +3,7 @@ import unittest
 
 from dsl import Work, Server, Source, Program, DependentCall, Constants
 from utils.plot_parameters import PlotParameters
-from model.single_server.single_server_ctmc import SingleServerCTMC
+from model.single_server.ctmc import SingleServerCTMC
 
 
 def timed_call(f, *args, **kwargs):

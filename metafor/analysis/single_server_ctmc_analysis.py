@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 import scipy
 
-from model.single_server.single_server_ctmc import SingleServerCTMC
+from model.single_server.ctmc import SingleServerCTMC
 from utils.plot import plot_results, trigger_plot_generator, plot_bar_data, plot_results_latency, plot_results_reset
 from utils.plot_parameters import PlotParameters
 
