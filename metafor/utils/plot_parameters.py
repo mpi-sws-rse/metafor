@@ -22,8 +22,10 @@ class PlotParameters:
     reset_lambda_min: float = 6
     reset_lambda_step: float = 0.5
     lambda_fault: List[float] = field(default_factory=lambda: [20])
-    lambda_reset: List[float] = field(default_factory=lambda: [8, .25])
-    config_set: List[List[float]] = field(default_factory=lambda: [[8, .5], [8, 4.5], [8, .25]])
+    lambda_reset: List[float] = field(default_factory=lambda: [8, 0.25])
+    config_set: List[List[float]] = field(
+        default_factory=lambda: [[8, 0.5], [8, 4.5], [8, 0.25]]
+    )
     start_time_fault: int = 200
     duration_fault: int = 200
     reset_time: float = 150

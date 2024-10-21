@@ -1,7 +1,7 @@
 import functools
-from typing import List, Set, Tuple
+from typing import List, Set, Tuple, Optional
 
-from analysis.analyzer import Analyzer
+# from analysis.analyzer import Analyzer
 from model.ctmc import CTMC
 from model.multi_server.ctmc import MultiServerCTMC
 from model.single_server.ctmc import SingleServerCTMC
@@ -15,14 +15,26 @@ class Constants:
 
 # a source of requests: an exponential distribution with rate `arrival_rate`
 class Source:
-    def __init__(self, name: str, api_name: str, arrival_rate: float, timeout: int, retries: int = 0):
+    def __init__(
+        self,
+        name: str,
+        api_name: str,
+        arrival_rate: float,
+        timeout: int,
+        retries: int = 0,
+    ):
         self.name = name  # unique name for this source, eg `client1`
         self.api_name = api_name  # name of the API call, e.g., `rd`
-        assert (arrival_rate >= 0.0)
+        assert arrival_rate >= 0.0
         self.arrival_rate = arrival_rate  # lambda for the exponential distribution
         self.timeout = timeout
         self.retries = retries
 
+    def __to_string__(self):
+        return "%s: generates %s: (arr %f, to %d, re %d)" % (self.name, self.api_name, self.arrival_rate, self.timeout, self.retries)
+    
+    def print(self):
+        print(self.__to_string__())
 
 # a source of requests that is a general phase type distribution
 # such a source can be implemented as its own CTMC, with an absorbing state.
@@ -32,20 +44,30 @@ class Source:
 class PhaseTypeSource(Source):
     pass
 
+
 class MixtureSource(Source):
     pass
+
 
 class DependentCall:
     # callee is the downstream server to which the request is sent
     # caller is the server that forwarded the request (the parent server)
     # api_name is the name of the API call, e.g., `rd`
-    def __init__(self, server_name: str, parent_server_name: str, api_name: str, call_type: Constants,
-                 arrival_rate: float, timeout: int, retry: int):
+    def __init__(
+        self,
+        server_name: str,
+        parent_server_name: str,
+        api_name: str,
+        call_type: Constants,
+        arrival_rate: float, # do we need this? this should be set by the processing speed, no?
+        timeout: int,
+        retry: int,
+    ):
         self.callee = server_name
         self.caller = parent_server_name
         self.api_name = api_name
-        assert (arrival_rate >= 0.0)
-        self.arrival_rate = arrival_rate  # lambda for the exponential distribution
+        assert arrival_rate >= 0.0
+        self.arrival_rate = arrival_rate  # lambda for the exponential distribution: check if needed
         self.call_type = call_type
         self.timeout = timeout
         self.retry = retry
@@ -66,13 +88,26 @@ class Work:
 # `thread_pool` is the number of threads processing requests
 # `work` is a map from name to `Work`
 class Server:
-    def __init__(self, name: str, apis: dict[str, Work], qsize: int, orbit_size: int, thread_pool: int = 1):
+    def __init__(
+        self,
+        name: str,
+        apis: dict[str, Work],
+        qsize: int,
+        orbit_size: int,
+        thread_pool: int = 1,
+    ):
         self.name = name
         self.apis = apis
         self.qsize = qsize
         self.orbit_size = orbit_size
-        assert (thread_pool >= 1)
+        assert thread_pool >= 1
         self.thread_pool = thread_pool
+
+    def __to_string__(self):
+        api_strings = ','.join(self.apis.keys())
+        return "%s: serves %s [q %d orbit %d threads %d]" % (self.name, api_strings, self.qsize, self.orbit_size, self.thread_pool)
+    def print(self):
+        print(self.__to_string__())
 
     # a state of a server is a tuple (q1, ..., qk | tp1, ..., tpn | o1, ... ok)
     # qi says how many requests of api i are waiting,
@@ -83,7 +118,9 @@ class Server:
     # for simplicity, let's assume each qi <= qsize and each oi <= orbit_size
     def num_states(self) -> int:
         num_apis = len(self.apis.keys())
-        return (self.qsize * self.orbit_size) ** num_apis * (num_apis + 1) ** self.thread_pool
+        return (self.qsize * self.orbit_size) ** num_apis * (
+            num_apis + 1
+        ) ** self.thread_pool
 
 
 class Program:
@@ -94,17 +131,17 @@ class Program:
         self.connections = []
 
     def add_server(self, server: Server):
-        assert(not(server.name in self.servers))
+        assert not (server.name in self.servers)
         self.servers[server.name] = server
 
     def add_source(self, source: Source):
-        assert(not(source.name in self.sources))
+        assert not (source.name in self.sources)
         self.sources[source.name] = source
 
     def connect(self, source_name: str, server_name: str):
-        assert (source_name in self.sources)
-        assert (server_name in self.servers)
-        assert(self.sources[source_name].api_name in self.servers[server_name].apis)
+        assert source_name in self.sources
+        assert server_name in self.servers
+        assert self.sources[source_name].api_name in self.servers[server_name].apis
         self.connections.append((source_name, server_name))
 
     def get_callees(self, server: Server) -> Set[Server]:
@@ -121,12 +158,21 @@ class Program:
         for server in all_servers:
             callees = callees.union(self.get_callees(server))
         root = all_servers.difference(callees)
-        assert (len(root) == 1)
+        assert len(root) == 1
         return list(root)[0]
 
-    def get_params(self, server: Server, connections: List[Tuple[str, str]]) -> \
-            Tuple[List[float], List[float], List[int], List[int], List[Work]]:
-        sources: List[Source] = [self.sources[source_name] for source_name, _ in connections]
+    def get_server(self, sname) -> Optional[Server]:
+        return self.servers.get(sname, None)
+    
+    def get_source(self, sname) -> Optional[Source]:
+        return self.sources.get(sname, None)
+
+    def get_params(
+        self, server: Server, connections: List[Tuple[str, str]]
+    ) -> Tuple[List[float], List[float], List[int], List[int], List[Work]]:
+        sources: List[Source] = [
+            self.sources[source_name] for source_name, _ in connections
+        ]
         arrival_rates: List[float] = [source.arrival_rate for source in sources]
         jobs: List[Work] = [server.apis[source.api_name] for source in sources]
         processing_rates: List[float] = [job.processing_rate for job in jobs]
@@ -135,8 +181,11 @@ class Program:
         return arrival_rates, processing_rates, timeouts, retries, jobs
 
     def get_connections(self, server: Server) -> List[Tuple[str, str]]:
-        connections = [(source_name, server_name) for source_name, server_name in self.connections if
-                       server_name == server.name]
+        connections = [
+            (source_name, server_name)
+            for source_name, server_name in self.connections
+            if server_name == server.name
+        ]
         return connections
 
     def get_requests(self, s: str) -> List[str]:
@@ -147,15 +196,26 @@ class Program:
 
     # build takes a program configuration and constructs a CTMC out of it
     def build(self) -> CTMC:
-        num_states = functools.reduce(lambda a, s: a * s.num_states(), self.servers.values(), 1)
+        num_states = functools.reduce(
+            lambda a, s: a * s.num_states(), self.servers.values(), 1
+        )
         print("Program: ", self.name, ", Number of states = ", num_states)
 
         if len(self.servers) == 1:  # single server
             _, server_name = self.connections[0]
             server: Server = self.servers[server_name]
-            arrival_rates, processing_rates, timeouts, retries, _ = self.get_params(server, self.connections)
-            ctmc = SingleServerCTMC(server.qsize, server.orbit_size, arrival_rates, processing_rates, timeouts, retries,
-                                    server.thread_pool)
+            arrival_rates, processing_rates, timeouts, retries, _ = self.get_params(
+                server, self.connections
+            )
+            ctmc = SingleServerCTMC(
+                server.qsize,
+                server.orbit_size,
+                arrival_rates,
+                processing_rates,
+                timeouts,
+                retries,
+                server.thread_pool,
+            )
         else:  # multiple servers in serial connection
             root_server: Server = self.get_root_server()
             serial_servers: List[Server] = [root_server]
@@ -165,10 +225,14 @@ class Program:
                 server = list(callees)[0]
                 callees = self.get_callees(server)
             main_queue_sizes: List[int] = [server.qsize for server in serial_servers]
-            retry_queue_sizes: List[int] = [server.orbit_size for server in serial_servers]
+            retry_queue_sizes: List[int] = [
+                server.orbit_size for server in serial_servers
+            ]
 
             connections = self.get_connections(root_server)
-            arrival_rates, processing_rates, timeouts, retries, jobs = self.get_params(root_server, connections)
+            arrival_rates, processing_rates, timeouts, retries, jobs = self.get_params(
+                root_server, connections
+            )
 
             for job in jobs:
                 for dependent_call in job.downstream:
@@ -179,34 +243,63 @@ class Program:
             thread_pools: List[int] = [server.thread_pool for server in serial_servers]
             parent_list: List[List[int]] = [[]]
             parent_list += [[i] for i in range(0, len(serial_servers))]
-            sub_tree_list: List[List[int]] = [[j for j in range(i, len(serial_servers))] for
-                                              i in range(0, len(serial_servers))]
-            ctmc = MultiServerCTMC(len(serial_servers), main_queue_sizes, retry_queue_sizes, arrival_rates,
-                                   processing_rates, timeouts, retries, thread_pools, parent_list, sub_tree_list)
+            sub_tree_list: List[List[int]] = [
+                [j for j in range(i, len(serial_servers))]
+                for i in range(0, len(serial_servers))
+            ]
+            ctmc = MultiServerCTMC(
+                len(serial_servers),
+                main_queue_sizes,
+                retry_queue_sizes,
+                arrival_rates,
+                processing_rates,
+                timeouts,
+                retries,
+                thread_pools,
+                parent_list,
+                sub_tree_list,
+            )
         return ctmc
 
+    def print(self):
+        print("Program: ", self.name)
+        for (s, c) in self.connections:
+            print(s, " --> ", c)
+        for sname, s in self.servers.items():
+            print("Servers: ")
+            s.print()
+        for sname, s in self.sources.items():
+            print("Sources: ")
+            s.print()
+
+        
+            
+"""
     def average_lengths_analysis(self, plot_params: PlotParameters):
         ctmc: CTMC = self.build()
-        file_name = self.name + '.png'
+        file_name = self.name + ".png"
         analyzer: Analyzer = Analyzer(ctmc, file_name)
         analyzer.average_lengths_analysis(plot_params)
 
     def fault_scenario_analysis(self, plot_params: PlotParameters):
         ctmc: CTMC = self.build()
-        file_name = self.name + '.png'
+        file_name = self.name + ".png"
         analyzer: Analyzer = Analyzer(ctmc, file_name)
         analyzer.fault_scenario_analysis(plot_params)
 
     def latency_analysis(self, plot_params: PlotParameters):
         ctmc: CTMC = self.build()
-        file_name = self.name + '.png'
+        file_name = self.name + ".png"
         analyzer: Analyzer = Analyzer(ctmc, file_name)
 
         _, server_name = self.connections[0]
         server: Server = self.servers[server_name]
-        sources: List[Source] = [self.sources[source_name] for source_name, _ in self.connections]
+        sources: List[Source] = [
+            self.sources[source_name] for source_name, _ in self.connections
+        ]
         jobs: List[Work] = [server.apis[source.api_name] for source in sources]
         job_types = [job_type for job_type in range(0, len(jobs))]
 
         for job_type in job_types:
             analyzer.latency_analysis(plot_params, job_type)
+"""
