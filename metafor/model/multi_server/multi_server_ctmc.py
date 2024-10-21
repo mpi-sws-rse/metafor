@@ -4,21 +4,25 @@ import numpy as np
 import math
 import copy
 
+import scipy
+
 from model.ctmc import CTMC
 from model.multi_server.generator_matrix import GeneratorMatrix
 import time
-from scipy.sparse.linalg import gmres
+from scipy.sparse.linalg import gmres, eigs
 import itertools
 
 from model.multi_server.ctmc_parameters import MultiServerCTMCParameters
 
 
 class MultiServerCTMC(CTMC):
+
     def __init__(self, server_num: int, main_queue_sizes: List[int], retry_queue_sizes: List[int],
                  lambdaas: List[float], mu0_ps: List[float], timeouts: List[int], max_retries: List[int],
                  thread_pools: List[int], parent_list: List[List[int]], sub_tree_list: List[List[int]],
                  q_min_list: List[int] = None, q_max_list: List[int] = None,
                  o_min_list: List[int] = None, o_max_list: List[int] = None):
+        super().__init__()
         assert len(main_queue_sizes) == len(retry_queue_sizes) == len(lambdaas) == len(mu0_ps) == len(timeouts) \
                == len(max_retries) == len(thread_pools) == server_num
         state_num = []
@@ -154,6 +158,184 @@ class MultiServerCTMC(CTMC):
                 q_len_node += q_node * p
             q_len[node_id] = q_len_node
         return q_len
+
+    def sparse_info_calculator(self, lambda_list, node_selected, q_range, o_range):
+        state_num = self.params.state_num_prod
+        server_num = self.params.server_num
+        parent_list = self.params.parent_list
+        mu0_p = self.params.mu0_ps
+        timeout = self.params.timeouts
+        max_retries = self.params.max_retries
+        main_queue_size = self.params.main_queue_sizes
+        retry_queue_size = self.params.retry_queue_sizes
+        row_ind = []
+        col_ind = []
+        data = []
+        for total_ind in range(state_num):
+            q, o = self.index_decomposer(total_ind)
+            absorbing_flg = False
+            for node_id in range(server_num):
+                if node_id == node_selected:
+                    if q_range[1] >= q[node_id] >= q_range[0] and o_range[1] >= o[node_id] >= o_range[0]:
+                        absorbing_flg = True
+
+            if not absorbing_flg:
+                val_sum = 0
+                tail_prob_list = self.tail_prob_computer(total_ind)
+                q_next = [0 * i for i in range(server_num)]
+                o_next = [0 * i for i in range(server_num)]
+                # compute the non-synchronized transitions' rates of the generator matrix
+                for node_id in range(server_num):
+                    mu_drop_base = 1 / (timeout[node_id] * (max_retries[node_id] + 1))
+                    mu_retry_base = max_retries[node_id] / (timeout[node_id] * (max_retries[node_id] + 1))
+                    # Check which arrival source is active for the selected node_id
+                    lambdaa = lambda_list[node_id]
+                    if len(parent_list[node_id]) == 0:  # if there exists only a local source of job arrival
+                        lambda_summed = lambdaa
+                    elif q[parent_list[node_id][0]] == 0:
+                        lambda_summed = lambdaa
+                    else:  # if there exists local and non-local sources of job arrival
+                        lambda_summed = lambdaa + mu0_p[parent_list[node_id][0]]
+                    if q[node_id] == 0:  # queue is empty
+                        q_next[:] = q
+                        o_next[:] = o
+                        # Setting the rates related to job arrivals
+                        q_next[node_id] = q[node_id] + 1
+                        val = lambda_summed
+                        col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                        data.append(val)
+                        val_sum += val
+                        row_ind.append(total_ind)
+                        q_next[:] = q
+                        o_next[:] = o
+                        # Setting the rates related to abandon and retry
+                        if o[node_id] > 0:  # if there is any job in the server's orbit
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_drop_base  # drop rate
+                            col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[node_id] = q[node_id] + 1
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_retry_base  # retry rate
+                            col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+
+                    elif q[node_id] == main_queue_size[node_id] - 1:  # queue is full
+                        q_next[:] = q
+                        o_next[:] = o
+                        # setting the rates related to job processing
+                        q_next[node_id] = q[node_id] - 1
+                        val = mu0_p[node_id]
+                        col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                        data.append(val)
+                        val_sum += val
+                        row_ind.append(total_ind)
+                        q_next[:] = q
+                        o_next[:] = o
+                        # setting the rates related to abandon
+                        if o[node_id] > 0:  # if there is any job in the server's orbit
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_drop_base
+                            col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+                        # setting the rates related to moving to the orbit space
+                        if o[node_id] < retry_queue_size[node_id] - 1:  # if orbit isn't full
+                            o_next[node_id] = o[node_id] + 1
+                            val = lambda_summed * mu_retry_base * tail_prob_list[node_id]
+                            col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+
+                    else:  # queue is neither full nor empty
+                        q_next[:] = q
+                        o_next[:] = o
+                        # Setting the rates related to job arrivals
+                        q_next[node_id] = q[node_id] + 1
+                        val = lambda_summed
+                        col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                        data.append(val)
+                        val_sum += val
+                        row_ind.append(total_ind)
+                        q_next[:] = q
+                        o_next[:] = o
+                        # setting the rates related to job processing
+                        q_next[node_id] = q[node_id] - 1
+                        val = mu0_p[node_id]
+                        col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                        data.append(val)
+                        val_sum += val
+                        row_ind.append(total_ind)
+                        q_next[:] = q
+                        o_next[:] = o
+                        # Setting the rates related to abandon and retry
+                        if o[node_id] > 0:  # if there is any job in the server's orbit
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_drop_base
+                            col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[node_id] = q[node_id] + 1
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_retry_base * (1 - tail_prob_list[node_id])
+                            col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+                        # setting the rates related to moving to the orbit space
+                        if o[node_id] < retry_queue_size[node_id] - 1:  # if orbit isn't full
+                            q_next[node_id] = q[node_id] + 1
+                            o_next[node_id] = o[node_id] + 1
+                            val = lambda_summed * mu_retry_base * tail_prob_list[node_id]
+                            col_ind.append(self.index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+                val = - val_sum
+                col_ind.append(total_ind)
+                data.append(val)
+                row_ind.append(total_ind)
+        return [row_ind, col_ind, data]
+
+    def get_stationary_distribution(self) -> List[float]:
+        if self.pi is None:
+            state_num = self.params.state_num
+            row_ind, col_ind, data = self.sparse_info_calculator(self.params.lambda_init, -1, [0, 0], [0, 0])
+            Q = scipy.sparse.csr_matrix((data, (row_ind, col_ind)), shape=(state_num, state_num))
+
+            def matvec_func(x):
+                return Q.T.dot(x)
+
+            def rmatvec_func(x):
+                return Q.dot(x)
+
+            Q_op_T = GeneratorMatrix(shape=(state_num, state_num), matvec=matvec_func, rmatvec=rmatvec_func,
+                                     dtype=Q.dtype)
+            start = time.time()
+            _, eigenvectors = eigs(Q_op_T, k=1, which='SM')
+            pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
+            if pi_ss[0] < -.00000001:
+                pi_ss = -pi_ss
+            print("Computing the stationary distribution took ", time.time() - start)
+            self.pi = pi_ss
+        return self.pi
 
     def hitting_time_average(self, Q, S1, S2) -> float:
         state_num = self.params.state_num_prod
