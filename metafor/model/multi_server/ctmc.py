@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import math
@@ -159,7 +159,7 @@ class MultiServerCTMC(CTMC):
             q_len[node_id] = q_len_node
         return q_len
 
-    def sparse_info_calculator(self, lambda_list, node_selected, q_range, o_range):
+    def sparse_info_calculator(self, lambda_list, node_selected, q_range, o_range) -> Tuple[int, int, List]:
         state_num = self.params.state_num_prod
         server_num = self.params.server_num
         parent_list = self.params.parent_list
@@ -314,27 +314,33 @@ class MultiServerCTMC(CTMC):
                 row_ind.append(total_ind)
         return [row_ind, col_ind, data]
 
+    def compute_stationary_distribution(self, lambda_config) -> Tuple[List[float], int, int, List,
+                                                                      GeneratorMatrix, GeneratorMatrix]:
+        state_num = self.params.state_num_prod
+        row_ind, col_ind, data = self.sparse_info_calculator(lambda_config, -1, [0, 0], [0, 0])
+        Q = scipy.sparse.csr_matrix((data, (row_ind, col_ind)), shape=(state_num, state_num))
+
+        def matvec_func(x):
+            return Q.T.dot(x)
+
+        def rmatvec_func(x):
+            return Q.dot(x)
+
+        Q_op = GeneratorMatrix(shape=(state_num, state_num), matvec=rmatvec_func, rmatvec=matvec_func,
+                               dtype=Q.dtype)
+        Q_op_T = GeneratorMatrix(shape=(state_num, state_num), matvec=matvec_func, rmatvec=rmatvec_func,
+                                 dtype=Q.dtype)
+        start = time.time()
+        _, eigenvectors = eigs(Q_op_T, k=1, which='SM')
+        pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
+        if pi_ss[0] < -.00000001:
+            pi_ss = -pi_ss
+        print("Computing the stationary distribution took ", time.time() - start)
+        return pi_ss, row_ind, col_ind, data, Q_op, Q_op_T
+
     def get_stationary_distribution(self) -> List[float]:
         if self.pi is None:
-            state_num = self.params.state_num_prod
-            row_ind, col_ind, data = self.sparse_info_calculator(self.params.lambda_init, -1, [0, 0], [0, 0])
-            Q = scipy.sparse.csr_matrix((data, (row_ind, col_ind)), shape=(state_num, state_num))
-
-            def matvec_func(x):
-                return Q.T.dot(x)
-
-            def rmatvec_func(x):
-                return Q.dot(x)
-
-            Q_op_T = GeneratorMatrix(shape=(state_num, state_num), matvec=matvec_func, rmatvec=rmatvec_func,
-                                     dtype=Q.dtype)
-            start = time.time()
-            _, eigenvectors = eigs(Q_op_T, k=1, which='SM')
-            pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
-            if pi_ss[0] < -.00000001:
-                pi_ss = -pi_ss
-            print("Computing the stationary distribution took ", time.time() - start)
-            self.pi = pi_ss
+            self.pi, _, _, _, _, _ = self.compute_stationary_distribution(self.params.lambda_init)
         return self.pi
 
     def hitting_time_average(self, Q, S1, S2) -> float:

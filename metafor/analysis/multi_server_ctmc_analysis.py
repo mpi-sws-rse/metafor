@@ -62,31 +62,15 @@ def fault_simulation_data_generator(ctmc: MultiServerCTMC, pi_q_seq, main_queue_
     col_ind_reset = 0
 
     for lambda_config in plot_params.config_set:
-        # Computing the generator matrices
-        start1 = time.time()
-        row_ind, col_ind, data = ctmc.sparse_info_calculator(lambda_config, -1, [0, 0], [0, 0])
+        # Computing the generator matrices and the stationary distributions
+        pi_ss, row_ind, col_ind, data, Q_op, Q_op_T = ctmc.compute_stationary_distribution(lambda_config)
         if lambda_config == lambda_init:
             row_ind_init, col_ind_init, data_init = row_ind, col_ind, data
+            np.save("pi_ss", pi_ss)
         elif lambda_config == lambda_fault:
             row_ind_fault, col_ind_fault, data_fault = row_ind, col_ind, data
         elif lambda_config == lambda_reset:
             row_ind_reset, col_ind_reset, data_reset = row_ind, col_ind, data
-
-        Q = scipy.sparse.csr_matrix((data, (row_ind, col_ind)), shape=(state_num, state_num))
-
-        def matvec_func(x):
-            return Q.T.dot(x)
-
-        def rmatvec_func(x):
-            return Q.dot(x)
-
-        Q_op = GeneratorMatrix(shape=(state_num, state_num), matvec=rmatvec_func, rmatvec=matvec_func,
-                               dtype=Q.dtype)
-        Q_op_T = GeneratorMatrix(shape=(state_num, state_num), matvec=matvec_func, rmatvec=rmatvec_func,
-                                 dtype=Q.dtype)
-
-        rt1 = time.time() - start1
-        print(rt1)
 
         #  approximate hitting time via using spectral gap
         h_su = []
@@ -116,16 +100,6 @@ def fault_simulation_data_generator(ctmc: MultiServerCTMC, pi_q_seq, main_queue_
             clusters = [[], []]
         else:
             clusters = [[]]
-
-        # computing stationary distribution
-        start = time.time()
-        _, eigenvectors = eigs(Q_op_T, k=1, which='SM')
-        pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
-        if pi_ss[0] < -.00000001:
-            pi_ss = -pi_ss
-        if lambda_config == plot_params.config_set[0]:
-            np.save("pi_ss", pi_ss)
-        print("time taken to compute pi_ss is", time.time() - start)
 
         # computing occupancy prob
         cumulative_prob_stable = []
