@@ -10,7 +10,6 @@ import time
 
 from utils.plot_parameters import PlotParameters
 from model.ctmc import CTMC
-from model.ctmc_parameters import CTMCParameters
 from utils.calculate import tail_prob_computer
 from utils.plot import plot_results, trigger_plot_generator, plot_bar_data, plot_results_latency, plot_results_reset
 

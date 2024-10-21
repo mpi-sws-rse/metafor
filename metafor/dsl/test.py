@@ -1,10 +1,8 @@
 import time
 import unittest
-import numpy as np
 
 from dsl import Work, Server, Source, Program, DependentCall, Constants
 from utils.plot_parameters import PlotParameters
-#from model.single_server.single_server_ctmc import SingleServerCTMC
 from model.single_server.ctmc import SingleServerCTMC
 
 
@@ -44,8 +42,7 @@ class TestDSL(unittest.TestCase):
         p.add_source(rd_src)
         p.connect("reader", "server")
         timed_call(lambda: simple_analysis(p))
-        
-
+ 
     def test_single_server_multiple_requests(self):
         """A single server and two sources processing API call `rd`: the first source sends requests at rate 5 and the second at rate 2,
         each with a timeout of 10 and 3 retries. The server processes `rd` with rate 10, and has no downstream work"""
@@ -62,10 +59,8 @@ class TestDSL(unittest.TestCase):
         p.connect("reader1", "server")
         p.connect("reader2", "server")
 
-        simple_analysis(p)
+        timed_call(lambda: simple_analysis(p))
         # p.average_lengths_analysis(PlotParameters(step_time=100, sim_time=1000))
-        #p.latency_analysis(PlotParameters())
-        # ctmc = p.build()
         
     def test_single_server_single_request_multiple_threads(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 9.5,
@@ -80,9 +75,8 @@ class TestDSL(unittest.TestCase):
         p.add_server(s)
         p.add_source(rd_src)
         p.connect("reader", "server")
-        simple_analysis(p)
+        timed_call(lambda: simple_analysis(p))
         # p.average_lengths_analysis(PlotParameters())
-        #p.latency_analysis(PlotParameters())
 
 
     def test_single_server_multiple_reqs(self):
@@ -105,8 +99,8 @@ class TestDSL(unittest.TestCase):
         p.connect("client1", "server")
         p.connect("client2", "server")
         p.connect("client3", "server")
-        simple_analysis(p)
-        #p.latency_analysis(PlotParameters())
+        timed_call(lambda: simple_analysis(p))
+
 
     def test_two_servers(self):
         """Two servers in series and a single source processing API call `rd`: the source sends requests at rate 9.5,
@@ -128,8 +122,6 @@ class TestDSL(unittest.TestCase):
         p.add_source(rd_src)
         p.connect("client", "server")
         #p.fault_scenario_analysis(PlotParameters())
-
-    
 
 
 if __name__ == "__main__":

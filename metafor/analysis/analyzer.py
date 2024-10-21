@@ -2,8 +2,8 @@ from analysis.multi_server_ctmc_analysis import fault_scenario_analysis as multi
 from analysis.single_server_ctmc_analysis import average_lengths_analysis as single_average_lengths_analysis, \
     fault_scenario_analysis as single_fault_scenario_analysis, latency_analysis as single_latency_analysis
 from model.ctmc import CTMC
-from model.multi_server.multi_server_ctmc import MultiServerCTMC
-from model.single_server.single_server_ctmc import SingleServerCTMC
+from model.multi_server.ctmc import MultiServerCTMC
+from model.single_server.ctmc import SingleServerCTMC
 from utils.plot_parameters import PlotParameters
 
 

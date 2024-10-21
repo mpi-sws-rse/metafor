@@ -3,7 +3,7 @@ from typing import List
 
 
 @dataclass
-class CTMCParameters:
+class SingleServerCTMCParameters:
     main_queue_size: int
     retry_queue_size: int
     lambdaa: float

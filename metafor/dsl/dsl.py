@@ -3,9 +3,8 @@ from typing import List, Set, Tuple
 
 from analysis.analyzer import Analyzer
 from model.ctmc import CTMC
-from model.multi_server.multi_server_ctmc import MultiServerCTMC
+from model.multi_server.ctmc import MultiServerCTMC
 from model.single_server.ctmc import SingleServerCTMC
-#from model.single_server.single_server_ctmc import SingleServerCTMC
 from utils.plot_parameters import PlotParameters
 
 

@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from scipy.sparse.linalg import eigs
 
 from model.multi_server.generator_matrix import GeneratorMatrix
-from model.multi_server.multi_server_ctmc import MultiServerCTMC
+from model.multi_server.ctmc import MultiServerCTMC
 from utils.plot_parameters import PlotParameters
 
 
@@ -28,162 +28,6 @@ def hitting_time_approx(ctmc: MultiServerCTMC, Q):
 
     mixing_time = abs(math.log2(.1) / eigenvalues_sorted[1].real)
     return mixing_time
-
-
-def sparse_info_calculator(ctmc: MultiServerCTMC, lambda_list, node_selected, q_range, o_range):
-    state_num = ctmc.params.state_num_prod
-    server_num = ctmc.params.server_num
-    parent_list = ctmc.params.parent_list
-    mu0_p = ctmc.params.mu0_ps
-    timeout = ctmc.params.timeouts
-    max_retries = ctmc.params.max_retries
-    main_queue_size = ctmc.params.main_queue_sizes
-    retry_queue_size = ctmc.params.retry_queue_sizes
-    row_ind = []
-    col_ind = []
-    data = []
-    for total_ind in range(state_num):
-        q, o = ctmc.index_decomposer(total_ind)
-        absorbing_flg = False
-        for node_id in range(server_num):
-            if node_id == node_selected:
-                if q_range[1] >= q[node_id] >= q_range[0] and o_range[1] >= o[node_id] >= o_range[0]:
-                    absorbing_flg = True
-
-        if not absorbing_flg:
-            val_sum = 0
-            tail_prob_list = ctmc.tail_prob_computer(total_ind)
-            q_next = [0 * i for i in range(server_num)]
-            o_next = [0 * i for i in range(server_num)]
-            # compute the non-synchronized transitions' rates of the generator matrix
-            for node_id in range(server_num):
-                mu_drop_base = 1 / (timeout[node_id] * (max_retries[node_id] + 1))
-                mu_retry_base = max_retries[node_id] / (timeout[node_id] * (max_retries[node_id] + 1))
-                # Check which arrival source is active for the selected node_id
-                lambdaa = lambda_list[node_id]
-                if len(parent_list[node_id]) == 0:  # if there exists only a local source of job arrival
-                    lambda_summed = lambdaa
-                elif q[parent_list[node_id][0]] == 0:
-                    lambda_summed = lambdaa
-                else:  # if there exists local and non-local sources of job arrival
-                    lambda_summed = lambdaa + mu0_p[parent_list[node_id][0]]
-                if q[node_id] == 0:  # queue is empty
-                    q_next[:] = q
-                    o_next[:] = o
-                    # Setting the rates related to job arrivals
-                    q_next[node_id] = q[node_id] + 1
-                    val = lambda_summed
-                    col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                    data.append(val)
-                    val_sum += val
-                    row_ind.append(total_ind)
-                    q_next[:] = q
-                    o_next[:] = o
-                    # Setting the rates related to abandon and retry
-                    if o[node_id] > 0:  # if there is any job in the server's orbit
-                        o_next[node_id] = o[node_id] - 1
-                        val = o[node_id] * mu_drop_base  # drop rate
-                        col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                        data.append(val)
-                        val_sum += val
-                        row_ind.append(total_ind)
-                        q_next[node_id] = q[node_id] + 1
-                        o_next[node_id] = o[node_id] - 1
-                        val = o[node_id] * mu_retry_base  # retry rate
-                        col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                        data.append(val)
-                        val_sum += val
-                        row_ind.append(total_ind)
-                        q_next[:] = q
-                        o_next[:] = o
-
-                elif q[node_id] == main_queue_size[node_id] - 1:  # queue is full
-                    q_next[:] = q
-                    o_next[:] = o
-                    # setting the rates related to job processing
-                    q_next[node_id] = q[node_id] - 1
-                    val = mu0_p[node_id]
-                    col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                    data.append(val)
-                    val_sum += val
-                    row_ind.append(total_ind)
-                    q_next[:] = q
-                    o_next[:] = o
-                    # setting the rates related to abandon
-                    if o[node_id] > 0:  # if there is any job in the server's orbit
-                        o_next[node_id] = o[node_id] - 1
-                        val = o[node_id] * mu_drop_base
-                        col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                        data.append(val)
-                        val_sum += val
-                        row_ind.append(total_ind)
-                        q_next[:] = q
-                        o_next[:] = o
-                    # setting the rates related to moving to the orbit space
-                    if o[node_id] < retry_queue_size[node_id] - 1:  # if orbit isn't full
-                        o_next[node_id] = o[node_id] + 1
-                        val = lambda_summed * mu_retry_base * tail_prob_list[node_id]
-                        col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                        data.append(val)
-                        val_sum += val
-                        row_ind.append(total_ind)
-                        q_next[:] = q
-                        o_next[:] = o
-
-                else:  # queue is neither full nor empty
-                    q_next[:] = q
-                    o_next[:] = o
-                    # Setting the rates related to job arrivals
-                    q_next[node_id] = q[node_id] + 1
-                    val = lambda_summed
-                    col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                    data.append(val)
-                    val_sum += val
-                    row_ind.append(total_ind)
-                    q_next[:] = q
-                    o_next[:] = o
-                    # setting the rates related to job processing
-                    q_next[node_id] = q[node_id] - 1
-                    val = mu0_p[node_id]
-                    col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                    data.append(val)
-                    val_sum += val
-                    row_ind.append(total_ind)
-                    q_next[:] = q
-                    o_next[:] = o
-                    # Setting the rates related to abandon and retry
-                    if o[node_id] > 0:  # if there is any job in the server's orbit
-                        o_next[node_id] = o[node_id] - 1
-                        val = o[node_id] * mu_drop_base
-                        col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                        data.append(val)
-                        val_sum += val
-                        row_ind.append(total_ind)
-                        q_next[node_id] = q[node_id] + 1
-                        o_next[node_id] = o[node_id] - 1
-                        val = o[node_id] * mu_retry_base * (1 - tail_prob_list[node_id])
-                        col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                        data.append(val)
-                        val_sum += val
-                        row_ind.append(total_ind)
-                        q_next[:] = q
-                        o_next[:] = o
-                    # setting the rates related to moving to the orbit space
-                    if o[node_id] < retry_queue_size[node_id] - 1:  # if orbit isn't full
-                        q_next[node_id] = q[node_id] + 1
-                        o_next[node_id] = o[node_id] + 1
-                        val = lambda_summed * mu_retry_base * tail_prob_list[node_id]
-                        col_ind.append(ctmc.index_composer(q_next[:], o_next[:]))
-                        data.append(val)
-                        val_sum += val
-                        row_ind.append(total_ind)
-                        q_next[:] = q
-                        o_next[:] = o
-            val = - val_sum
-            col_ind.append(total_ind)
-            data.append(val)
-            row_ind.append(total_ind)
-    return [row_ind, col_ind, data]
 
 
 def fault_simulation_data_generator(ctmc: MultiServerCTMC, pi_q_seq, main_queue_ave_len_seq, lambda_seq,
@@ -218,31 +62,15 @@ def fault_simulation_data_generator(ctmc: MultiServerCTMC, pi_q_seq, main_queue_
     col_ind_reset = 0
 
     for lambda_config in plot_params.config_set:
-        # Computing the generator matrices
-        start1 = time.time()
-        row_ind, col_ind, data = sparse_info_calculator(ctmc, lambda_config, -1, [0, 0], [0, 0])
+        # Computing the generator matrices and the stationary distributions
+        pi_ss, row_ind, col_ind, data, Q_op, Q_op_T = ctmc.compute_stationary_distribution(lambda_config)
         if lambda_config == lambda_init:
             row_ind_init, col_ind_init, data_init = row_ind, col_ind, data
+            np.save("pi_ss", pi_ss)
         elif lambda_config == lambda_fault:
             row_ind_fault, col_ind_fault, data_fault = row_ind, col_ind, data
         elif lambda_config == lambda_reset:
             row_ind_reset, col_ind_reset, data_reset = row_ind, col_ind, data
-
-        Q = scipy.sparse.csr_matrix((data, (row_ind, col_ind)), shape=(state_num, state_num))
-
-        def matvec_func(x):
-            return Q.T.dot(x)
-
-        def rmatvec_func(x):
-            return Q.dot(x)
-
-        Q_op = GeneratorMatrix(shape=(state_num, state_num), matvec=rmatvec_func, rmatvec=matvec_func,
-                               dtype=Q.dtype)
-        Q_op_T = GeneratorMatrix(shape=(state_num, state_num), matvec=matvec_func, rmatvec=rmatvec_func,
-                                 dtype=Q.dtype)
-
-        rt1 = time.time() - start1
-        print(rt1)
 
         #  approximate hitting time via using spectral gap
         h_su = []
@@ -251,8 +79,7 @@ def fault_simulation_data_generator(ctmc: MultiServerCTMC, pi_q_seq, main_queue_
             start = time.time()
             q_range_u = [q_min_list[node_id], main_queue_size[node_id]]
             o_range_u = [o_min_list[node_id], retry_queue_size[node_id]]
-            row_ind_u, col_ind_u, data_ind_u = sparse_info_calculator(ctmc, lambda_config, node_id, q_range_u,
-                                                                      o_range_u)
+            row_ind_u, col_ind_u, data_ind_u = ctmc.sparse_info_calculator(lambda_config, node_id, q_range_u, o_range_u)
             Q_u = scipy.sparse.csr_matrix((data_ind_u, (row_ind_u, col_ind_u)), shape=(state_num, state_num))
             h_su.append(hitting_time_approx(ctmc, Q_u))
             print("h_su is", h_su[node_id])
@@ -261,8 +88,7 @@ def fault_simulation_data_generator(ctmc: MultiServerCTMC, pi_q_seq, main_queue_
             start = time.time()
             q_range_s = [0, q_max_list[node_id]]
             o_range_s = [0, o_max_list[node_id]]
-            row_ind_s, col_ind_s, data_ind_s = sparse_info_calculator(ctmc, lambda_config, node_id, q_range_s,
-                                                                      o_range_s)
+            row_ind_s, col_ind_s, data_ind_s = ctmc.sparse_info_calculator(lambda_config, node_id, q_range_s, o_range_s)
             Q_s = scipy.sparse.csr_matrix((data_ind_s, (row_ind_s, col_ind_s)), shape=(state_num, state_num))
             h_us.append(hitting_time_approx(ctmc, Q_s))
             print("h_us is", h_us[node_id])
@@ -274,16 +100,6 @@ def fault_simulation_data_generator(ctmc: MultiServerCTMC, pi_q_seq, main_queue_
             clusters = [[], []]
         else:
             clusters = [[]]
-
-        # computing stationary distribution
-        start = time.time()
-        _, eigenvectors = eigs(Q_op_T, k=1, which='SM')
-        pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
-        if pi_ss[0] < -.00000001:
-            pi_ss = -pi_ss
-        if lambda_config == plot_params.config_set[0]:
-            np.save("pi_ss", pi_ss)
-        print("time taken to compute pi_ss is", time.time() - start)
 
         # computing occupancy prob
         cumulative_prob_stable = []
