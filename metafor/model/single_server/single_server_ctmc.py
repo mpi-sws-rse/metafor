@@ -16,6 +16,7 @@ class SingleServerCTMC(CTMC):
 
     def __init__(self, main_queue_size: int, retry_queue_size: int, lambdaas: List[float], mu0_ps: List[float],
                  timeouts: List[int], retries: List[int], thread_pool: int, alpha: float = 0.25):
+        super().__init__()
         assert (thread_pool >= 1)
         assert (len(lambdaas) == len(mu0_ps) == len(timeouts) == len(retries))
         self.params = self.init_parameters(main_queue_size, retry_queue_size, lambdaas, mu0_ps, timeouts, retries,
@@ -23,7 +24,8 @@ class SingleServerCTMC(CTMC):
 
     @staticmethod
     def init_parameters(main_queue_size: int, retry_queue_size: int, lambdaas: List[float], mu0_ps: List[float],
-                        timeouts: List[int], retries: List[int], thread_pool: int, alpha: float) -> SingleServerCTMCParameters:
+                        timeouts: List[int], retries: List[int], thread_pool: int,
+                        alpha: float) -> SingleServerCTMCParameters:
         state_num = main_queue_size * retry_queue_size
         lambdaa = sum(lambdaas)
         mu0_p = 0
@@ -38,8 +40,9 @@ class SingleServerCTMC(CTMC):
         mu_retry_base = max_retries * lambdaa / ((max_retries + 1) * timeout)
         # the rate of dropping jobs in the retry queue
         mu_drop_base = lambdaa / ((max_retries + 1) * timeout)
-        return SingleServerCTMCParameters(main_queue_size, retry_queue_size, lambdaa, lambdaas, state_num, mu_retry_base,
-                                          mu_drop_base, mu0_p, mu0_ps, timeout, timeouts, max_retries, retries, thread_pool, alpha)
+        return SingleServerCTMCParameters(main_queue_size, retry_queue_size, lambdaa, lambdaas, state_num,
+                                          mu_retry_base, mu_drop_base, mu0_p, mu0_ps, timeout, timeouts, max_retries,
+                                          retries, thread_pool, alpha)
 
     def index_decomposer(self, total_ind):
         """This function converts a given index in range [0, state_num]
@@ -167,7 +170,7 @@ class SingleServerCTMC(CTMC):
         main_queue_size = self.params.main_queue_size
         # use the law of total expectation
         mu0_p = self.params.mu0_ps[job_type]
-        val = 1 / mu0_p
+        val: List[float] = 1 / mu0_p
         for n_main_queue in range(main_queue_size):
             weight = 0
             for n_retry_queue in range(retry_queue_size):
