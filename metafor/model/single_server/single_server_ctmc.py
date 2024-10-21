@@ -8,7 +8,7 @@ import time
 
 from utils.plot_parameters import PlotParameters
 from model.ctmc import CTMC
-from model.ctmc_parameters import CTMCParameters
+from model.single_server.ctmc_parameters import SingleServerCTMCParameters
 from utils.calculate import tail_prob_computer
 
 
@@ -23,7 +23,7 @@ class SingleServerCTMC(CTMC):
 
     @staticmethod
     def init_parameters(main_queue_size: int, retry_queue_size: int, lambdaas: List[float], mu0_ps: List[float],
-                        timeouts: List[int], retries: List[int], thread_pool: int, alpha: float) -> CTMCParameters:
+                        timeouts: List[int], retries: List[int], thread_pool: int, alpha: float) -> SingleServerCTMCParameters:
         state_num = main_queue_size * retry_queue_size
         lambdaa = sum(lambdaas)
         mu0_p = 0
@@ -38,8 +38,8 @@ class SingleServerCTMC(CTMC):
         mu_retry_base = max_retries * lambdaa / ((max_retries + 1) * timeout)
         # the rate of dropping jobs in the retry queue
         mu_drop_base = lambdaa / ((max_retries + 1) * timeout)
-        return CTMCParameters(main_queue_size, retry_queue_size, lambdaa, lambdaas, state_num, mu_retry_base,
-                              mu_drop_base, mu0_p, mu0_ps, timeout, timeouts, max_retries, retries, thread_pool, alpha)
+        return SingleServerCTMCParameters(main_queue_size, retry_queue_size, lambdaa, lambdaas, state_num, mu_retry_base,
+                                          mu_drop_base, mu0_p, mu0_ps, timeout, timeouts, max_retries, retries, thread_pool, alpha)
 
     def index_decomposer(self, total_ind):
         """This function converts a given index in range [0, state_num]
@@ -110,10 +110,11 @@ class SingleServerCTMC(CTMC):
         return Q
 
     def get_stationary_distribution(self):
-        Q = self.generator_mat_exact()
-        QT = np.transpose(Q)
-        ns = scipy.linalg.null_space(QT)
-        self.pi = ns / np.linalg.norm(ns, ord=1)
+        if self.pi is None:
+            Q = self.generator_mat_exact()
+            QT = np.transpose(Q)
+            ns = scipy.linalg.null_space(QT)
+            self.pi = ns / np.linalg.norm(ns, ord=1)
         return self.pi
     
     def main_queue_average_size(self, pi) -> float:
