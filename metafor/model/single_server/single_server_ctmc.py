@@ -114,6 +114,8 @@ class SingleServerCTMC(CTMC):
         QT = np.transpose(Q)
         ns = scipy.linalg.null_space(QT)
         self.pi = ns / np.linalg.norm(ns, ord=1)
+        if sum(self.pi) < - 0.01: # the null space can return the negation of the stationary distribution
+                self.pi = - self.pi
         return self.pi
     
     def main_queue_average_size(self, pi) -> float:

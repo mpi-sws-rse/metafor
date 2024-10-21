@@ -65,6 +65,11 @@ class SingleServerCTMC(CTMC):
 
         self.pi: Optional[npt.NDArray[np.float64]] = None
 
+    def get_init_state(self) -> npt.NDArray[np.float64]:
+        pi = np.zeros(self.state_num)
+        pi[0] = 1.0  # Initially the queue is empty
+        return pi
+
     # compute the stationary distribution and cache it
     def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
         if self.pi is None:
@@ -72,10 +77,21 @@ class SingleServerCTMC(CTMC):
             QT = np.transpose(self.Q)
             ns = scipy.linalg.null_space(QT)
             self.pi = ns / np.linalg.norm(ns, ord=1)
+            if sum(self.pi) < - 0.01: # the null space may return `-pi`
+                self.pi = - self.pi
             return self.pi
         else:
             return self.pi
     
+    def get_eigenvalues(self):
+        eigenvalues = np.linalg.eigvals(self.Q)
+        sorted_eigenvalues = np.sort(eigenvalues.real)[::-1]
+        return sorted_eigenvalues
+    
+    def get_mixing_time(self):
+        eigenvalues = self.get_eigenvalues() # RM: we only need the first eigenvalue
+        t_mixing = 1 / abs(eigenvalues[1]) * math.log2(100)
+        return t_mixing
 
     def _index_decomposer(self, total_ind):
         """This function converts a given index in range [0, state_num]
@@ -145,6 +161,38 @@ class SingleServerCTMC(CTMC):
                 Q[total_ind, total_ind] = - np.sum(Q[total_ind, :])
         return Q
 
+
+
+    def finite_time_analysis(self, pi0, analyses = {}, sim_time=60, sim_step=10):
+        results = {}
+        results[0] = { 'pi': pi0 }
+        print('Computing finite time statistics for time quantum %d time units with step size %d' % (sim_time, sim_step))
+        QT  = np.transpose(self.Q)
+        start = time.time()
+        print("Starting matrix exponentiation...", end=" ")
+        matexp = scipy.linalg.expm(QT * sim_step)
+        print("Matrix exponentiation took %f s", time.time() - start)
+
+        piq = pi0
+        for t in range(sim_step, sim_time, sim_step):
+            result = {}
+            start = time.time()
+            piq = np.transpose(np.matmul(matexp, piq))
+            elapsed_time = time.time() - start
+            result['step'] = t
+            result['pi'] = piq
+            # pi = np.transpose(np.matmul(scipy.linalg.expm(QT * t), pi0))
+            # result['inefficientpi'] = pi
+            result['wallclock_time'] = elapsed_time
+            # now run all the analyses passed to this function with the current distribution
+            for (analysis_name, analysis_fn) in analyses.items():
+                v = analysis_fn(piq)
+                result[analysis_name] = v
+
+            results[t] = result
+            print(result)
+        return results  
+    
     def main_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
         main_queue_size = self.main_queue_size
@@ -168,7 +216,7 @@ class SingleServerCTMC(CTMC):
             weight = 0
             for n_retry_queue in range(retry_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
-            var += weight * (n_main_queue - mean_queue_length) ** 2
+            var += weight * (n_main_queue - mean_queue_length) * (n_main_queue - mean_queue_length)
         return var
 
     def retry_queue_size_average(self, pi) -> float:
@@ -183,24 +231,37 @@ class SingleServerCTMC(CTMC):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             length += weight * n_retry_queue
         return length
+    
+    def retry_queue_size_variance(self, pi, mean_queue_length) -> float:
+        """This function computes the variance over queue length for a given prob distribution pi"""
+        main_queue_size = self.main_queue_size
+        retry_queue_size = self.retry_queue_size
+
+        var = 0
+        for n_retry_queue in range(retry_queue_size):
+            weight = 0
+            for n_main_queue in range(main_queue_size):
+                weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
+            var += weight * (n_retry_queue - mean_queue_length) * (n_retry_queue - mean_queue_length)
+        return var
 
     @staticmethod
     def main_queue_size_std(main_queue_variance) -> float:
         """This function computes the standard deviation over queue length from its variance"""
         return math.sqrt(main_queue_variance)
 
-    # job_type represents the index of the job
-    def latency_average(self, pi, job_type: int = -1) -> float:
+    # req_type represents the index of the request 
+    def latency_average(self, pi, req_type: int = 0) -> float:
         retry_queue_size = self.retry_queue_size
         main_queue_size = self.main_queue_size
         # use the law of total expectation
-        mu0_p = self.mu0_ps[job_type]
+        mu0_p = self.mu0_ps[req_type]
         val = 1 / mu0_p
         for n_main_queue in range(main_queue_size):
             weight = 0
             for n_retry_queue in range(retry_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
-            val += weight * (self.lambdaas[job_type] / self.lambdaa) * n_main_queue * (1 / mu0_p)
+            val += weight * (self.lambdaas[req_type] / self.lambdaa) * n_main_queue * (1 / mu0_p)
         return val[0]
 
     def latency_variance(self, pi, job_type: int) -> float:
@@ -539,37 +600,39 @@ class SingleServerCTMC(CTMC):
         plot_results_reset(input_seq, mean_rt_seq, lower_bound_rt_seq, upper_bound_rt_seq, x_axis_label, 'Return time',
                            'reset_' + variable1 + "_varied_" + file_name, main_color, fade_color, nominal_value)
 
-    def server_population_queue_model(self, Q, pi_q_seq, plot_params: PlotParameters):
-        """This function runs CTMC over the given simulation time and
-        provides some analysis over the system's performance."""
-        step_time = plot_params.step_time
-        sim_time = int(plot_params.sim_time)
 
-        main_queue_avg_len_seq = [0]
-        main_queue_var_len_seq = [0]
-        main_queue_std_len_seq = [0]
-        runtime_seq = [0]
+              
 
-        retry_queue_avg_len_seq = [0]
+    # def server_population_queue_model(self, Q, pi_q_seq, plot_params: PlotParameters):
+    #    """This function runs CTMC over the given simulation time and
+    #    provides some analysis over the system's performance."""
+    #    step_time = plot_params.step_time
+    #    sim_time = int(plot_params.sim_time)
+    #
+    #    main_queue_avg_len_seq = [0]
+    #    main_queue_var_len_seq = [0]
+    #    main_queue_std_len_seq = [0]
+    #    runtime_seq = [0]
+    #
+    # retry_queue_avg_len_seq = [0]
+    # Q_T = np.transpose(Q)
+    # print('Computing the average length of the main queue/orbit in the time interval %d-%d' % (step_time, sim_time))
+    # for t in range(step_time, sim_time + 1, step_time):
+    #     print("Time bound is equal to", t)
+    #     start_time = time.time()
+    #     # Updating the system states
+    #     pi_q_new = np.transpose(np.matmul(scipy.linalg.expm(Q_T * t), pi_q_seq[0]))
+    #     pi_q_seq.append(copy.copy(pi_q_new))
+    #     main_queue_mean_length = self.main_queue_average_size(pi_q_new)
+    #     main_queue_avg_len_seq.append(main_queue_mean_length)
+    #     main_queue_variance_length = self.main_queue_size_var(pi_q_new, main_queue_mean_length)
+    #     main_queue_var_len_seq.append(main_queue_variance_length)
+    #     main_queue_std_len_seq.append(self.main_queue_size_std(main_queue_variance_length))
+    #     retry_queue_avg_len_seq.append(self.retry_queue_average_size(pi_q_new))
+    #     runtime_seq.append(time.time() - start_time)
 
-        Q_T = np.transpose(Q)
-        print('Computing the average length of the main queue/orbit in the time interval %d-%d' % (step_time, sim_time))
-        for t in range(step_time, sim_time + 1, step_time):
-            print("Time bound is equal to", t)
-            start_time = time.time()
-            # Updating the system states
-            pi_q_new = np.transpose(np.matmul(scipy.linalg.expm(Q_T * t), pi_q_seq[0]))
-            pi_q_seq.append(copy.copy(pi_q_new))
-            main_queue_mean_length = self.main_queue_average_size(pi_q_new)
-            main_queue_avg_len_seq.append(main_queue_mean_length)
-            main_queue_variance_length = self.main_queue_size_var(pi_q_new, main_queue_mean_length)
-            main_queue_var_len_seq.append(main_queue_variance_length)
-            main_queue_std_len_seq.append(self.main_queue_size_std(main_queue_variance_length))
-            retry_queue_avg_len_seq.append(self.retry_queue_average_size(pi_q_new))
-            runtime_seq.append(time.time() - start_time)
-
-        return (main_queue_avg_len_seq, main_queue_var_len_seq, main_queue_std_len_seq,
-                retry_queue_avg_len_seq, runtime_seq)
+    # return (main_queue_avg_len_seq, main_queue_var_len_seq, main_queue_std_len_seq,
+    #         retry_queue_avg_len_seq, runtime_seq)
 
     def reach_prob_computation(self, Q, plot_params: PlotParameters) -> List[float]:
         print('Computing the probability to reach the queue full mode')
@@ -602,16 +665,16 @@ class SingleServerCTMC(CTMC):
         probabilities = self.reach_prob_computation(Q, plot_params)
         return probabilities[int(plot_params.sim_time / t)]
 
-    def queues_avg_len(self, Q, t: int, plot_params: PlotParameters) -> (float, float):
-        assert t % plot_params.step_time == 0
+    # def queues_avg_len(self, Q, t: int, plot_params: PlotParameters) -> (float, float):
+    #     assert t % plot_params.step_time == 0
 
-        pi_q_new = np.zeros(self.state_num)
-        pi_q_new[0] = 1  # Initially the queue is empty
-        pi_q_seq = [copy.copy(pi_q_new)]  # Initializing the initial distribution
+    #     pi_q_new = np.zeros(self.state_num)
+    #     pi_q_new[0] = 1  # Initially the queue is empty
+    #     pi_q_seq = [copy.copy(pi_q_new)]  # Initializing the initial distribution
 
-        main_queue_avg_len, _, _, retry_queue_avg_len, _ = self.server_population_queue_model(Q, pi_q_seq, plot_params)
-        index = int(plot_params.sim_time / t)
-        return main_queue_avg_len[index], retry_queue_avg_len[index]
+    #     main_queue_avg_len, _, _, retry_queue_avg_len, _ = self.server_population_queue_model(Q, pi_q_seq, plot_params)
+    #     index = int(plot_params.sim_time / t)
+    #     return main_queue_avg_len[index], retry_queue_avg_len[index]
 
     """This function computes the generator matrix of CTMC."""
     def sparse_info_calculator(self):
@@ -679,11 +742,11 @@ class SingleServerCTMC(CTMC):
                     data_point.append(n_retry_queue * mu_retry_base * (1 - tail_main))
                     data_sum += n_retry_queue * mu_retry_base * (1 - tail_main)
                     row_ind.append(total_ind)
-                    col_ind.append(self.index_composer(n_main_queue, n_retry_queue - 1))
+                    col_ind.append(self._index_composer(n_main_queue, n_retry_queue - 1))
                     data_point.append(n_retry_queue * mu_drop_base)
                     data_sum += n_retry_queue * mu_drop_base
                 row_ind.append(total_ind)
-                col_ind.append(self.index_composer(n_main_queue - 1, n_retry_queue))
+                col_ind.append(self._index_composer(n_main_queue - 1, n_retry_queue))
                 data_point.append(mu0_p)
                 data_sum += mu0_p
             row_ind.append(total_ind)
@@ -695,7 +758,7 @@ class SingleServerCTMC(CTMC):
         val = 0
         for q in range(q1, q2):
             for o in range(o1, o2):
-                state = self.index_composer(q, o)
+                state = self._index_composer(q, o)
                 val += pi[state]
         return val
 
