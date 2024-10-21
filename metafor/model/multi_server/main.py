@@ -80,6 +80,7 @@ def main():
                                  lambda_reset=lambda_reset, reset_time=reset_time, config_set=config_set)
     ctmc = MultiServerCTMC(server_num, main_queue_sizes, retry_queue_sizes, lambda0s, mu0_p, timeouts, max_retries,
                            thread_pools, parent_list, sub_tree_list, q_min_list, q_max_list, o_min_list, o_max_list)
+    print(ctmc.get_stationary_distribution())
     file_name = 'multi_server_results.png'
     analyzer = Analyzer(ctmc, file_name)
     analyzer.fault_scenario_analysis(plot_params)

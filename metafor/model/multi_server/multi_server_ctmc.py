@@ -316,7 +316,7 @@ class MultiServerCTMC(CTMC):
 
     def get_stationary_distribution(self) -> List[float]:
         if self.pi is None:
-            state_num = self.params.state_num
+            state_num = self.params.state_num_prod
             row_ind, col_ind, data = self.sparse_info_calculator(self.params.lambda_init, -1, [0, 0], [0, 0])
             Q = scipy.sparse.csr_matrix((data, (row_ind, col_ind)), shape=(state_num, state_num))
 
