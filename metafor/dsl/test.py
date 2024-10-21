@@ -34,7 +34,7 @@ class TestCTMC(unittest.TestCase):
         print("Computing stationary distribution")
         pi = timed_call(SingleServerCTMC.get_stationary_distribution, ctmc)
         print(pi)
-        print("Average queue size = ", ctmc.main_queue_size_average(pi))
+        print("Average queue size = ", ctmc.main_queue_average_size(pi))
         print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
 
     def test_single_server_multiple_requests(self):

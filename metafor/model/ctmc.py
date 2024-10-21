@@ -1,5 +1,8 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 
 
 class CTMC(ABC):
-    pass
+
+    @abstractmethod
+    def main_queue_average_size(self, pi) -> float:
+        pass

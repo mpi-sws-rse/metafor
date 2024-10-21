@@ -106,7 +106,7 @@ class MultiServerCTMC(CTMC):
                 tail_prob[node_id] = 1
         return tail_prob
 
-    def cumulative_prob_computer(self, pi_vec, q_range, o_range):
+    def cumulative_prob_computer(self, pi, q_range, o_range):
         """To compute the probability mass of set of states with queue length between q_min and q_max,
         and orbit length between o_min and o_max"""
         # index_composer = self.index_composer()
@@ -125,10 +125,10 @@ class MultiServerCTMC(CTMC):
                 prod_state_list.append(self.index_composer(q, o))
         cumulative_prob = 0
         for state in prod_state_list:
-            cumulative_prob += pi_vec[state]
+            cumulative_prob += pi[state]
         return cumulative_prob
 
-    def main_queue_average_size(self, pi_vec):
+    def main_queue_average_size(self, pi) -> float:
         server_num = self.params.server_num
         main_queue_size = self.params.main_queue_sizes
         retry_queue_size = self.params.retry_queue_sizes
@@ -150,7 +150,7 @@ class MultiServerCTMC(CTMC):
                 p = 0
                 for q in q_prod_list:
                     for o in o_prod_list:
-                        p += pi_vec[self.index_composer(q, o)]
+                        p += pi[self.index_composer(q, o)]
                 q_len_node += q_node * p
             q_len[node_id] = q_len_node
         return q_len
