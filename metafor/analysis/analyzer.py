@@ -5,21 +5,8 @@ from typing import Any, Iterable
 from numpy import linspace
 import pandas
 
-from analysis.multi_server_ctmc_analysis import (
-    fault_scenario_analysis as multi_fault_scenario_analysis,
-)
-from analysis.single_server_ctmc_analysis import (
-    average_lengths_analysis as single_average_lengths_analysis,
-    fault_scenario_analysis as single_fault_scenario_analysis,
-    latency_analysis as single_latency_analysis,
-)
-
 from dsl.dsl import Source, Server, Work, Program
 
-from model.ctmc import CTMC
-from model.multi_server.ctmc import MultiServerCTMC
-from model.single_server.ctmc import SingleServerCTMC
-from utils.plot_parameters import PlotParameters
 
 # A parameter name is a tuple of strings, starting with "server" or "source"
 # Typical parameter name would be
@@ -31,6 +18,7 @@ class ParameterName:
         assert(name[0] == "server" or name[0] == "source")
 
         self.name = name
+
 
 class Parameter:
     def __init__(self, name: ParameterName, values: Iterable[Any]):
@@ -62,10 +50,12 @@ class Parameter:
 #     def get_name(self):
 #         return self.sourcename
 
+
 def nested_map(keys, value):
     if len(keys) == 1:
         return {keys[0]: value}
     return {keys[0]: nested_map(keys[1:], value)}
+
 
 def create_nested_map(pairs):
     result = {}
@@ -78,6 +68,7 @@ def create_nested_map(pairs):
         temp[keys[-1]] = value  # Set the last key to the value
     return result
 
+
 class ParameterList:
     def __init__(self, paramlist: list[Parameter]):
         self.params = paramlist
@@ -89,6 +80,7 @@ class ParameterList:
     def __next__(self):
             tup = self.product.__next__()
             return create_nested_map(zip(map(lambda p: p.param_name(), self.params), tup))
+
 
 class Experiment:
     @abstractmethod
@@ -145,7 +137,6 @@ class Experiment:
             results.append(self.analyze(params, program))
         print("Sweep: \n", results)
         self.show(results)
-
 
 
 class TestProgram(Experiment):
