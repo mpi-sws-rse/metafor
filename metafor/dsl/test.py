@@ -1,5 +1,7 @@
 import time
 import unittest
+import numpy
+import sys
 
 from dsl import Work, Server, Source, Program, DependentCall, Constants
 from utils.plot_parameters import PlotParameters
@@ -94,7 +96,7 @@ class TestDSL(unittest.TestCase):
                 'put' : Work(20, []),
                 'list' : Work(2, []),
         }
-        node = Server('node', apis, 300, 5, 48)
+        node = Server('node', apis, 300, 5, 1)
 
         putsrc = Source('putsrc', 'put', 2, 5, 1)
         getsrc = Source('getsrc', 'get', 2, 3, 1)
@@ -109,16 +111,19 @@ class TestDSL(unittest.TestCase):
         p.connect('getsrc', 'node')
         p.connect('listsrc', 'node')
 
-        for qsize in range(1000, 5000, 500):
+        for qsize in range(10, 30, 20):
+            numpy.set_printoptions(threshold=sys.maxsize)
             start = time.time()
             node.qsize = qsize
             ctmc = p.build()
             pi = ctmc.get_stationary_distribution()
             print("Average queue size = ", ctmc.main_queue_size_average(pi))
+            print(pi)
             for (i, req) in enumerate(p.get_requests('node')):
                 print("Qsize = ", qsize, " Request = ", req, end='')
                 l = ctmc.latency_average(pi, i)
                 print(' has average latency ', l)
+                ctmc.latency_percentile(pi, req_type = i, percentile = 50.0)
             print("Wallclock time = ", time.time() - start)
 
 

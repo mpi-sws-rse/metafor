@@ -247,7 +247,7 @@ class SingleServerCTMC(CTMC):
         main_queue_size = self.main_queue_size
         retry_queue_size = self.retry_queue_size
 
-        length = 0.0
+        length: float = 0.0
         for n_main_queue in range(main_queue_size):
             weight = 0.0
             for n_retry_queue in range(retry_queue_size):
@@ -362,6 +362,37 @@ class SingleServerCTMC(CTMC):
 
         var = var1 + var2
         return var[0]
+    
+    def latency_percentile(self, pi, req_type: int = 0, percentile: float = 50.0):
+        assert(percentile <= 100.0)
+        retry_queue_size = self.retry_queue_size
+        main_queue_size = self.main_queue_size
+        distribution = np.zeros((self.state_num, 2))
+        mu0_p = self.mu0_ps[req_type]
+        val = 1 / mu0_p
+        index = 0
+        for n_main_queue in range(main_queue_size):
+            weight = 0
+            for n_retry_queue in range(retry_queue_size):
+                weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
+            val += (
+                 (self.lambdaas[req_type] / self.lambdaa)
+                * n_main_queue
+                * (1 / mu0_p)
+            )
+            distribution[index][0] = val
+            distribution[index][1] = weight
+            index = index + 1
+        distribution.sort(axis=0)
+        cum = 0
+        index = 0
+        while cum * 100 < percentile:
+            cum = cum + distribution[index][1]
+            index = index + 1
+        print(distribution)
+        print(index)
+        return distribution[index][0]
+
 
     def hitting_time_average_us(self, Q, pi, qlen_max) -> float:
         state_num = self.state_num
