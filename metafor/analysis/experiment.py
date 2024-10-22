@@ -2,11 +2,8 @@ import itertools
 from abc import abstractmethod
 
 from typing import Any, Iterable
-from numpy import linspace
-import pandas
 
-from dsl.dsl import Source, Server, Work, Program
-from model.single_server.ctmc import SingleServerCTMC
+from dsl.dsl import Program
 
 
 # A parameter name is a tuple of strings, starting with "server" or "source"
@@ -140,37 +137,6 @@ class Experiment:
         self.show(results)
 
 
-class TestProgram(Experiment):
-    def __init__(self):
-        pass
-
-    def build(self, param) -> Program:
-        apis = {'rd': Work(10, [])}
-        s = Server("server", apis, 100, 20, 1)
-        rdsrc = Source("reader", "rd", 9.5, 9, 3)
-        p = Program("single_server")
-        p.add_server(s)
-        p.add_source(rdsrc)
-        p.connect("reader", "server")
-        return self.update(p, param)
-
-    def analyze(self, param_setting, p: Program):
-        ctmc: SingleServerCTMC = p.build()
-        pi = ctmc.get_stationary_distribution()
-        avg = ctmc.main_queue_size_average(pi)[0]
-        print("avg = ", avg)
-        std = ctmc.main_queue_size_std(pi, avg)
-        print("std = ", std)
-        print([param_setting, avg, std])
-        return [param_setting, avg, std]
-
-    def show(self, results):
-        print(results)
-        pd = pandas.DataFrame(results, columns=["parameter", "average", "std"])
-        print(pd)
-        # ADD PLOT CODE HERE
-
-
 # def test_fiddle_program():
 #     apis = { 'rd': Work(10, []) }
 #     s_conf = fiddle.Config(Server, name="server", apis=apis, qsize=100, orbit_size=20, thread_pool=1)
@@ -194,37 +160,3 @@ class TestProgram(Experiment):
 #     p.add_source(rd_src)
 #     p.connect("reader", "server")
 #     p.print()
-
-
-if __name__ == "__main__":
-    t = TestProgram()
-    p1 = Parameter(("server", "server", "qsize"), range(20, 40, 10))
-    p2 = Parameter(("source", "reader", "arrival_rate"), linspace(8.0, 10.0, num=2))
-    t.sweep(ParameterList([p1, p2]))
-
-        
-"""
-class Analyzer:
-
-    def __init__(self, ctmc: CTMC, file_name: str):
-        self.ctmc = ctmc
-        self.file_name = file_name
-
-    def average_lengths_analysis(self, plot_params: PlotParameters):
-        if isinstance(self.ctmc, SingleServerCTMC):
-            single_average_lengths_analysis(self.ctmc, self.file_name, plot_params)
-        else:
-            raise NotImplementedError
-
-    def fault_scenario_analysis(self, plot_params: PlotParameters):
-        if isinstance(self.ctmc, SingleServerCTMC):
-            single_fault_scenario_analysis(self.ctmc, self.file_name, plot_params)
-        elif isinstance(self.ctmc, MultiServerCTMC):
-            multi_fault_scenario_analysis(self.ctmc, self.file_name, plot_params)
-
-    def latency_analysis(self, plot_params: PlotParameters, job_type: int = -1):
-        if isinstance(self.ctmc, SingleServerCTMC):
-            single_latency_analysis(self.ctmc, self.file_name, plot_params, job_type)
-        else:
-            raise NotImplementedError
-"""

@@ -13,7 +13,6 @@ from utils.plot_parameters import PlotParameters
 
 
 def hitting_time_approx(ctmc: MultiServerCTMC, Q):
-    state_num = ctmc.params.state_num_prod
     A = copy.deepcopy(Q)
 
     def matvec_func(x):
@@ -23,7 +22,7 @@ def hitting_time_approx(ctmc: MultiServerCTMC, Q):
         return A.T.dot(x)
 
     A_op = GeneratorMatrix(
-        shape=(state_num, state_num),
+        shape=(ctmc.state_num_prod, ctmc.state_num_prod),
         matvec=matvec_func,
         rmatvec=rmatvec_func,
         dtype=A.dtype,
@@ -47,19 +46,10 @@ def fault_simulation_data_generator(
     unstable_configs = []
     metastable_configs = []
     lambda_reset = plot_params.lambda_reset
-    lambda_init = ctmc.params.lambda_init
     fault_time = plot_params.start_time_fault
     reset_time = plot_params.reset_time
     lambda_fault = plot_params.lambda_fault
     step_time = plot_params.step_time
-    main_queue_size = ctmc.params.main_queue_sizes
-    retry_queue_size = ctmc.params.retry_queue_sizes
-    state_num = ctmc.params.state_num_prod
-    server_num = ctmc.params.server_num
-    q_min_list = ctmc.params.q_min_list
-    q_max_list = ctmc.params.q_max_list
-    o_min_list = ctmc.params.o_min_list
-    o_max_list = ctmc.params.o_max_list
 
     data_init = []
     row_ind_init = 0
@@ -76,7 +66,7 @@ def fault_simulation_data_generator(
         pi_ss, row_ind, col_ind, data, Q_op, Q_op_T = (
             ctmc.compute_stationary_distribution(lambda_config)
         )
-        if lambda_config == lambda_init:
+        if lambda_config == ctmc.lambdaas:
             row_ind_init, col_ind_init, data_init = row_ind, col_ind, data
             np.save("pi_ss", pi_ss)
         elif lambda_config == lambda_fault:
@@ -87,28 +77,28 @@ def fault_simulation_data_generator(
         #  approximate hitting time via using spectral gap
         h_su = []
         h_us = []
-        for node_id in range(server_num):
+        for node_id in range(ctmc.server_num):
             start = time.time()
-            q_range_u = [q_min_list[node_id], main_queue_size[node_id]]
-            o_range_u = [o_min_list[node_id], retry_queue_size[node_id]]
+            q_range_u = [ctmc.q_min_list[node_id], ctmc.main_queue_sizes[node_id]]
+            o_range_u = [ctmc.o_min_list[node_id], ctmc.retry_queue_sizes[node_id]]
             row_ind_u, col_ind_u, data_ind_u = ctmc.sparse_info_calculator(
                 lambda_config, node_id, q_range_u, o_range_u
             )
             Q_u = scipy.sparse.csr_matrix(
-                (data_ind_u, (row_ind_u, col_ind_u)), shape=(state_num, state_num)
+                (data_ind_u, (row_ind_u, col_ind_u)), shape=(ctmc.state_num_prod, ctmc.state_num_prod)
             )
             h_su.append(hitting_time_approx(ctmc, Q_u))
             print("h_su is", h_su[node_id])
             print("time taken to compute h_su is", time.time() - start)
 
             start = time.time()
-            q_range_s = [0, q_max_list[node_id]]
-            o_range_s = [0, o_max_list[node_id]]
+            q_range_s = [0, ctmc.q_max_list[node_id]]
+            o_range_s = [0, ctmc.o_max_list[node_id]]
             row_ind_s, col_ind_s, data_ind_s = ctmc.sparse_info_calculator(
                 lambda_config, node_id, q_range_s, o_range_s
             )
             Q_s = scipy.sparse.csr_matrix(
-                (data_ind_s, (row_ind_s, col_ind_s)), shape=(state_num, state_num)
+                (data_ind_s, (row_ind_s, col_ind_s)), shape=(ctmc.state_num_prod, ctmc.state_num_prod)
             )
             h_us.append(hitting_time_approx(ctmc, Q_s))
             print("h_us is", h_us[node_id])
@@ -124,16 +114,16 @@ def fault_simulation_data_generator(
         # computing occupancy prob
         cumulative_prob_stable = []
         cumulative_prob_unstable = []
-        for node_id in range(server_num):
+        for node_id in range(ctmc.server_num):
             q_range_s = []
             o_range_s = []
-            for server_id in range(server_num):
+            for server_id in range(ctmc.server_num):
                 if server_id == node_id:
-                    q_range_s.append([0, q_max_list[node_id]])
-                    o_range_s.append([0, o_max_list[node_id]])
+                    q_range_s.append([0, ctmc.q_max_list[node_id]])
+                    o_range_s.append([0, ctmc.o_max_list[node_id]])
                 else:
-                    q_range_s.append([0, main_queue_size[node_id]])
-                    o_range_s.append([0, retry_queue_size[node_id]])
+                    q_range_s.append([0, ctmc.main_queue_sizes[node_id]])
+                    o_range_s.append([0, ctmc.retry_queue_sizes[node_id]])
             # compute the probability assigned to stable portion of the state space of the individual servers
             cumulative_prob_stable.append(
                 ctmc.cumulative_prob_computer(pi_ss, q_range_s, o_range_s)
@@ -141,17 +131,17 @@ def fault_simulation_data_generator(
 
             q_range_u = []
             o_range_u = []
-            for server_id in range(server_num):
+            for server_id in range(ctmc.server_num):
                 if server_id == node_id:
                     q_range_u.append(
-                        [q_min_list[server_id], main_queue_size[server_id]]
+                        [ctmc.q_min_list[server_id], ctmc.main_queue_sizes[server_id]]
                     )
                     o_range_u.append(
-                        [o_min_list[server_id], retry_queue_size[server_id]]
+                        [ctmc.o_min_list[server_id], ctmc.retry_queue_sizes[server_id]]
                     )
                 else:
-                    q_range_u.append([0, main_queue_size[server_id]])
-                    o_range_u.append([0, retry_queue_size[server_id]])
+                    q_range_u.append([0, ctmc.main_queue_sizes[server_id]])
+                    o_range_u.append([0, ctmc.retry_queue_sizes[server_id]])
             # compute the probability assigned to stable portion of the state space of the individual servers
             cumulative_prob_unstable.append(
                 ctmc.cumulative_prob_computer(pi_ss, q_range_u, o_range_u)
@@ -167,10 +157,10 @@ def fault_simulation_data_generator(
             np.save("eigenvectors_Q_sorted", eigenvectors_Q_sorted)
         print("time taken to compute clustering is", time.time() - start)
         if len(clusters) == 1:
-            clusters.append([i for i in range(0, state_num)])
+            clusters.append([i for i in range(0, ctmc.state_num_prod)])
         else:
             X = np.real(eigenvectors_Q_sorted[:, 1])
-            for i in range(state_num):
+            for i in range(ctmc.state_num_prod):
                 if X[i] > 0:
                     clusters[0].append(i)
                 else:
@@ -222,7 +212,7 @@ def fault_simulation_data_generator(
     # SIMULATION
     for t in range(0, plot_params.sim_time, plot_params.step_time):
         if t <= fault_time:
-            lambda_seq.append(lambda_init[1])
+            lambda_seq.append(ctmc.lambdaas[1])
             data = [data_init[i] * step_time for i in range(len(data_init))]
             row_ind = copy.deepcopy(row_ind_init)
             col_ind = copy.deepcopy(col_ind_init)
@@ -237,7 +227,7 @@ def fault_simulation_data_generator(
             row_ind = copy.deepcopy(row_ind_reset)
             col_ind = copy.deepcopy(col_ind_reset)
         Q = scipy.sparse.csr_matrix(
-            (data, (row_ind, col_ind)), shape=(state_num, state_num)
+            (data, (row_ind, col_ind)), shape=(ctmc.state_num_prod, ctmc.state_num_prod)
         )
 
         def matvec_func(x):
@@ -247,7 +237,7 @@ def fault_simulation_data_generator(
             return Q.dot(x)
 
         Q_op_T = GeneratorMatrix(
-            shape=(state_num, state_num),
+            shape=(ctmc.state_num_prod, ctmc.state_num_prod),
             matvec=matvec_func,
             rmatvec=rmatvec_func,
             dtype=Q.dtype,
@@ -270,7 +260,7 @@ def fault_scenario_analysis(
 ):
     print("Started the fault scenario analysis")
 
-    pi_q_new = np.zeros(ctmc.params.state_num_prod)
+    pi_q_new = np.zeros(ctmc.state_num_prod)
     pi_q_new[0] = 1  # Initially the queue is empty
     lambda_seq = []
     pi_q_seq = [copy.copy(pi_q_new)]  # Initializing the initial distribution

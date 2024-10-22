@@ -21,7 +21,7 @@ def average_lengths_analysis(
 ):
     print("Started the average lengths analysis")
 
-    pi_q_new = np.zeros(ctmc.params.state_num)
+    pi_q_new = np.zeros(ctmc.state_num)
     pi_q_new[0] = 1  # Initially the queue is empty
     pi_q_seq = [copy.copy(pi_q_new)]  # Initializing the initial distribution
 
@@ -286,7 +286,7 @@ def fault_scenario_plot_generator(
         Q_before_fault = ctmc_before_fault.generator_mat_exact()
         Q_during_fault = ctmc_during_fault.generator_mat_exact()
         Q_after_fault = ctmc_after_fault.generator_mat_exact()
-        pi_0 = np.zeros(ctmc_before_fault.params.state_num)
+        pi_0 = np.zeros(ctmc_before_fault.state_num)
         pi_0[0] = 1  # initially, no job in the buffer
         pi_before_fault = np.matmul(
             pi_0, scipy.linalg.expm(Q_before_fault * fault_start_time)
@@ -329,16 +329,6 @@ def fault_scenario_analysis(
 ):
     print("Started the fault scenario analysis")
 
-    mu0_ps = ctmc.params.mu0_ps
-    main_queue_size = ctmc.params.main_queue_size
-    retry_queue_size = ctmc.params.retry_queue_size
-    lambdaa = ctmc.params.lambdaa
-    lambdaas = ctmc.params.lambdaas
-    timeouts = ctmc.params.timeouts
-    retries = ctmc.params.retries
-    thread_pool = ctmc.params.thread_pool
-    alpha = ctmc.params.alpha
-
     timeout_min = plot_params.timeout_min
     timeout_max = plot_params.timeout_max
     mu_min = plot_params.mu_min
@@ -353,7 +343,7 @@ def fault_scenario_analysis(
 
     # fault scenario plots
     trigger_plot_generator(
-        lambda_fault, start_time_fault, duration_fault, lambdaa, 10, 1000, file_name
+        lambda_fault, start_time_fault, duration_fault, ctmc.lambdaa, 10, 1000, file_name
     )
 
     fault_scenario_plot_generator(
@@ -364,14 +354,14 @@ def fault_scenario_analysis(
         mu_min,
         mu_max,
         mu_step,
-        main_queue_size,
-        retry_queue_size,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.main_queue_size,
+        ctmc.retry_queue_size,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         10,
         file_name,
     )
@@ -383,14 +373,14 @@ def fault_scenario_analysis(
         timeout_min,
         timeout_max,
         1,
-        main_queue_size,
-        retry_queue_size,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.main_queue_size,
+        ctmc.retry_queue_size,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         9,
         file_name,
     )
@@ -402,14 +392,14 @@ def fault_scenario_analysis(
         reset_lambda_min,
         reset_lambda_max,
         reset_lambda_step,
-        main_queue_size,
-        retry_queue_size,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.main_queue_size,
+        ctmc.retry_queue_size,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         9.5,
         file_name,
     )
@@ -548,11 +538,11 @@ def latency_plot_generator(
         if olen == 0:
             olen = retry_queue_size
 
-        unstable_ind = ctmc.index_composer(int(0.9 * qlen), 0)
-        stable_ind = ctmc.index_composer(int(0.1 * qlen), olen - 1)
-        pi_unstable = np.zeros(ctmc.params.state_num)
+        unstable_ind = ctmc._index_composer(int(0.9 * qlen), 0)
+        stable_ind = ctmc._index_composer(int(0.1 * qlen), olen - 1)
+        pi_unstable = np.zeros(ctmc.state_num)
         pi_unstable[unstable_ind] = 1
-        pi_stable = np.zeros(ctmc.params.state_num)
+        pi_stable = np.zeros(ctmc.state_num)
         pi_stable[stable_ind] = 1
         mean_return_time_su = ctmc.hitting_time_average_su(
             Q, pi_stable, math.floor(0.9 * qlen)
@@ -638,15 +628,6 @@ def latency_analysis(
         job_details = " for job " + str(job_type)
     print("Started latency analysis" + job_details)
 
-    mu0_ps = ctmc.params.mu0_ps
-    main_queue_size = ctmc.params.main_queue_size
-    retry_queue_size = ctmc.params.retry_queue_size
-    lambdaas = ctmc.params.lambdaas
-    timeouts = ctmc.params.timeouts
-    retries = ctmc.params.retries
-    thread_pool = ctmc.params.thread_pool
-    alpha = ctmc.params.alpha
-
     timeout_min = plot_params.timeout_min
     timeout_max = plot_params.timeout_max
     mu_min = plot_params.mu_min
@@ -668,14 +649,14 @@ def latency_analysis(
         timeout_min,
         timeout_max,
         1,
-        main_queue_size,
-        retry_queue_size,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.main_queue_size,
+        ctmc.retry_queue_size,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         file_name,
         job_type,
     )
@@ -685,14 +666,14 @@ def latency_analysis(
         mu_min,
         mu_max,
         mu_step,
-        main_queue_size,
-        retry_queue_size,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.main_queue_size,
+        ctmc.retry_queue_size,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         file_name,
         job_type,
     )
@@ -702,14 +683,14 @@ def latency_analysis(
         lambda_min,
         lambda_max,
         lambda_step,
-        main_queue_size,
-        retry_queue_size,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.main_queue_size,
+        ctmc.retry_queue_size,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         file_name,
         job_type,
     )
@@ -719,14 +700,14 @@ def latency_analysis(
         80,
         qlen_max,
         qlen_step,
-        main_queue_size,
-        retry_queue_size,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.main_queue_size,
+        ctmc.retry_queue_size,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         file_name,
         job_type,
     )
@@ -736,14 +717,14 @@ def latency_analysis(
         10,
         olen_max,
         olen_step,
-        main_queue_size,
-        retry_queue_size,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.main_queue_size,
+        ctmc.retry_queue_size,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         file_name,
         job_type,
     )
@@ -756,14 +737,14 @@ def latency_analysis(
         mu_min,
         mu_max,
         mu_step,
-        main_queue_size,
+        ctmc.main_queue_size,
         1,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         file_name,
         job_type,
     )
@@ -773,14 +754,14 @@ def latency_analysis(
         lambda_min,
         lambda_max,
         lambda_step,
-        main_queue_size,
+        ctmc.main_queue_size,
         1,
-        lambdaas,
-        mu0_ps,
-        timeouts,
-        retries,
-        thread_pool,
-        alpha,
+        ctmc.lambdaas,
+        ctmc.mu0_ps,
+        ctmc.timeouts,
+        ctmc.retries,
+        ctmc.thread_pool,
+        ctmc.alpha,
         file_name,
         job_type,
     )
