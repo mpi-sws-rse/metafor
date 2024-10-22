@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple, Dict
 
 import numpy as np
 import numpy.typing as npt
@@ -236,6 +236,11 @@ class SingleServerCTMC(CTMC):
     
     def main_queue_size_std(self, pi, mean_queue_length) -> float:
         return math.sqrt(self.main_queue_size_variance(pi, mean_queue_length))
+
+    def main_queue_size_analysis(self, pi) -> Dict[str, float]:
+        avg = self.main_queue_size_average(pi)
+        std = self.main_queue_size_std(pi, avg)
+        return {'avg': avg, 'std': std}
 
     def retry_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
