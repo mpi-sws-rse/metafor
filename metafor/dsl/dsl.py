@@ -1,11 +1,9 @@
 import functools
 from typing import List, Set, Tuple, Optional
 
-# from analysis.analyzer import Analyzer
 from model.ctmc import CTMC
 from model.multi_server.ctmc import MultiServerCTMC
 from model.single_server.ctmc import SingleServerCTMC
-from utils.plot_parameters import PlotParameters
 
 
 class Constants:
@@ -31,10 +29,12 @@ class Source:
         self.retries = retries
 
     def __to_string__(self):
-        return "%s: generates %s: (arr %f, to %d, re %d)" % (self.name, self.api_name, self.arrival_rate, self.timeout, self.retries)
+        return "%s: generates %s: (arr %f, to %d, re %d)" % (self.name, self.api_name, self.arrival_rate, self.timeout,
+                                                             self.retries)
     
     def print(self):
         print(self.__to_string__())
+
 
 # a source of requests that is a general phase type distribution
 # such a source can be implemented as its own CTMC, with an absorbing state.
@@ -105,12 +105,15 @@ class Server:
 
     def __to_string__(self):
         api_strings = ','.join(self.apis.keys())
-        return "%s: serves %s [q %d orbit %d threads %d]" % (self.name, api_strings, self.qsize, self.orbit_size, self.thread_pool)
+        return "%s: serves %s [q %d orbit %d threads %d]" % (self.name, api_strings, self.qsize, self.orbit_size,
+                                                             self.thread_pool)
+
     def print(self):
         print(self.__to_string__())
 
     def num_states(self) -> int:
         return self.qsize * self.orbit_size
+
 
 class Program:
     def __init__(self, name="<anon>"):

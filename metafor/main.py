@@ -2,8 +2,6 @@ import argparse
 import os
 from typing import List
 
-from analysis.analyzer import Analyzer
-from utils.plot_parameters import PlotParameters
 from simulator.simulate import run_discrete_experiment
 from model.single_server.ctmc import SingleServerCTMC
 
@@ -270,30 +268,6 @@ def main():
 
     if ctmc:
         print("\nCTMC")
-        plot_params = PlotParameters(
-            step_time,
-            sim_time,
-            qlen_max,
-            qlen_step,
-            olen_max,
-            olen_step,
-            retry_max,
-            retry_step,
-            lambda_max,
-            lambda_min,
-            lambda_step,
-            mu_max,
-            mu_min,
-            mu_step,
-            reset_lambda_max,
-            reset_lambda_min,
-            reset_lambda_step,
-            [lambda_fault],
-            start_time_fault,
-            duration_fault,
-            timeout_max,
-            timeout_min,
-        )
         ctmc = SingleServerCTMC(
             main_queue_size,
             retry_queue_size,
@@ -305,10 +279,7 @@ def main():
             alpha,
         )
         file_name = "single_server_results.png"
-        analyzer = Analyzer(ctmc, file_name)
-        analyzer.average_lengths_analysis(plot_params)
-        analyzer.latency_analysis(plot_params)
-        analyzer.fault_scenario_analysis(plot_params)
+        print(ctmc.get_stationary_distribution())
 
 
 if __name__ == "__main__":
