@@ -109,19 +109,8 @@ class Server:
     def print(self):
         print(self.__to_string__())
 
-    # a state of a server is a tuple (q1, ..., qk | tp1, ..., tpn | o1, ... ok)
-    # qi says how many requests of api i are waiting,
-    # tpi says if thread i is currently free (0) or serving api j \in {1, ..., |api|}
-    # oi says how many requests of api i are pending in orbit
-    # sum qi = qsize
-    # sum oi = orbit_size
-    # for simplicity, let's assume each qi <= qsize and each oi <= orbit_size
     def num_states(self) -> int:
-        num_apis = len(self.apis.keys())
-        return (self.qsize * self.orbit_size) ** num_apis * (
-            num_apis + 1
-        ) ** self.thread_pool
-
+        return self.qsize * self.orbit_size
 
 class Program:
     def __init__(self, name="<anon>"):

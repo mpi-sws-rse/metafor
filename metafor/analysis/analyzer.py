@@ -1,8 +1,6 @@
 import itertools
 from abc import abstractmethod
 
-import fiddle
-
 from typing import Any, Iterable
 from numpy import linspace
 import pandas

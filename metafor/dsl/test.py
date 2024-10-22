@@ -89,6 +89,39 @@ class TestDSL(unittest.TestCase):
         timed_call(lambda: simple_analysis(p))
         # p.average_lengths_analysis(PlotParameters(step_time=100, sim_time=1000))
 
+    def test_storage_server(self):
+        apis = { 'get' : Work(10, []),
+                'put' : Work(20, []),
+                'list' : Work(2, []),
+        }
+        node = Server('node', apis, 300, 5, 48)
+
+        putsrc = Source('putsrc', 'put', 2, 5, 1)
+        getsrc = Source('getsrc', 'get', 2, 3, 1)
+        listsrc = Source('listsrc', 'list', 2, 5, 1)
+
+        p = Program("storage_node")
+        p.add_server(node)
+        p.add_source(putsrc)
+        p.add_source(getsrc)
+        p.add_source(listsrc)
+        p.connect('putsrc', 'node')
+        p.connect('getsrc', 'node')
+        p.connect('listsrc', 'node')
+
+        for qsize in range(1000, 5000, 500):
+            start = time.time()
+            node.qsize = qsize
+            ctmc = p.build()
+            pi = ctmc.get_stationary_distribution()
+            print("Average queue size = ", ctmc.main_queue_size_average(pi))
+            for (i, req) in enumerate(p.get_requests('node')):
+                print("Qsize = ", qsize, " Request = ", req, end='')
+                l = ctmc.latency_average(pi, i)
+                print(' has average latency ', l)
+            print("Wallclock time = ", time.time() - start)
+
+
     def test_single_server_single_request_multiple_threads(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 9.5,
         with a timeout of 10 and 3 retries. The server processes `rd` with rate 10, and has no downstream work
