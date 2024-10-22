@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple, Dict
 
 import numpy as np
 import numpy.typing as npt
@@ -102,90 +102,76 @@ class SingleServerCTMC(CTMC):
 
     def _index_decomposer(self, total_ind):
         """This function converts a given index in range [0, state_num]
-        into two indices corresponding to (1) number of jobs in orbit and (2) jobs in the queue.
+        into two indices corresponding to number of (1) jobs in the orbit and (2) jobs in the queue.
         """
-        main_queue_size = self.main_queue_size
-
-        n_retry_queue = total_ind // main_queue_size
-        n_main_queue = total_ind % main_queue_size
+        n_retry_queue = total_ind // self.main_queue_size
+        n_main_queue = total_ind % self.main_queue_size
         assert 0 <= n_retry_queue < self.state_num
         assert 0 <= n_main_queue < self.state_num
         return [n_retry_queue, n_main_queue]
 
     def _index_composer(self, n_main_queue, n_retry_queue):
         """This function converts two given input indices into one universal index in range [0, state_num].
-        The input indices correspond to number of (1) jobs in queue and (2) jobs in the orbit.
+        The input indices correspond to number of (1) jobs in the queue and (2) jobs in the orbit.
         """
-        main_queue_size = self.main_queue_size
-
-        total_ind = n_retry_queue * main_queue_size + n_main_queue
+        total_ind = n_retry_queue * self.main_queue_size + n_main_queue
         assert 0 <= total_ind < self.state_num
         return total_ind
 
     def generator_mat_exact(self, transition_matrix: bool = False):
-        alpha = self.alpha
-        state_num = self.state_num
-        lambdaa = self.lambdaa
-        mu_drop_base = self.mu_drop_base
-        mu_retry_base = self.mu_retry_base
-        mu0_p = self.mu0_p
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
-        thread_pool = self.thread_pool
-
-        Q = np.zeros((state_num, state_num))
-        tail_seq = tail_prob_computer(main_queue_size, mu0_p, self.timeout)
-        for total_ind in range(state_num):
+        Q = np.zeros((self.state_num, self.state_num))
+        tail_seq = tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
+        for total_ind in range(self.state_num):
             n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
             tail_main = tail_seq[n_main_queue]
             if n_main_queue == 0:  # queue is empty
                 Q[total_ind, self._index_composer(n_main_queue + 1, n_retry_queue)] = (
-                    lambdaa
+                    self.lambdaa
                 )
                 if n_retry_queue > 0:
                     Q[
                         total_ind, self._index_composer(n_main_queue, n_retry_queue - 1)
-                    ] = (n_retry_queue * mu_drop_base)
+                    ] = (n_retry_queue * self.mu_drop_base)
                     Q[
                         total_ind,
                         self._index_composer(n_main_queue + 1, n_retry_queue - 1),
                     ] = (
-                        n_retry_queue * mu_retry_base
+                        n_retry_queue * self.mu_retry_base
                     )
-            elif n_main_queue == main_queue_size - 1:  # queue is full
+            elif n_main_queue == self.main_queue_size - 1:  # queue is full
                 Q[total_ind, self._index_composer(n_main_queue - 1, n_retry_queue)] = (
-                    min(main_queue_size, thread_pool) * mu0_p
+                    min(self.main_queue_size, self.thread_pool) * self.mu0_p
                 )
                 if n_retry_queue > 0:
                     Q[
                         total_ind, self._index_composer(n_main_queue, n_retry_queue - 1)
-                    ] = (n_retry_queue * mu_drop_base)
-                if n_retry_queue < retry_queue_size - 1:
+                    ] = (n_retry_queue * self.mu_drop_base)
+                if n_retry_queue < self.retry_queue_size - 1:
                     Q[
                         total_ind, self._index_composer(n_main_queue, n_retry_queue + 1)
-                    ] = (alpha * (lambdaa + n_retry_queue * mu_retry_base) * tail_main)
+                    ] = (self.alpha * (self.lambdaa + n_retry_queue * self.mu_retry_base) * tail_main)
             else:  # queue is neither full nor empty
-                alpha_tail_prob_sum = alpha * lambdaa * tail_main
-                if n_retry_queue < retry_queue_size - 1:
+                alpha_tail_prob_sum = self.alpha * self.lambdaa * tail_main
+                if n_retry_queue < self.retry_queue_size - 1:
                     Q[
                         total_ind,
                         self._index_composer(n_main_queue + 1, n_retry_queue + 1),
                     ] = alpha_tail_prob_sum
                 Q[total_ind, self._index_composer(n_main_queue + 1, n_retry_queue)] = (
-                    lambdaa + n_retry_queue * mu_retry_base * tail_main
+                    self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main
                 )
                 if n_retry_queue > 0:
                     Q[
                         total_ind,
                         self._index_composer(n_main_queue + 1, n_retry_queue - 1),
                     ] = (
-                        n_retry_queue * mu_retry_base * (1 - tail_main)
+                        n_retry_queue * self.mu_retry_base * (1 - tail_main)
                     )
                     Q[
                         total_ind, self._index_composer(n_main_queue, n_retry_queue - 1)
-                    ] = (n_retry_queue * mu_drop_base)
+                    ] = (n_retry_queue * self.mu_drop_base)
                 Q[total_ind, self._index_composer(n_main_queue - 1, n_retry_queue)] = (
-                    min(main_queue_size, thread_pool) * mu0_p
+                    min(self.main_queue_size, self.thread_pool) * self.mu0_p
                 )
             if not transition_matrix:
                 Q[total_ind, total_ind] = -np.sum(Q[total_ind, :])
@@ -201,7 +187,7 @@ class SingleServerCTMC(CTMC):
         start = time.time()
         print("Starting matrix exponentiation...", end=" ")
         matexp = scipy.linalg.expm(QT * sim_step)
-        print("Matrix exponentiation took %f s", time.time() - start)
+        print("Matrix exponentiation took %f s" % (time.time() - start))
 
         piq = pi0
         for t in range(sim_step, sim_time, sim_step):
@@ -226,26 +212,22 @@ class SingleServerCTMC(CTMC):
     ########### Various analyses built on top of probability distributions ###############
     def main_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
-        main_queue_size = self.main_queue_size
         retry_queue_size = self.retry_queue_size
 
-        length: float = 0.0
-        for n_main_queue in range(main_queue_size):
+        length = 0.0
+        for n_main_queue in range(self.main_queue_size):
             weight = 0.0
-            for n_retry_queue in range(retry_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             length += weight * n_main_queue
         return length
 
     def main_queue_size_variance(self, pi, mean_queue_length) -> float:
         """This function computes the variance over queue length for a given prob distribution pi"""
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
-
         var = 0
-        for n_main_queue in range(main_queue_size):
+        for n_main_queue in range(self.main_queue_size):
             weight = 0
-            for n_retry_queue in range(retry_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             var += (
                 weight
@@ -257,28 +239,27 @@ class SingleServerCTMC(CTMC):
     def main_queue_size_std(self, pi, mean_queue_length) -> float:
         return math.sqrt(self.main_queue_size_variance(pi, mean_queue_length))
 
+    def main_queue_size_analysis(self, pi) -> Dict[str, float]:
+        avg = self.main_queue_size_average(pi)
+        std = self.main_queue_size_std(pi, avg)
+        return {'avg': avg, 'std': std}
+
     def retry_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
-
         length = 0
-        for n_retry_queue in range(retry_queue_size):
+        for n_retry_queue in range(self.retry_queue_size):
             weight = 0
-            for n_main_queue in range(main_queue_size):
+            for n_main_queue in range(self.main_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             length += weight * n_retry_queue
         return length
 
     def retry_queue_size_variance(self, pi, mean_queue_length) -> float:
         """This function computes the variance over queue length for a given prob distribution pi"""
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
-
         var = 0
-        for n_retry_queue in range(retry_queue_size):
+        for n_retry_queue in range(self.retry_queue_size):
             weight = 0
-            for n_main_queue in range(main_queue_size):
+            for n_main_queue in range(self.main_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             var += (
                 weight
@@ -292,14 +273,12 @@ class SingleServerCTMC(CTMC):
     
     # req_type represents the index of the request
     def latency_average(self, pi, req_type: int = 0) -> float:
-        retry_queue_size = self.retry_queue_size
-        main_queue_size = self.main_queue_size
         # use the law of total expectation
         mu0_p = self.mu0_ps[req_type]
         val = 1 / mu0_p
-        for n_main_queue in range(main_queue_size):
+        for n_main_queue in range(self.main_queue_size):
             weight = 0
-            for n_retry_queue in range(retry_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             val += (
                 weight
@@ -310,14 +289,12 @@ class SingleServerCTMC(CTMC):
         return val[0]
 
     def latency_variance(self, pi, job_type: int) -> float:
-        retry_queue_size = self.retry_queue_size
-        main_queue_size = self.main_queue_size
         mu0_p = self.mu0_ps[job_type]
         ave = self.latency_average(pi, job_type)
         # use the law of total variance
         var1 = 1 / (mu0_p**2)  # var1 := Var(E(Y|X))
-        for n_main_queue in range(main_queue_size):
-            for n_retry_queue in range(retry_queue_size):
+        for n_main_queue in range(self.main_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 weight = pi[state]
                 var1 += weight * (
@@ -331,9 +308,9 @@ class SingleServerCTMC(CTMC):
                 )
 
         var2 = 0  # var2 := E(Var(Y|X))
-        for n_main_queue in range(main_queue_size):
+        for n_main_queue in range(self.main_queue_size):
             weight = 0
-            for n_retry_queue in range(retry_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             var2 += (
                 weight
@@ -377,13 +354,10 @@ class SingleServerCTMC(CTMC):
 
 
     def hitting_time_average_us(self, Q, pi, qlen_max) -> float:
-        state_num = self.state_num
-        retry_queue_size = self.retry_queue_size
-        main_queue_size = self.main_queue_size
         A = np.copy(Q)
-        b = -np.ones(state_num)
+        b = -np.ones(self.state_num)
         for n_main_queue in range(qlen_max):
-            for n_retry_queue in range(retry_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 A[state, :] = 0
                 A[state, state] = 1
@@ -391,20 +365,17 @@ class SingleServerCTMC(CTMC):
 
         u = np.linalg.solve(A, b)
         hitting_time_mean = 0
-        for n_main_queue in range(main_queue_size):
-            for n_retry_queue in range(retry_queue_size):
+        for n_main_queue in range(self.main_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 hitting_time_mean += pi[state] * u[state]
         return hitting_time_mean
 
     def hitting_time_average_su(self, Q, pi, qlen_min) -> float:
-        state_num = self.state_num
-        retry_queue_size = self.retry_queue_size
-        main_queue_size = self.main_queue_size
         A = np.copy(Q)
-        b = -np.ones(state_num)
-        for n_main_queue in range(qlen_min, main_queue_size):
-            for n_retry_queue in range(retry_queue_size):
+        b = -np.ones(self.state_num)
+        for n_main_queue in range(qlen_min, self.main_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 A[state, :] = 0
                 A[state, state] = 1
@@ -412,22 +383,19 @@ class SingleServerCTMC(CTMC):
 
         u = np.linalg.solve(A, b)
         hitting_time_mean = 0
-        for n_main_queue in range(main_queue_size):
-            for n_retry_queue in range(retry_queue_size):
+        for n_main_queue in range(self.main_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 hitting_time_mean += pi[state] * u[state]
         return hitting_time_mean
 
     def hitting_time_variance_us(self, Q, pi, qlen_max) -> float:
-        state_num = self.state_num
-        retry_queue_size = self.retry_queue_size
-        main_queue_size = self.main_queue_size
         A = np.copy(Q)
-        b = -np.ones(state_num)
+        b = -np.ones(self.state_num)
         for n_main_queue in range(qlen_max):
-            for n_retry_queue in range(retry_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
-                A[state, :] = np.zeros(state_num)
+                A[state, :] = np.zeros(self.state_num)
                 A[state, state] = 1
                 b[state] = 0
 
@@ -436,22 +404,19 @@ class SingleServerCTMC(CTMC):
         v = np.linalg.solve(A, -2 * u)
 
         hitting_time_var = 0
-        for n_main_queue in range(main_queue_size):
-            for n_retry_queue in range(retry_queue_size):
+        for n_main_queue in range(self.main_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 hitting_time_var += pi[state] * (v[state] - (u[state] ** 2))
         return hitting_time_var
 
     def hitting_time_variance_su(self, Q, pi, qlen_min) -> float:
-        state_num = self.state_num
-        retry_queue_size = self.retry_queue_size
-        main_queue_size = self.main_queue_size
         A = np.copy(Q)
-        b = -np.ones(state_num)
-        for n_main_queue in range(qlen_min, main_queue_size):
-            for n_retry_queue in range(retry_queue_size):
+        b = -np.ones(self.state_num)
+        for n_main_queue in range(qlen_min, self.main_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
-                A[state, :] = np.zeros(state_num)
+                A[state, :] = np.zeros(self.state_num)
                 A[state, state] = 1
                 b[state] = 0
 
@@ -460,28 +425,26 @@ class SingleServerCTMC(CTMC):
         v = np.linalg.solve(A, -2 * u)
 
         hitting_time_var = 0
-        for n_main_queue in range(main_queue_size):
-            for n_retry_queue in range(retry_queue_size):
+        for n_main_queue in range(self.main_queue_size):
+            for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 hitting_time_var += pi[state] * (v[state] - (u[state] ** 2))
         return hitting_time_var
 
     def reach_prob_computation(self, Q, plot_params: PlotParameters) -> List[float]:
         print("Computing the probability to reach the queue full mode")
-
-        state_num = self.state_num
         step_time = plot_params.step_time
         sim_time = int(plot_params.sim_time)
-        target_set = [state_num - 1]
+        target_set = [self.state_num - 1]
 
         probabilities = []
 
         Q_mod = copy.copy(Q)
-        init_vec = np.zeros(state_num)
+        init_vec = np.zeros(self.state_num)
         init_vec[target_set[0]] = 1
         # making the target states absorbing
         for state in target_set:
-            Q_mod[state, :] = np.zeros(state_num)
+            Q_mod[state, :] = np.zeros(self.state_num)
         for t in range(step_time, sim_time + 1, step_time):
             start_time = time.time()
             reach_prob_vec = np.matmul(scipy.linalg.expm(Q_mod * t), init_vec)
@@ -501,57 +464,49 @@ class SingleServerCTMC(CTMC):
         row_ind = []
         col_ind = []
         data_point = []
-        state_num = self.state_num
-        lambdaa = self.lambdaa
-        mu_drop_base = self.mu_drop_base
-        mu_retry_base = self.mu_retry_base
-        mu0_p = self.mu0_p
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
-        timeout = self.timeout
 
-        tail_seq = tail_prob_computer(main_queue_size, mu0_p, timeout)
-        for total_ind in range(state_num):
+        tail_seq = tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
+        for total_ind in range(self.state_num):
             data_sum = 0
             n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
             tail_main = tail_seq[n_main_queue]
             if n_main_queue == 0:  # queue is empty
                 row_ind.append(total_ind)
                 col_ind.append(self._index_composer(n_main_queue + 1, n_retry_queue))
-                data_point.append(lambdaa)
-                data_sum += lambdaa
+                data_point.append(self.lambdaa)
+                data_sum += self.lambdaa
                 if n_retry_queue > 0:
                     row_ind.append(total_ind)
                     col_ind.append(self._index_composer(n_main_queue, n_retry_queue - 1))
-                    data_point.append(n_retry_queue * mu_drop_base)
-                    data_sum += n_retry_queue * mu_drop_base
+                    data_point.append(n_retry_queue * self.mu_drop_base)
+                    data_sum += n_retry_queue * self.mu_drop_base
                     row_ind.append(total_ind)
                     col_ind.append(
                         self._index_composer(n_main_queue + 1, n_retry_queue - 1)
                     )
-                    data_point.append(n_retry_queue * mu_retry_base)
-                    data_sum += n_retry_queue * mu_retry_base
+                    data_point.append(n_retry_queue * self.mu_retry_base)
+                    data_sum += n_retry_queue * self.mu_retry_base
 
-            elif n_main_queue == main_queue_size - 1:  # queue is full
+            elif n_main_queue == self.main_queue_size - 1:  # queue is full
                 row_ind.append(total_ind)
                 col_ind.append(self._index_composer(n_main_queue - 1, n_retry_queue))
-                data_point.append(mu0_p)
-                data_sum += mu0_p
+                data_point.append(self.mu0_p)
+                data_sum += self.mu0_p
                 if n_retry_queue > 0:
                     row_ind.append(total_ind)
                     col_ind.append(self._index_composer(n_main_queue, n_retry_queue - 1))
-                    data_point.append(n_retry_queue * mu_drop_base)
-                    data_sum += n_retry_queue * mu_drop_base
-                if n_retry_queue < retry_queue_size - 1:
+                    data_point.append(n_retry_queue * self.mu_drop_base)
+                    data_sum += n_retry_queue * self.mu_drop_base
+                if n_retry_queue < self.retry_queue_size - 1:
                     row_ind.append(total_ind)
                     col_ind.append(self._index_composer(n_main_queue, n_retry_queue + 1))
                     data_point.append(
-                        (lambdaa + n_retry_queue * mu_retry_base) * tail_main
+                        (self.lambdaa + n_retry_queue * self.mu_retry_base) * tail_main
                     )
-                    data_sum += (lambdaa + n_retry_queue * mu_retry_base) * tail_main
+                    data_sum += (self.lambdaa + n_retry_queue * self.mu_retry_base) * tail_main
             else:  # queue is neither full nor empty
-                alpha_tail_prob_sum = lambdaa * tail_main
-                if n_retry_queue < retry_queue_size - 1:
+                alpha_tail_prob_sum = self.lambdaa * tail_main
+                if n_retry_queue < self.retry_queue_size - 1:
                     row_ind.append(total_ind)
                     col_ind.append(
                         self._index_composer(n_main_queue + 1, n_retry_queue + 1)
@@ -560,25 +515,25 @@ class SingleServerCTMC(CTMC):
                     data_sum += alpha_tail_prob_sum
                 row_ind.append(total_ind)
                 col_ind.append(self._index_composer(n_main_queue + 1, n_retry_queue))
-                data_point.append(lambdaa + n_retry_queue * mu_retry_base * tail_main)
-                data_sum += lambdaa + n_retry_queue * mu_retry_base * tail_main
+                data_point.append(self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main)
+                data_sum += self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main
                 if n_retry_queue > 0:
                     row_ind.append(total_ind)
                     col_ind.append(
                         self._index_composer(n_main_queue + 1, n_retry_queue - 1)
                     )
-                    data_point.append(n_retry_queue * mu_retry_base * (1 - tail_main))
-                    data_sum += n_retry_queue * mu_retry_base * (1 - tail_main)
+                    data_point.append(n_retry_queue * self.mu_retry_base * (1 - tail_main))
+                    data_sum += n_retry_queue * self.mu_retry_base * (1 - tail_main)
                     row_ind.append(total_ind)
                     col_ind.append(
                         self._index_composer(n_main_queue, n_retry_queue - 1)
                     )
-                    data_point.append(n_retry_queue * mu_drop_base)
-                    data_sum += n_retry_queue * mu_drop_base
+                    data_point.append(n_retry_queue * self.mu_drop_base)
+                    data_sum += n_retry_queue * self.mu_drop_base
                 row_ind.append(total_ind)
                 col_ind.append(self._index_composer(n_main_queue - 1, n_retry_queue))
-                data_point.append(mu0_p)
-                data_sum += mu0_p
+                data_point.append(self.mu0_p)
+                data_sum += self.mu0_p
             row_ind.append(total_ind)
             col_ind.append(total_ind)
             data_point.append(-data_sum)

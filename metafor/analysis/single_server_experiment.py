@@ -23,13 +23,9 @@ class TestFidelityWithDiscreteModel(Experiment):
 
     def analyze(self, param_setting, p: Program):
         ctmc: SingleServerCTMC = p.build()
-        pi = ctmc.get_stationary_distribution()
-        avg = ctmc.main_queue_size_average(pi)[0]
-        print("avg = ", avg)
-        std = ctmc.main_queue_size_std(pi, avg)
-        print("std = ", std)
-        print([param_setting, avg, std])
-        return [param_setting, avg, std]
+        pi = ctmc.get_init_state()
+        results = ctmc.finite_time_analysis(pi, {'main queue size': ctmc.main_queue_size_analysis})
+        return [param_setting, results]
 
     def show(self, results):
         print(results)
@@ -40,6 +36,6 @@ class TestFidelityWithDiscreteModel(Experiment):
 
 if __name__ == "__main__":
     t = TestFidelityWithDiscreteModel()
-    p1 = Parameter(("server", "server", "qsize"), range(20, 40, 10))
-    p2 = Parameter(("source", "reader", "arrival_rate"), linspace(8.0, 10.0, num=2))
-    t.sweep(ParameterList([p1, p2]))
+    p1 = Parameter(("server", "server", "qsize"), range(100, 101))
+    #p2 = Parameter(("source", "reader", "arrival_rate"), linspace(8.0, 10.0, num=2))
+    t.sweep(ParameterList([p1]))
