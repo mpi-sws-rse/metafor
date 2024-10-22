@@ -1,5 +1,8 @@
 import functools
 from typing import List, Set, Tuple, Optional
+import numpy as np
+import numpy.typing as npt
+from numpy import float64
 
 from model.ctmc import CTMC
 from model.multi_server.ctmc import MultiServerCTMC
@@ -24,9 +27,10 @@ class Source:
         self.name = name  # unique name for this source, eg `client1`
         self.api_name = api_name  # name of the API call, e.g., `rd`
         assert arrival_rate >= 0.0
+        assert timeout >= 0
         self.arrival_rate = arrival_rate  # lambda for the exponential distribution
         self.timeout = timeout
-        self.retries = retries
+        self.retries = retries if retries >= 0 else 0
 
     def __to_string__(self):
         return "%s: generates %s: (arr %f, to %d, re %d)" % (self.name, self.api_name, self.arrival_rate, self.timeout,
@@ -34,6 +38,9 @@ class Source:
     
     def print(self):
         print(self.__to_string__())
+    
+    def num_states(self):
+        return 1
 
 
 # a source of requests that is a general phase type distribution
@@ -48,6 +55,32 @@ class PhaseTypeSource(Source):
 class MixtureSource(Source):
     pass
 
+# a state machine source is useful to model bursty traffic. 
+# In a state machine source, each state has its own arrival rate/timeout/retry and states transition among themselves according
+# to exponential distributions given in the transition matrix
+# Q: is this a special case of a Phase type distribution?
+class StateMachineSource(Source):
+    # TBD: HANDLE THESE IN CTMC CREATION
+    def __init__(self, name: str, api_name: str, transition_matrix: npt.NDArray[np.float64], lambda_map: npt.NDArray[tuple[float64, int, int]]):
+        self.name = name
+        self.api_name = api_name
+        assert(np.all(np.vectorize(lambda x: x>=0.0)(transition_matrix))), "All entries in the transition map should be nonnegative"
+        assert(np.all(np.vectorize(lambda x: x>=0.0)(lambda_map))), "All entries in the lambda map should be nonnegative"
+        assert(lambda_map.shape[0] == transition_matrix.shape[0] == transition_matrix.shape[1]), "Transition map and lambda map have different dimensions"
+        self.lambda_map = lambda_map
+        self.transition_matrix = transition_matrix
+        self.nstates = lambda_map.shape[0]
+
+    def __to_string__(self):
+        return "%s: generates %s: (arr %f, to %d, re %d)" % (self.name, self.api_name, self.arrival_rate, self.timeout,
+                                                             self.retries)
+    
+    def print(self):
+        print(self.__to_string__())
+
+    def num_states(self):
+        return self.nstates
+        
 
 class DependentCall:
     # callee is the downstream server to which the request is sent
@@ -190,7 +223,7 @@ class Program:
     def build(self) -> CTMC:
         num_states = functools.reduce(
             lambda a, s: a * s.num_states(), self.servers.values(), 1
-        )
+        ) * functools.reduce(lambda a, s: a * s.num_states(), self.sources.values(), 1)
         print("Program: ", self.name, ", Number of states = ", num_states)
 
         if len(self.servers) == 1:  # single server

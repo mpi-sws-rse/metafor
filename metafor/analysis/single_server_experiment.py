@@ -9,17 +9,17 @@ from model.single_server.ctmc import SingleServerCTMC
 
 class TestFidelityWithDiscreteModel(Experiment):
     def __init__(self):
-        pass
-
-    def build(self, param) -> Program:
         apis = {'rd': Work(10, [])}
         s = Server("server", apis, 100, 20, 1)
         rdsrc = Source("reader", "rd", 9.5, 9, 3)
-        p = Program("single_server")
-        p.add_server(s)
-        p.add_source(rdsrc)
-        p.connect("reader", "server")
-        return self.update(p, param)
+        self.p = Program("single_server")
+        self.p.add_server(s)
+        self.p.add_source(rdsrc)
+        self.p.connect("reader", "server")
+        
+
+    def build(self, param) -> Program:
+        return self.update(self.p, param)
 
     def analyze(self, param_setting, p: Program):
         ctmc: SingleServerCTMC = p.build()

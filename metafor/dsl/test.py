@@ -1,9 +1,10 @@
 import time
 import unittest
 import numpy
+import numpy.typing as npt
 import sys
 
-from dsl import Work, Server, Source, Program, DependentCall, Constants
+from dsl import Work, Server, Source, StateMachineSource, Program, DependentCall, Constants
 from model.single_server.ctmc import SingleServerCTMC
 
 
@@ -186,6 +187,14 @@ class TestDSL(unittest.TestCase):
         p.add_source(rd_src)
         p.connect("client", "server")
 
+class TestBasic(unittest.TestCase):
+    def test_sources(self):
+        s = Source('foo', 'foo', 1, 0, 0)
+        states = numpy.array([(2, 3, 1), (4, 3, 3)])
+        transitions = numpy.array([[0, 10], [2, 0]])
+        assert(states.shape[0] == transitions.shape[1])
+        s = StateMachineSource('bar', 'foo', transitions, states)
+        assert(s.num_states() == 2)
 
 if __name__ == "__main__":
     unittest.main()

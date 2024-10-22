@@ -32,23 +32,6 @@ class Parameter:
     def as_list(self):
         return list(self.values)
 
-# class ServerParameter(Parameter):
-#     def __init__(self, servername: str, paramname: str, values: Iterable[Any]):
-#         super().__init__(paramname, values)
-#         self.servername = servername
-
-#     def get_name(self):
-#         return self.servername
-    
-# class SourceParameter(Parameter):
-#     def __init__(self, sourcename: str, paramname: str, values: Iterable[Any]):
-#         super().__init__(paramname, values)
-#         self.sourcename = sourcename
-
-#     def get_name(self):
-#         return self.sourcename
-
-
 def nested_map(keys, value):
     if len(keys) == 1:
         return {keys[0]: value}
@@ -136,27 +119,3 @@ class Experiment:
         print("Sweep: \n", results)
         self.show(results)
 
-
-# def test_fiddle_program():
-#     apis = { 'rd': Work(10, []) }
-#     s_conf = fiddle.Config(Server, name="server", apis=apis, qsize=100, orbit_size=20, thread_pool=1)
-#     rd_src_conf = fiddle.Config(Source, name="reader", api_name="rd", arrival_rate=9.5, timeout=9, retries=3)
-#     p_conf = fiddle.Config(Program, name="single_server")
-
-#     s = fiddle.build(s_conf)
-#     rd_src = fiddle.build(rd_src_conf)
-#     p = fiddle.build(p_conf)
-#     p.add_server(s)
-#     p.add_source(rd_src)
-#     p.connect("reader", "server")
-#     p.print()
-
-#     s_conf.qsize = 200
-#     rd_src_conf.arrival_rate = 3
-#     s = fiddle.build(s_conf)
-#     rd_src = fiddle.build(rd_src_conf)
-#     p = fiddle.build(p_conf)
-#     p.add_server(s)
-#     p.add_source(rd_src)
-#     p.connect("reader", "server")
-#     p.print()
