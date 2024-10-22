@@ -2,24 +2,9 @@ import itertools
 from abc import abstractmethod
 
 from typing import Any, Iterable
-from numpy import linspace
-import pandas
 
-from analysis.multi_server_ctmc_analysis import (
-    fault_scenario_analysis as multi_fault_scenario_analysis,
-)
-from analysis.single_server_ctmc_analysis import (
-    average_lengths_analysis as single_average_lengths_analysis,
-    fault_scenario_analysis as single_fault_scenario_analysis,
-    latency_analysis as single_latency_analysis,
-)
+from dsl.dsl import Program
 
-from dsl.dsl import Source, Server, Work, Program
-
-from model.ctmc import CTMC
-from model.multi_server.ctmc import MultiServerCTMC
-from model.single_server.ctmc import SingleServerCTMC
-from utils.plot_parameters import PlotParameters
 
 # A parameter name is a tuple of strings, starting with "server" or "source"
 # Typical parameter name would be
@@ -32,6 +17,7 @@ class ParameterName:
 
         self.name = name
 
+
 class Parameter:
     def __init__(self, name: ParameterName, values: Iterable[Any]):
         self.name = name
@@ -43,7 +29,7 @@ class Parameter:
     def __iter__(self):
         return self.values.__iter__()
     
-    def aslist(self):
+    def as_list(self):
         return list(self.values)
 
 # class ServerParameter(Parameter):
@@ -62,10 +48,12 @@ class Parameter:
 #     def get_name(self):
 #         return self.sourcename
 
+
 def nested_map(keys, value):
     if len(keys) == 1:
         return {keys[0]: value}
     return {keys[0]: nested_map(keys[1:], value)}
+
 
 def create_nested_map(pairs):
     result = {}
@@ -78,6 +66,7 @@ def create_nested_map(pairs):
         temp[keys[-1]] = value  # Set the last key to the value
     return result
 
+
 class ParameterList:
     def __init__(self, paramlist: list[Parameter]):
         self.params = paramlist
@@ -89,6 +78,7 @@ class ParameterList:
     def __next__(self):
             tup = self.product.__next__()
             return create_nested_map(zip(map(lambda p: p.param_name(), self.params), tup))
+
 
 class Experiment:
     @abstractmethod
@@ -108,8 +98,8 @@ class Experiment:
         source_params = param.get('source', None)
 
         if server_params is not None:
-            for servername, smap in server_params.items():
-                s = p.get_server(servername)
+            for server_name, smap in server_params.items():
+                s = p.get_server(server_name)
                 if s is not None:
                     if 'qsize' in smap:
                         s.qsize = smap['qsize']
@@ -118,8 +108,8 @@ class Experiment:
                     if 'thread_pool' in smap:
                         s.thread_pool = smap['thread_pool']
                     if 'api' in smap:
-                        apimap = smap['api']
-                        for api_name, api_update_map in apimap.items():
+                        api_map = smap['api']
+                        for api_name, api_update_map in api_map.items():
                             api = s.apis.get(api_name, None)
                             if api is not None:
                                 if 'processing_rate' in api_update_map:
@@ -147,38 +137,6 @@ class Experiment:
         self.show(results)
 
 
-
-class TestProgram(Experiment):
-    def __init__(self):
-        pass
-
-    def build(self, param) -> Program:
-        apis = { 'rd': Work(10, []) }
-        s = Server("server", apis, 100, 20, 1)
-        rdsrc = Source("reader", "rd", 9.5, 9, 3)
-        p = Program("single_server")
-        p.add_server(s)
-        p.add_source(rdsrc)
-        p.connect("reader", "server")
-        return self.update(p, param)
-
-    def analyze(self, param_setting, p: Program):
-        ctmc = p.build()
-        pi = ctmc.get_stationary_distribution()
-        avg = ctmc.main_queue_size_average(pi)[0]
-        print("avg = ", avg)
-        std = ctmc.main_queue_size_std(pi, avg)
-        print("srd = ", std)
-        print([param_setting, avg, std])
-        return [param_setting, avg, std]
-
-    def show(self, results):
-        print(results)
-        pd = pandas.DataFrame(results, columns=["parameter", "average", "std"])
-        print(pd)
-        # ADD PLOT CODE HERE
-
-
 # def test_fiddle_program():
 #     apis = { 'rd': Work(10, []) }
 #     s_conf = fiddle.Config(Server, name="server", apis=apis, qsize=100, orbit_size=20, thread_pool=1)
@@ -202,37 +160,3 @@ class TestProgram(Experiment):
 #     p.add_source(rd_src)
 #     p.connect("reader", "server")
 #     p.print()
-
-
-if __name__ == "__main__":
-    t = TestProgram()
-    p1 = Parameter(("server", "server", "qsize"), range(20, 40, 10))
-    p2 = Parameter(("source", "reader", "arrival_rate"), linspace(8.0, 10.0, num=2))
-    t.sweep(ParameterList([p1, p2]))
-
-        
-"""
-class Analyzer:
-
-    def __init__(self, ctmc: CTMC, file_name: str):
-        self.ctmc = ctmc
-        self.file_name = file_name
-
-    def average_lengths_analysis(self, plot_params: PlotParameters):
-        if isinstance(self.ctmc, SingleServerCTMC):
-            single_average_lengths_analysis(self.ctmc, self.file_name, plot_params)
-        else:
-            raise NotImplementedError
-
-    def fault_scenario_analysis(self, plot_params: PlotParameters):
-        if isinstance(self.ctmc, SingleServerCTMC):
-            single_fault_scenario_analysis(self.ctmc, self.file_name, plot_params)
-        elif isinstance(self.ctmc, MultiServerCTMC):
-            multi_fault_scenario_analysis(self.ctmc, self.file_name, plot_params)
-
-    def latency_analysis(self, plot_params: PlotParameters, job_type: int = -1):
-        if isinstance(self.ctmc, SingleServerCTMC):
-            single_latency_analysis(self.ctmc, self.file_name, plot_params, job_type)
-        else:
-            raise NotImplementedError
-"""

@@ -4,7 +4,6 @@ import numpy
 import sys
 
 from dsl import Work, Server, Source, Program, DependentCall, Constants
-from utils.plot_parameters import PlotParameters
 from model.single_server.ctmc import SingleServerCTMC
 
 
@@ -89,7 +88,6 @@ class TestDSL(unittest.TestCase):
         p.connect("reader2", "server")
 
         timed_call(lambda: simple_analysis(p))
-        # p.average_lengths_analysis(PlotParameters(step_time=100, sim_time=1000))
 
     def test_storage_server(self):
         apis = { 'get' : Work(10, []),
@@ -126,7 +124,6 @@ class TestDSL(unittest.TestCase):
                 ctmc.latency_percentile(pi, req_type = i, percentile = 50.0)
             print("Wallclock time = ", time.time() - start)
 
-
     def test_single_server_single_request_multiple_threads(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 9.5,
         with a timeout of 10 and 3 retries. The server processes `rd` with rate 10, and has no downstream work
@@ -140,7 +137,6 @@ class TestDSL(unittest.TestCase):
         p.add_source(rd_src)
         p.connect("reader", "server")
         timed_call(lambda: simple_analysis(p))
-        # p.average_lengths_analysis(PlotParameters())
 
     def test_single_server_multiple_reqs(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 9.5,
@@ -169,7 +165,7 @@ class TestDSL(unittest.TestCase):
         """Two servers in series and a single source processing API call `rd`: the source sends requests at rate 9.5,
         with a timeout of 10 and 3 retries. The first server processes `rd` with rate 10, pushes work to the second
         server"""
-        rates = {  # ignore for the moment... work in progress
+        rates = {
             "rd": Work(
                 10,
                 [
@@ -189,7 +185,6 @@ class TestDSL(unittest.TestCase):
         p.add_server(s2)
         p.add_source(rd_src)
         p.connect("client", "server")
-        # p.fault_scenario_analysis(PlotParameters())
 
 
 if __name__ == "__main__":

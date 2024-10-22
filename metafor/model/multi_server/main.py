@@ -1,7 +1,5 @@
 import argparse
 
-from analysis.analyzer import Analyzer
-from utils.plot_parameters import PlotParameters
 from model.multi_server.ctmc import MultiServerCTMC
 
 
@@ -160,15 +158,6 @@ def main():
     o_max_list = args.o_max_list
 
     print("\nCTMC")
-    plot_params = PlotParameters(
-        step_time,
-        sim_time,
-        lambda_fault=lambda_fault,
-        start_time_fault=start_time_fault,
-        lambda_reset=lambda_reset,
-        reset_time=reset_time,
-        config_set=config_set,
-    )
     ctmc = MultiServerCTMC(
         server_num,
         main_queue_sizes,
@@ -185,10 +174,8 @@ def main():
         o_min_list,
         o_max_list,
     )
-    print(ctmc.get_stationary_distribution())
     file_name = "multi_server_results.png"
-    analyzer = Analyzer(ctmc, file_name)
-    analyzer.fault_scenario_analysis(plot_params)
+    print(ctmc.get_stationary_distribution())
 
 
 if __name__ == "__main__":
