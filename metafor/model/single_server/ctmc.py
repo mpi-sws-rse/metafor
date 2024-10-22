@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 import numpy.typing as npt
@@ -71,8 +71,6 @@ class SingleServerCTMC(CTMC):
         for row in self.Q:
             assert abs(sum(row)) < 0.0001
         # np.set_printoptions(threshold=None)
-
-        self.pi: Optional[npt.NDArray[np.float64]] = None
 
     def get_init_state(self) -> npt.NDArray[np.float64]:
         pi = np.zeros(self.state_num)

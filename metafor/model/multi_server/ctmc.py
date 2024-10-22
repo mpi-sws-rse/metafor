@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 import numpy as np
+import numpy.typing as npt
 import math
 import copy
 
@@ -172,7 +173,7 @@ class MultiServerCTMC(CTMC):
             cumulative_prob += pi[state]
         return cumulative_prob
 
-    def main_queue_average_size(self, pi) -> float:
+    def main_queue_size_average(self, pi: npt.NDArray[np.float64]) -> float:
         server_num = self.params.server_num
         main_queue_size = self.params.main_queue_sizes
         retry_queue_size = self.params.retry_queue_sizes
@@ -377,7 +378,7 @@ class MultiServerCTMC(CTMC):
 
     def compute_stationary_distribution(
         self, lambda_config
-    ) -> Tuple[List[float], int, int, List, GeneratorMatrix, GeneratorMatrix]:
+    ) -> Tuple[npt.NDArray[np.float64], int, int, List, GeneratorMatrix, GeneratorMatrix]:
         state_num = self.params.state_num_prod
         row_ind, col_ind, data = self.sparse_info_calculator(
             lambda_config, -1, [0, 0], [0, 0]
@@ -412,7 +413,7 @@ class MultiServerCTMC(CTMC):
         print("Computing the stationary distribution took ", time.time() - start)
         return pi_ss, row_ind, col_ind, data, Q_op, Q_op_T
 
-    def get_stationary_distribution(self) -> List[float]:
+    def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
         if self.pi is None:
             self.pi, _, _, _, _, _ = self.compute_stationary_distribution(
                 self.params.lambda_init

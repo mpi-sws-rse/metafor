@@ -258,7 +258,7 @@ def fault_simulation_data_generator(
         print(time.time() - start)
         # collecting new measurements
         pi_q_seq.append(copy.copy(pi_q_new))
-        mean_queue_lengths = ctmc.main_queue_average_size(pi_q_new)
+        mean_queue_lengths = ctmc.main_queue_size_average(pi_q_new)
         print(mean_queue_lengths)
         main_queue_ave_len_seq.append(np.sum(mean_queue_lengths))
         print(t)
