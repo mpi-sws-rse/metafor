@@ -6,6 +6,7 @@ from numpy import linspace
 import pandas
 
 from dsl.dsl import Source, Server, Work, Program
+from model.single_server.ctmc import SingleServerCTMC
 
 
 # A parameter name is a tuple of strings, starting with "server" or "source"
@@ -31,7 +32,7 @@ class Parameter:
     def __iter__(self):
         return self.values.__iter__()
     
-    def aslist(self):
+    def as_list(self):
         return list(self.values)
 
 # class ServerParameter(Parameter):
@@ -100,8 +101,8 @@ class Experiment:
         source_params = param.get('source', None)
 
         if server_params is not None:
-            for servername, smap in server_params.items():
-                s = p.get_server(servername)
+            for server_name, smap in server_params.items():
+                s = p.get_server(server_name)
                 if s is not None:
                     if 'qsize' in smap:
                         s.qsize = smap['qsize']
@@ -110,8 +111,8 @@ class Experiment:
                     if 'thread_pool' in smap:
                         s.thread_pool = smap['thread_pool']
                     if 'api' in smap:
-                        apimap = smap['api']
-                        for api_name, api_update_map in apimap.items():
+                        api_map = smap['api']
+                        for api_name, api_update_map in api_map.items():
                             api = s.apis.get(api_name, None)
                             if api is not None:
                                 if 'processing_rate' in api_update_map:
@@ -144,7 +145,7 @@ class TestProgram(Experiment):
         pass
 
     def build(self, param) -> Program:
-        apis = { 'rd': Work(10, []) }
+        apis = {'rd': Work(10, [])}
         s = Server("server", apis, 100, 20, 1)
         rdsrc = Source("reader", "rd", 9.5, 9, 3)
         p = Program("single_server")
@@ -154,12 +155,12 @@ class TestProgram(Experiment):
         return self.update(p, param)
 
     def analyze(self, param_setting, p: Program):
-        ctmc = p.build()
+        ctmc: SingleServerCTMC = p.build()
         pi = ctmc.get_stationary_distribution()
         avg = ctmc.main_queue_size_average(pi)[0]
         print("avg = ", avg)
         std = ctmc.main_queue_size_std(pi, avg)
-        print("srd = ", std)
+        print("std = ", std)
         print([param_setting, avg, std])
         return [param_setting, avg, std]
 
