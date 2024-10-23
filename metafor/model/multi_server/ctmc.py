@@ -388,7 +388,7 @@ class MultiServerCTMC(CTMC):
     def compute_stationary_distribution(
         self, lambda_config
     ) -> Tuple[
-        npt.NDArray[np.float64], int, int, List, GeneratorMatrix, GeneratorMatrix
+        npt.NDArray[np.float64], int, int, List, GeneratorMatrix
     ]:
         row_ind, col_ind, data = self.sparse_info_calculator(
             lambda_config, -1, [0, 0], [0, 0]
@@ -421,11 +421,11 @@ class MultiServerCTMC(CTMC):
         if pi_ss[0] < -0.00000001:
             pi_ss = -pi_ss
         print("Computing the stationary distribution took ", time.time() - start)
-        return pi_ss, row_ind, col_ind, data, Q_op, Q_op_T
+        return pi_ss, row_ind, col_ind, data, Q_op
 
     def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
         if self.pi is None:
-            self.pi, _, _, _, _, _ = self.compute_stationary_distribution(self.lambdaas)
+            self.pi, _, _, _, _ = self.compute_stationary_distribution(self.lambdaas)
         return self.pi
 
     def hitting_time_average(self, Q, S1, S2) -> float:

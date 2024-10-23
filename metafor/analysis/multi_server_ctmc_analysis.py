@@ -63,7 +63,7 @@ def fault_simulation_data_generator(
 
     for lambda_config in plot_params.config_set:
         # Computing the generator matrices and the stationary distributions
-        pi_ss, row_ind, col_ind, data, Q_op, Q_op_T = (
+        pi_ss, row_ind, col_ind, data, Q_op = (
             ctmc.compute_stationary_distribution(lambda_config)
         )
         if lambda_config == ctmc.lambdaas:
