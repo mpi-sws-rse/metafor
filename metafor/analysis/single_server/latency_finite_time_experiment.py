@@ -36,9 +36,10 @@ class TestLatencyFiniteTime(Experiment):
         for res_step in res.values():
             if 'main queue size' in res_step.keys():
                 size_res = res_step['main queue size']
-                avg_len.append(size_res['avg'])
-                var_len.append(size_res['variance'])
-                std_len.append(size_res['std'])
+                if isinstance(size_res, dict):
+                    avg_len.append(size_res['avg'])
+                    var_len.append(size_res['variance'])
+                    std_len.append(size_res['std'])
             if 'wallclock_time' in res_step.keys():
                 runtime.append(res_step['wallclock_time'])
 
