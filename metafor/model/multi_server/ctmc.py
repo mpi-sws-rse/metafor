@@ -67,7 +67,9 @@ class MultiServerCTMC(CTMC):
             self.state_num_prod *= self.state_num[i]
 
         if q_min_list is None:
-            self.q_min_list = [int(main_queue_sizes[i] * 0.9) for i in range(server_num)]
+            self.q_min_list = [
+                int(main_queue_sizes[i] * 0.9) for i in range(server_num)
+            ]
         if o_min_list is None:
             self.o_min_list = [retry_queue_sizes[i] // 2 for i in range(server_num)]
         if q_max_list is None:
@@ -103,7 +105,9 @@ class MultiServerCTMC(CTMC):
         The input indices correspond to number of (1) jobs in queue and (2) jobs in the orbit.
         """
 
-        total_ind = n_main_queue_list[0] + n_retry_queue_list[0] * self.main_queue_sizes[0]
+        total_ind = (
+            n_main_queue_list[0] + n_retry_queue_list[0] * self.main_queue_sizes[0]
+        )
         for node_id in range(1, self.server_num):
             ss_size_bias = 1
             for i in range(node_id):
@@ -126,7 +130,11 @@ class MultiServerCTMC(CTMC):
             sub_tree = self.sub_tree_list[node_id]
             for downstream_node_id in sub_tree:
                 ave += q_list[downstream_node_id] / self.mu0_ps[downstream_node_id]
-                var += q_list[downstream_node_id] * 1 / (self.mu0_ps[downstream_node_id] ** 2)
+                var += (
+                    q_list[downstream_node_id]
+                    * 1
+                    / (self.mu0_ps[downstream_node_id] ** 2)
+                )
             sigma = math.sqrt(var)
             if self.timeouts[node_id] - ave > sigma:
                 k_inv = sigma / (self.timeouts[node_id] - ave)
@@ -203,7 +211,9 @@ class MultiServerCTMC(CTMC):
                 o_next = [0 * i for i in range(self.server_num)]
                 # compute the non-synchronized transitions' rates of the generator matrix
                 for node_id in range(self.server_num):
-                    mu_drop_base = 1 / (self.timeouts[node_id] * (self.max_retries[node_id] + 1))
+                    mu_drop_base = 1 / (
+                        self.timeouts[node_id] * (self.max_retries[node_id] + 1)
+                    )
                     mu_retry_base = self.max_retries[node_id] / (
                         self.timeouts[node_id] * (self.max_retries[node_id] + 1)
                     )
@@ -216,7 +226,9 @@ class MultiServerCTMC(CTMC):
                     elif q[self.parent_list[node_id][0]] == 0:
                         lambda_summed = lambdaa
                     else:  # if there exists local and non-local sources of job arrival
-                        lambda_summed = lambdaa + self.mu0_ps[self.parent_list[node_id][0]]
+                        lambda_summed = (
+                            lambdaa + self.mu0_ps[self.parent_list[node_id][0]]
+                        )
                     if q[node_id] == 0:  # queue is empty
                         q_next[:] = q
                         o_next[:] = o
@@ -247,7 +259,9 @@ class MultiServerCTMC(CTMC):
                             q_next[:] = q
                             o_next[:] = o
 
-                    elif q[node_id] == self.main_queue_sizes[node_id] - 1:  # queue is full
+                    elif (
+                        q[node_id] == self.main_queue_sizes[node_id] - 1
+                    ):  # queue is full
                         q_next[:] = q
                         o_next[:] = o
                         # setting the rates related to job processing
@@ -349,7 +363,9 @@ class MultiServerCTMC(CTMC):
 
     def compute_stationary_distribution(
         self, lambda_config
-    ) -> Tuple[npt.NDArray[np.float64], int, int, List, GeneratorMatrix, GeneratorMatrix]:
+    ) -> Tuple[
+        npt.NDArray[np.float64], int, int, List, GeneratorMatrix, GeneratorMatrix
+    ]:
         row_ind, col_ind, data = self.sparse_info_calculator(
             lambda_config, -1, [0, 0], [0, 0]
         )
@@ -385,9 +401,7 @@ class MultiServerCTMC(CTMC):
 
     def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
         if self.pi is None:
-            self.pi, _, _, _, _, _ = self.compute_stationary_distribution(
-                self.lambdaas
-            )
+            self.pi, _, _, _, _, _ = self.compute_stationary_distribution(self.lambdaas)
         return self.pi
 
     def hitting_time_average(self, Q, S1, S2) -> float:

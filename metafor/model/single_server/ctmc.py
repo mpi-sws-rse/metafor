@@ -15,8 +15,17 @@ from utils.calculate import tail_prob_computer
 
 class SingleServerCTMC(CTMC):
 
-    def __init__(self, main_queue_size: int, retry_queue_size: int, lambdaas: List[float], mu0_ps: List[float],
-                 timeouts: List[int], retries: List[int], thread_pool: int, alpha: float = 0.25):
+    def __init__(
+        self,
+        main_queue_size: int,
+        retry_queue_size: int,
+        lambdaas: List[float],
+        mu0_ps: List[float],
+        timeouts: List[int],
+        retries: List[int],
+        thread_pool: int,
+        alpha: float = 0.25,
+    ):
         """alpha is a parameter that allows us to adjust the CTMC with simulation data"""
 
         super().__init__()
@@ -149,7 +158,11 @@ class SingleServerCTMC(CTMC):
                 if n_retry_queue < self.retry_queue_size - 1:
                     Q[
                         total_ind, self._index_composer(n_main_queue, n_retry_queue + 1)
-                    ] = (self.alpha * (self.lambdaa + n_retry_queue * self.mu_retry_base) * tail_main)
+                    ] = (
+                        self.alpha
+                        * (self.lambdaa + n_retry_queue * self.mu_retry_base)
+                        * tail_main
+                    )
             else:  # queue is neither full nor empty
                 alpha_tail_prob_sum = self.alpha * self.lambdaa * tail_main
                 if n_retry_queue < self.retry_queue_size - 1:
@@ -177,11 +190,17 @@ class SingleServerCTMC(CTMC):
                 Q[total_ind, total_ind] = -np.sum(Q[total_ind, :])
         return Q
 
-    def finite_time_analysis(self, pi0, analyses: dict[str, Callable[[Any], Any]]={}, sim_time=60, sim_step=10):
-        initial_result = { n: 0.0 for n in analyses } 
+    def finite_time_analysis(
+        self,
+        pi0,
+        analyses: dict[str, Callable[[Any], Any]] = {},
+        sim_time=60,
+        sim_step=10,
+    ):
+        initial_result = {n: 0.0 for n in analyses}
         # XXX: we are assuming the initial result for the analyses is 0, which may not be true
         initial_result["pi"] = pi0
-        results = {0: initial_result }
+        results = {0: initial_result}
         print(
             "Computing finite time statistics for time quantum %d time units with step size %d"
             % (sim_time, sim_step)
@@ -238,14 +257,14 @@ class SingleServerCTMC(CTMC):
                 * (n_main_queue - mean_queue_length)
             )
         return var
-    
+
     def main_queue_size_std(self, pi, mean_queue_length) -> float:
         return math.sqrt(self.main_queue_size_variance(pi, mean_queue_length))
 
     def main_queue_size_analysis(self, pi) -> Dict[str, float]:
         avg = self.main_queue_size_average(pi)
         std = self.main_queue_size_std(pi, avg)
-        return {'avg': avg, 'std': std}
+        return {"avg": avg, "std": std}
 
     def retry_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
@@ -273,7 +292,7 @@ class SingleServerCTMC(CTMC):
 
     def retry_queue_size_std(self, pi, mean_queue_length) -> float:
         return math.sqrt(self.retry_queue_size_variance(pi, mean_queue_length))
-    
+
     # req_type represents the index of the request
     def latency_average(self, pi, req_type: int = 0) -> float:
         # use the law of total expectation
@@ -323,9 +342,9 @@ class SingleServerCTMC(CTMC):
 
         var = var1 + var2
         return var[0]
-    
+
     def latency_percentile(self, pi, req_type: int = 0, percentile: float = 50.0):
-        assert(percentile <= 100.0)
+        assert percentile <= 100.0
         retry_queue_size = self.retry_queue_size
         main_queue_size = self.main_queue_size
         distribution = np.zeros((self.state_num, 2))
@@ -336,11 +355,7 @@ class SingleServerCTMC(CTMC):
             weight = 0
             for n_retry_queue in range(retry_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
-            val += (
-                 (self.lambdaas[req_type] / self.lambdaa)
-                * n_main_queue
-                * (1 / mu0_p)
-            )
+            val += (self.lambdaas[req_type] / self.lambdaa) * n_main_queue * (1 / mu0_p)
             distribution[index][0] = val
             distribution[index][1] = weight
             index = index + 1
@@ -353,7 +368,6 @@ class SingleServerCTMC(CTMC):
         print(distribution)
         print(index)
         return distribution[index][0]
-
 
     def hitting_time_average_us(self, Q, pi, qlen_max) -> float:
         A = np.copy(Q)
@@ -479,7 +493,9 @@ class SingleServerCTMC(CTMC):
                 data_sum += self.lambdaa
                 if n_retry_queue > 0:
                     row_ind.append(total_ind)
-                    col_ind.append(self._index_composer(n_main_queue, n_retry_queue - 1))
+                    col_ind.append(
+                        self._index_composer(n_main_queue, n_retry_queue - 1)
+                    )
                     data_point.append(n_retry_queue * self.mu_drop_base)
                     data_sum += n_retry_queue * self.mu_drop_base
                     row_ind.append(total_ind)
@@ -496,16 +512,22 @@ class SingleServerCTMC(CTMC):
                 data_sum += self.mu0_p
                 if n_retry_queue > 0:
                     row_ind.append(total_ind)
-                    col_ind.append(self._index_composer(n_main_queue, n_retry_queue - 1))
+                    col_ind.append(
+                        self._index_composer(n_main_queue, n_retry_queue - 1)
+                    )
                     data_point.append(n_retry_queue * self.mu_drop_base)
                     data_sum += n_retry_queue * self.mu_drop_base
                 if n_retry_queue < self.retry_queue_size - 1:
                     row_ind.append(total_ind)
-                    col_ind.append(self._index_composer(n_main_queue, n_retry_queue + 1))
+                    col_ind.append(
+                        self._index_composer(n_main_queue, n_retry_queue + 1)
+                    )
                     data_point.append(
                         (self.lambdaa + n_retry_queue * self.mu_retry_base) * tail_main
                     )
-                    data_sum += (self.lambdaa + n_retry_queue * self.mu_retry_base) * tail_main
+                    data_sum += (
+                        self.lambdaa + n_retry_queue * self.mu_retry_base
+                    ) * tail_main
             else:  # queue is neither full nor empty
                 alpha_tail_prob_sum = self.lambdaa * tail_main
                 if n_retry_queue < self.retry_queue_size - 1:
@@ -517,14 +539,20 @@ class SingleServerCTMC(CTMC):
                     data_sum += alpha_tail_prob_sum
                 row_ind.append(total_ind)
                 col_ind.append(self._index_composer(n_main_queue + 1, n_retry_queue))
-                data_point.append(self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main)
-                data_sum += self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main
+                data_point.append(
+                    self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main
+                )
+                data_sum += (
+                    self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main
+                )
                 if n_retry_queue > 0:
                     row_ind.append(total_ind)
                     col_ind.append(
                         self._index_composer(n_main_queue + 1, n_retry_queue - 1)
                     )
-                    data_point.append(n_retry_queue * self.mu_retry_base * (1 - tail_main))
+                    data_point.append(
+                        n_retry_queue * self.mu_retry_base * (1 - tail_main)
+                    )
                     data_sum += n_retry_queue * self.mu_retry_base * (1 - tail_main)
                     row_ind.append(total_ind)
                     col_ind.append(

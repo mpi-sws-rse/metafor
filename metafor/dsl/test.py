@@ -4,7 +4,15 @@ import numpy
 import numpy.typing as npt
 import sys
 
-from dsl import Work, Server, Source, StateMachineSource, Program, DependentCall, Constants
+from dsl import (
+    Work,
+    Server,
+    Source,
+    StateMachineSource,
+    Program,
+    DependentCall,
+    Constants,
+)
 from model.single_server.ctmc import SingleServerCTMC
 
 
@@ -61,7 +69,7 @@ class TestDSL(unittest.TestCase):
         """
         apis = {
             "rd": Work(
-                1000/2, []
+                1000 / 2, []
             )  # `rd` API call has service rate 3 and no downstream work
         }
         s = Server("server", apis, 280, 20)
@@ -91,24 +99,25 @@ class TestDSL(unittest.TestCase):
         timed_call(lambda: simple_analysis(p))
 
     def test_storage_server(self):
-        apis = { 'get' : Work(10, []),
-                'put' : Work(20, []),
-                'list' : Work(2, []),
+        apis = {
+            "get": Work(10, []),
+            "put": Work(20, []),
+            "list": Work(2, []),
         }
-        node = Server('node', apis, 300, 5, 1)
+        node = Server("node", apis, 300, 5, 1)
 
-        putsrc = Source('putsrc', 'put', 2, 5, 1)
-        getsrc = Source('getsrc', 'get', 2, 3, 1)
-        listsrc = Source('listsrc', 'list', 2, 5, 1)
+        putsrc = Source("putsrc", "put", 2, 5, 1)
+        getsrc = Source("getsrc", "get", 2, 3, 1)
+        listsrc = Source("listsrc", "list", 2, 5, 1)
 
         p = Program("storage_node")
         p.add_server(node)
         p.add_source(putsrc)
         p.add_source(getsrc)
         p.add_source(listsrc)
-        p.connect('putsrc', 'node')
-        p.connect('getsrc', 'node')
-        p.connect('listsrc', 'node')
+        p.connect("putsrc", "node")
+        p.connect("getsrc", "node")
+        p.connect("listsrc", "node")
 
         for qsize in range(10, 30, 20):
             numpy.set_printoptions(threshold=sys.maxsize)
@@ -118,11 +127,11 @@ class TestDSL(unittest.TestCase):
             pi = ctmc.get_stationary_distribution()
             print("Average queue size = ", ctmc.main_queue_size_average(pi))
             print(pi)
-            for (i, req) in enumerate(p.get_requests('node')):
-                print("Qsize = ", qsize, " Request = ", req, end='')
+            for i, req in enumerate(p.get_requests("node")):
+                print("Qsize = ", qsize, " Request = ", req, end="")
                 l = ctmc.latency_average(pi, i)
-                print(' has average latency ', l)
-                ctmc.latency_percentile(pi, req_type = i, percentile = 50.0)
+                print(" has average latency ", l)
+                ctmc.latency_percentile(pi, req_type=i, percentile=50.0)
             print("Wallclock time = ", time.time() - start)
 
     def test_single_server_single_request_multiple_threads(self):
@@ -187,14 +196,16 @@ class TestDSL(unittest.TestCase):
         p.add_source(rd_src)
         p.connect("client", "server")
 
+
 class TestBasic(unittest.TestCase):
     def test_sources(self):
-        s = Source('foo', 'foo', 1, 0, 0)
+        s = Source("foo", "foo", 1, 0, 0)
         states = numpy.array([(2, 3, 1), (4, 3, 3)])
         transitions = numpy.array([[0, 10], [2, 0]])
-        assert(states.shape[0] == transitions.shape[1])
-        s = StateMachineSource('bar', 'foo', transitions, states)
-        assert(s.num_states() == 2)
+        assert states.shape[0] == transitions.shape[1]
+        s = StateMachineSource("bar", "foo", transitions, states)
+        assert s.num_states() == 2
+
 
 if __name__ == "__main__":
     unittest.main()

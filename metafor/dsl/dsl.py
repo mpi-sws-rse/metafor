@@ -33,12 +33,17 @@ class Source:
         self.retries = retries if retries >= 0 else 0
 
     def __to_string__(self):
-        return "%s: generates %s: (arr %f, to %d, re %d)" % (self.name, self.api_name, self.arrival_rate, self.timeout,
-                                                             self.retries)
-    
+        return "%s: generates %s: (arr %f, to %d, re %d)" % (
+            self.name,
+            self.api_name,
+            self.arrival_rate,
+            self.timeout,
+            self.retries,
+        )
+
     def print(self):
         print(self.__to_string__())
-    
+
     def num_states(self):
         return 1
 
@@ -55,32 +60,52 @@ class PhaseTypeSource(Source):
 class MixtureSource(Source):
     pass
 
-# a state machine source is useful to model bursty traffic. 
+
+# a state machine source is useful to model bursty traffic.
 # In a state machine source, each state has its own arrival rate/timeout/retry and states transition among themselves according
 # to exponential distributions given in the transition matrix
 # Q: is this a special case of a Phase type distribution?
 class StateMachineSource(Source):
     # TBD: HANDLE THESE IN CTMC CREATION
-    def __init__(self, name: str, api_name: str, transition_matrix: npt.NDArray[np.float64], lambda_map: npt.NDArray[tuple[float64, int, int]]):
+    def __init__(
+        self,
+        name: str,
+        api_name: str,
+        transition_matrix: npt.NDArray[np.float64],
+        lambda_map: npt.NDArray[tuple[float64, int, int]],
+    ):
         self.name = name
         self.api_name = api_name
-        assert(np.all(np.vectorize(lambda x: x>=0.0)(transition_matrix))), "All entries in the transition map should be nonnegative"
-        assert(np.all(np.vectorize(lambda x: x>=0.0)(lambda_map))), "All entries in the lambda map should be nonnegative"
-        assert(lambda_map.shape[0] == transition_matrix.shape[0] == transition_matrix.shape[1]), "Transition map and lambda map have different dimensions"
+        assert np.all(
+            np.vectorize(lambda x: x >= 0.0)(transition_matrix)
+        ), "All entries in the transition map should be nonnegative"
+        assert np.all(
+            np.vectorize(lambda x: x >= 0.0)(lambda_map)
+        ), "All entries in the lambda map should be nonnegative"
+        assert (
+            lambda_map.shape[0]
+            == transition_matrix.shape[0]
+            == transition_matrix.shape[1]
+        ), "Transition map and lambda map have different dimensions"
         self.lambda_map = lambda_map
         self.transition_matrix = transition_matrix
         self.nstates = lambda_map.shape[0]
 
     def __to_string__(self):
-        return "%s: generates %s: (arr %f, to %d, re %d)" % (self.name, self.api_name, self.arrival_rate, self.timeout,
-                                                             self.retries)
-    
+        return "%s: generates %s: (arr %f, to %d, re %d)" % (
+            self.name,
+            self.api_name,
+            self.arrival_rate,
+            self.timeout,
+            self.retries,
+        )
+
     def print(self):
         print(self.__to_string__())
 
     def num_states(self):
         return self.nstates
-        
+
 
 class DependentCall:
     # callee is the downstream server to which the request is sent
@@ -92,7 +117,7 @@ class DependentCall:
         parent_server_name: str,
         api_name: str,
         call_type: Constants,
-        arrival_rate: float, # do we need this? this should be set by the processing speed, no?
+        arrival_rate: float,  # do we need this? this should be set by the processing speed, no?
         timeout: int,
         retry: int,
     ):
@@ -100,7 +125,9 @@ class DependentCall:
         self.caller = parent_server_name
         self.api_name = api_name
         assert arrival_rate >= 0.0
-        self.arrival_rate = arrival_rate  # lambda for the exponential distribution: check if needed
+        self.arrival_rate = (
+            arrival_rate  # lambda for the exponential distribution: check if needed
+        )
         self.call_type = call_type
         self.timeout = timeout
         self.retry = retry
@@ -137,9 +164,14 @@ class Server:
         self.thread_pool = thread_pool
 
     def __to_string__(self):
-        api_strings = ','.join(self.apis.keys())
-        return "%s: serves %s [q %d orbit %d threads %d]" % (self.name, api_strings, self.qsize, self.orbit_size,
-                                                             self.thread_pool)
+        api_strings = ",".join(self.apis.keys())
+        return "%s: serves %s [q %d orbit %d threads %d]" % (
+            self.name,
+            api_strings,
+            self.qsize,
+            self.orbit_size,
+            self.thread_pool,
+        )
 
     def print(self):
         print(self.__to_string__())
@@ -188,7 +220,7 @@ class Program:
 
     def get_server(self, sname) -> Optional[Server]:
         return self.servers.get(sname, None)
-    
+
     def get_source(self, sname) -> Optional[Source]:
         return self.sources.get(sname, None)
 
@@ -288,17 +320,18 @@ class Program:
 
     def print(self):
         print("Program: ", self.name)
-        for (s, c) in self.connections:
+        for s, c in self.connections:
             print(s, " --> ", c)
-        print("Servers: ", end= " ")
+        print("Servers: ", end=" ")
         for sname, s in self.servers.items():
-            print("\t", end = " "); s.print()
-        print("Sources: ", end= " ")
+            print("\t", end=" ")
+            s.print()
+        print("Sources: ", end=" ")
         for sname, s in self.sources.items():
-            print("\t", end = " "); s.print()
+            print("\t", end=" ")
+            s.print()
 
-        
-            
+
 """
     def average_lengths_analysis(self, plot_params: PlotParameters):
         ctmc: CTMC = self.build()

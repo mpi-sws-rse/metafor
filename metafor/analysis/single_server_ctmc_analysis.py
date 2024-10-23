@@ -343,7 +343,13 @@ def fault_scenario_analysis(
 
     # fault scenario plots
     trigger_plot_generator(
-        lambda_fault, start_time_fault, duration_fault, ctmc.lambdaa, 10, 1000, file_name
+        lambda_fault,
+        start_time_fault,
+        duration_fault,
+        ctmc.lambdaa,
+        10,
+        1000,
+        file_name,
     )
 
     fault_scenario_plot_generator(

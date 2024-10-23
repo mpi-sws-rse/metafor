@@ -85,7 +85,8 @@ def fault_simulation_data_generator(
                 lambda_config, node_id, q_range_u, o_range_u
             )
             Q_u = scipy.sparse.csr_matrix(
-                (data_ind_u, (row_ind_u, col_ind_u)), shape=(ctmc.state_num_prod, ctmc.state_num_prod)
+                (data_ind_u, (row_ind_u, col_ind_u)),
+                shape=(ctmc.state_num_prod, ctmc.state_num_prod),
             )
             h_su.append(hitting_time_approx(ctmc, Q_u))
             print("h_su is", h_su[node_id])
@@ -98,7 +99,8 @@ def fault_simulation_data_generator(
                 lambda_config, node_id, q_range_s, o_range_s
             )
             Q_s = scipy.sparse.csr_matrix(
-                (data_ind_s, (row_ind_s, col_ind_s)), shape=(ctmc.state_num_prod, ctmc.state_num_prod)
+                (data_ind_s, (row_ind_s, col_ind_s)),
+                shape=(ctmc.state_num_prod, ctmc.state_num_prod),
             )
             h_us.append(hitting_time_approx(ctmc, Q_s))
             print("h_us is", h_us[node_id])

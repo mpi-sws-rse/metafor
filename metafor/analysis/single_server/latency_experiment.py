@@ -17,7 +17,16 @@ class LatencyExperiment(Experiment):
         self.main_color = "#A9A9A9"
         self.fade_color = "#D3D3D3"
 
-    def plot(self, figure_name: str, x_axis: str, y_axis: str, x_vals, mean_seq, lower_bound_seq, upper_bound_seq):
+    def plot(
+        self,
+        figure_name: str,
+        x_axis: str,
+        y_axis: str,
+        x_vals,
+        mean_seq,
+        lower_bound_seq,
+        upper_bound_seq,
+    ):
         plt.rc("font", size=14)
         plt.rcParams["figure.figsize"] = [5, 5]
         plt.rcParams["figure.autolayout"] = True
@@ -26,7 +35,7 @@ class LatencyExperiment(Experiment):
         plt.plot(x_vals, mean_seq, color=self.main_color)
         plt.fill_between(
             x_vals, lower_bound_seq, upper_bound_seq, color=self.fade_color, alpha=0.4
-        )   
+        )
         plt.xlabel(x_axis, fontsize=14)
         plt.ylabel(y_axis, fontsize=14)
         plt.grid("on")
@@ -44,7 +53,7 @@ class LatencyExperiment(Experiment):
         server = p.get_root_server()
 
         results = []
-        for (i, req) in enumerate(p.get_requests(server.name)):
+        for i, req in enumerate(p.get_requests(server.name)):
             latency = ctmc.latency_average(pi, i)
             variance = ctmc.latency_variance(pi, i)
             stddev = math.sqrt(variance)
@@ -53,16 +62,22 @@ class LatencyExperiment(Experiment):
 
     def show(self, results):
         # print(results)
-        columns = ['parameter']
+        columns = ["parameter"]
         server = self.p.get_root_server()
         for req in self.p.get_requests(server.name):
-            columns = columns + ([req+"_avg", req+"_std"])
+            columns = columns + ([req + "_avg", req + "_std"])
         pd = pandas.DataFrame(results, columns=columns)
         print(pd)
 
 
 class FiniteHorizonExperiment(Experiment):
-    def __init__(self, p: Program, analyses: dict[str, Callable[[Any], Any]], sim_time: int = 100, sim_step: int = 20):
+    def __init__(
+        self,
+        p: Program,
+        analyses: dict[str, Callable[[Any], Any]],
+        sim_time: int = 100,
+        sim_step: int = 20,
+    ):
         self.p = p
         self.analyses = analyses
         self.sim_time = sim_time
@@ -77,11 +92,13 @@ class FiniteHorizonExperiment(Experiment):
     def analyze(self, param_setting, p: Program):
         ctmc: SingleServerCTMC = p.build()
         pi = ctmc.get_init_state()
-        analyses = { k: f(ctmc) for (k, f) in self.analyses.items() }
-        results = ctmc.finite_time_analysis(pi, analyses, sim_time = self.sim_time, sim_step = self.sim_step)
+        analyses = {k: f(ctmc) for (k, f) in self.analyses.items()}
+        results = ctmc.finite_time_analysis(
+            pi, analyses, sim_time=self.sim_time, sim_step=self.sim_step
+        )
         # print("Results:", results)
         thisresult = []
-        for (step, values) in results.items():
+        for step, values in results.items():
             a = [step]
             # print("Values = ", values)
             for k in self.analyses:
@@ -91,19 +108,17 @@ class FiniteHorizonExperiment(Experiment):
 
     def show(self, results):
         print(results)
-        for (param, values) in results:
+        for param, values in results:
             print("Parameter: ", param)
-            columns = ['time'] + list(self.analyses.keys())
+            columns = ["time"] + list(self.analyses.keys())
             # print(columns)
             pd = pandas.DataFrame(values, columns=columns)
             print(pd)
-        
-
 
 
 class TestExperiments(unittest.TestCase):
     def program(self) -> Program:
-        apis = {'rd': Work(10, []), 'wr': Work(10, [])}
+        apis = {"rd": Work(10, []), "wr": Work(10, [])}
         s = Server("server", apis, 100, 20, 1)
         rdsrc = Source("reader", "rd", 4.75, 9, 3)
         wrsrc = Source("writer", "wr", 4.75, 9, 3)
@@ -115,7 +130,7 @@ class TestExperiments(unittest.TestCase):
         p.connect("reader", "server")
         p.connect("writer", "server")
         return p
-    
+
     def test_latency_v_qsize(self):
         p = self.program()
         t = LatencyExperiment(p)
@@ -136,7 +151,9 @@ class TestExperiments(unittest.TestCase):
 
     def test_finite_time(self):
         p = self.program()
-        t = FiniteHorizonExperiment(p, { 'main_q_size': lambda ctmc: ctmc.main_queue_size_average})
+        t = FiniteHorizonExperiment(
+            p, {"main_q_size": lambda ctmc: ctmc.main_queue_size_average}
+        )
         p1 = Parameter(("server", "server", "qsize"), range(80, 160, 10))
         t.sweep(ParameterList([p1]))
 
