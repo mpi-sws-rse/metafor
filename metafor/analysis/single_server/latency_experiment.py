@@ -11,6 +11,7 @@ from model.single_server.ctmc import SingleServerCTMC
 
 class TestLatency(Experiment):
     def __init__(self, p: Program):
+        super().__init__(p)
         self.p = p
         self.main_color = "#A9A9A9"
         self.fade_color = "#D3D3D3"
@@ -70,6 +71,7 @@ class TestLatency(Experiment):
         #   fade_color,
         #)
 
+
 def program() -> Program:
     apis = {'rd': Work(10, []), 'wr': Work(10, [])}
     s = Server("server", apis, 100, 20, 1)
@@ -83,6 +85,7 @@ def program() -> Program:
     p.connect("reader", "server")
     p.connect("writer", "server")
     return p
+
 
 if __name__ == "__main__":
     p = program()
