@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict
+from typing import Any, Callable, List, Tuple, Dict
 
 import numpy as np
 import numpy.typing as npt
@@ -177,8 +177,11 @@ class SingleServerCTMC(CTMC):
                 Q[total_ind, total_ind] = -np.sum(Q[total_ind, :])
         return Q
 
-    def finite_time_analysis(self, pi0, analyses={}, sim_time=60, sim_step=10):
-        results = {0: {"pi": pi0}}
+    def finite_time_analysis(self, pi0, analyses: dict[str, Callable[[Any], Any]]={}, sim_time=60, sim_step=10):
+        initial_result = { n: 0.0 for n in analyses } 
+        # XXX: we are assuming the initial result for the analyses is 0, which may not be true
+        initial_result["pi"] = pi0
+        results = {0: initial_result }
         print(
             "Computing finite time statistics for time quantum %d time units with step size %d"
             % (sim_time, sim_step)

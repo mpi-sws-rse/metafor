@@ -66,7 +66,7 @@ class ParameterList:
 class Experiment:
     def __init__(self, p: Program):
         self.p = p
-        
+
     @abstractmethod
     def build(self, params) -> Program:
         pass
@@ -114,11 +114,13 @@ class Experiment:
         return p
 
     def sweep(self, plist: ParameterList):
+        # NOTE: sweep mutates program structure
         results = []
         for params in plist:
             print("Running experiment with parameters ", params)
             program = self.build(params)
+            program.print()
             results.append(self.analyze(params, program))
-        print("Sweep: \n", results)
+        # print("Sweep: \n", results)
         self.show(results)
 

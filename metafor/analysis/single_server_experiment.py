@@ -1,4 +1,6 @@
 import math
+from typing import Any, Callable
+import unittest
 from analysis.experiment import Experiment, Parameter, ParameterList
 from dsl.dsl import Source, Server, Work, Program
 
@@ -9,7 +11,7 @@ from matplotlib import pyplot as plt
 from model.single_server.ctmc import SingleServerCTMC
 
 
-class TestLatency(Experiment):
+class LatencyExperiment(Experiment):
     def __init__(self, p: Program):
         self.p = p
         self.main_color = "#A9A9A9"
@@ -50,50 +52,95 @@ class TestLatency(Experiment):
         return [param_setting] + results
 
     def show(self, results):
-        print(results)
+        # print(results)
         columns = ['parameter']
         server = self.p.get_root_server()
         for req in self.p.get_requests(server.name):
             columns = columns + ([req+"_avg", req+"_std"])
         pd = pandas.DataFrame(results, columns=columns)
         print(pd)
-        # ADD PLOT CODE HERE
-        #self.plot_results_latency(
-        #    input_seq,
-        #    mean_latency_seq,
-        #    lower_bound_latency_seq,
-        #    upper_bound_latency_seq,
-        #    x_axis_label,
-        #    "Latency",
-        #    "latency_" + variable1 + "_varied_" + job_info + file_name,
-        #    main_color,
-        #   fade_color,
-        #)
 
-def program() -> Program:
-    apis = {'rd': Work(10, []), 'wr': Work(10, [])}
-    s = Server("server", apis, 100, 20, 1)
-    rdsrc = Source("reader", "rd", 4.75, 9, 3)
-    wrsrc = Source("writer", "wr", 4.75, 9, 3)
 
-    p = Program("single_server")
-    p.add_server(s)
-    p.add_source(rdsrc)
-    p.add_source(wrsrc)
-    p.connect("reader", "server")
-    p.connect("writer", "server")
-    return p
+class FiniteHorizonExperiment(Experiment):
+    def __init__(self, p: Program, analyses: dict[str, Callable[[Any], Any]], sim_time: int = 100, sim_step: int = 20):
+        self.p = p
+        self.analyses = analyses
+        self.sim_time = sim_time
+        self.sim_step = sim_step
+
+        self.main_color = "#A9A9A9"
+        self.fade_color = "#D3D3D3"
+
+    def build(self, param) -> Program:
+        return self.update(self.p, param)
+
+    def analyze(self, param_setting, p: Program):
+        ctmc: SingleServerCTMC = p.build()
+        pi = ctmc.get_init_state()
+        analyses = { k: f(ctmc) for (k, f) in self.analyses.items() }
+        results = ctmc.finite_time_analysis(pi, analyses, sim_time = self.sim_time, sim_step = self.sim_step)
+        # print("Results:", results)
+        thisresult = []
+        for (step, values) in results.items():
+            a = [step]
+            # print("Values = ", values)
+            for k in self.analyses:
+                a.append(values[k])
+            thisresult.append(a)
+        return (param_setting, thisresult)
+
+    def show(self, results):
+        print(results)
+        for (param, values) in results:
+            print("Parameter: ", param)
+            columns = ['time'] + list(self.analyses.keys())
+            # print(columns)
+            pd = pandas.DataFrame(values, columns=columns)
+            print(pd)
+        
+
+
+
+class TestExperiments(unittest.TestCase):
+    def program(self) -> Program:
+        apis = {'rd': Work(10, []), 'wr': Work(10, [])}
+        s = Server("server", apis, 100, 20, 1)
+        rdsrc = Source("reader", "rd", 4.75, 9, 3)
+        wrsrc = Source("writer", "wr", 4.75, 9, 3)
+
+        p = Program("single_server")
+        p.add_server(s)
+        p.add_source(rdsrc)
+        p.add_source(wrsrc)
+        p.connect("reader", "server")
+        p.connect("writer", "server")
+        return p
+    
+    def test_latency_v_qsize(self):
+        p = self.program()
+        t = LatencyExperiment(p)
+        p1 = Parameter(("server", "server", "qsize"), range(80, 160, 10))
+        t.sweep(ParameterList([p1]))
+
+    def test_latency_v_arrival_rate(self):
+        p = self.program()
+        t = LatencyExperiment(p)
+        p2 = Parameter(("source", "reader", "arrival_rate"), linspace(4.0, 6.0, num=4))
+        t.sweep(ParameterList([p2]))
+
+    def test_latency_v_timeout(self):
+        p = self.program()
+        t = LatencyExperiment(p)
+        p3 = Parameter(("source", "reader", "timeout"), range(2, 8))
+        t.sweep(ParameterList([p3]))
+
+    def test_finite_time(self):
+        p = self.program()
+        t = FiniteHorizonExperiment(p, { 'main_q_size': lambda ctmc: ctmc.main_queue_size_average})
+        p1 = Parameter(("server", "server", "qsize"), range(80, 160, 10))
+        t.sweep(ParameterList([p1]))
+
 
 if __name__ == "__main__":
-    p = program()
-    t = TestLatency(p)
-    p1 = Parameter(("server", "server", "qsize"), range(80, 160, 10))
-    t.sweep(ParameterList([p1]))
+    unittest.main()
 
-    p = program()
-    p2 = Parameter(("source", "reader", "arrival_rate"), linspace(4.0, 6.0, num=4))
-    t.sweep(ParameterList([p2]))
-
-    p = program()
-    p3 = Parameter(("source", "reader", "timeout"), range(2, 8))
-    t.sweep(ParameterList([p3]))

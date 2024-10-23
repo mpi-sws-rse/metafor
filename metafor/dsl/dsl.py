@@ -290,12 +290,12 @@ class Program:
         print("Program: ", self.name)
         for (s, c) in self.connections:
             print(s, " --> ", c)
+        print("Servers: ", end= " ")
         for sname, s in self.servers.items():
-            print("Servers: ")
-            s.print()
+            print("\t", end = " "); s.print()
+        print("Sources: ", end= " ")
         for sname, s in self.sources.items():
-            print("Sources: ")
-            s.print()
+            print("\t", end = " "); s.print()
 
         
             
