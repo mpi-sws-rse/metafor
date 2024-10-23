@@ -212,7 +212,7 @@ class SingleServerCTMC(CTMC):
         print("Matrix exponentiation took %f s" % (time.time() - start))
 
         piq = pi0
-        for t in range(sim_step, sim_time, sim_step):
+        for t in range(sim_step, sim_time + 1, sim_step):
             result = {}
             start = time.time()
             piq = np.transpose(np.matmul(matexp, piq))

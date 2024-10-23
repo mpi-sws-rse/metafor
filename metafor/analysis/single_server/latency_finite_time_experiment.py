@@ -54,6 +54,6 @@ class TestLatencyFiniteTime(Experiment):
 
 
 if __name__ == "__main__":
-    t = TestLatencyFiniteTime(Program())
+    t = TestLatencyFiniteTime()
     program = t.build({})
     t.show(t.analyze({'sim_time': 2000, 'sim_step': 500, 'file_name': program.name + '.png'}, program))
