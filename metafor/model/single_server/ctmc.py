@@ -242,7 +242,7 @@ class SingleServerCTMC(CTMC):
             length += weight * n_main_queue
         return length
 
-    def main_queue_size_variance(self, pi, mean_queue_length) -> float:
+    def main_queue_size_variance(self, pi: npt.NDArray[np.float64], mean_queue_length: float) -> float:
         """This function computes the variance over queue length for a given prob distribution pi"""
         var = 0
         for n_main_queue in range(self.main_queue_size):
@@ -256,14 +256,11 @@ class SingleServerCTMC(CTMC):
             )
         return var
 
-    def main_queue_size_std(self, pi, mean_queue_length) -> float:
-        return math.sqrt(self.main_queue_size_variance(pi, mean_queue_length))
-
     def main_queue_size_analysis(self, pi) -> Dict[str, float]:
         avg = self.main_queue_size_average(pi)
-        variance = self.main_queue_size_variance(pi, avg)
+        var = self.main_queue_size_variance(pi, avg)
         std = self.main_queue_size_std(pi, avg)
-        return {"avg": avg, "variance": variance, "std": std}
+        return {"avg": avg, "var": var, "std": std}
 
     def retry_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
