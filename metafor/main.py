@@ -112,7 +112,7 @@ def main():
 
     parser.add_argument("--discrete", action="store_true")
     parser.add_argument("--no-discrete", dest="discrete", action="store_false")
-    parser.set_defaults(discrete=True)
+    parser.set_defaults(discrete=False)
 
     parser.add_argument("--ctmc", action="store_true")
     parser.add_argument("--no-ctmc", dest="ctmc", action="store_false")
@@ -279,7 +279,10 @@ def main():
             alpha,
         )
         file_name = "single_server_results.png"
-        print(ctmc.get_stationary_distribution())
+        pi = ctmc.get_stationary_distribution()
+        print(pi)
+        print(ctmc.throughput_average(pi))
+        print(ctmc.failure_rate_average(pi))
 
 
 if __name__ == "__main__":

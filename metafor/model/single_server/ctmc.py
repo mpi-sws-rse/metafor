@@ -234,8 +234,6 @@ class SingleServerCTMC(CTMC):
     ########### Various analyses built on top of probability distributions ###############
     def main_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
-        retry_queue_size = self.retry_queue_size
-
         length = 0.0
         for n_main_queue in range(self.main_queue_size):
             weight = 0.0
@@ -293,6 +291,16 @@ class SingleServerCTMC(CTMC):
 
     def retry_queue_size_std(self, pi, mean_queue_length) -> float:
         return math.sqrt(self.retry_queue_size_variance(pi, mean_queue_length))
+
+    def throughput_average(self, pi) -> float:
+        main_queue_length = self.main_queue_size_average(pi)
+        return main_queue_length/self.mu0_p
+
+    def failure_rate_average(self, pi, req_type: int = 0) -> float:
+        main_queue_length = self.main_queue_size_average(pi)
+        total_reqs = self.lambdaas[req_type] * self.latency_average(pi, req_type)
+        successful_reqs = main_queue_length * self.lambdaas[req_type] / self.lambdaa
+        return abs(total_reqs - successful_reqs)/total_reqs
 
     # req_type represents the index of the request
     def latency_average(self, pi, req_type: int = 0) -> float:
