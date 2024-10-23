@@ -1,7 +1,6 @@
 import time
 import unittest
 import numpy
-import numpy.typing as npt
 import sys
 
 from dsl import (
@@ -123,7 +122,7 @@ class TestDSL(unittest.TestCase):
             numpy.set_printoptions(threshold=sys.maxsize)
             start = time.time()
             node.qsize = qsize
-            ctmc = p.build()
+            ctmc: SingleServerCTMC = p.build()
             pi = ctmc.get_stationary_distribution()
             print("Average queue size = ", ctmc.main_queue_size_average(pi))
             print(pi)

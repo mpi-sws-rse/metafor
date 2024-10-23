@@ -1,6 +1,6 @@
 import math
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Dict
 
 import numpy as np
 import numpy.typing as npt
@@ -25,3 +25,9 @@ class CTMC(ABC):
 
     def main_queue_size_std(self, pi, mean_queue_length):
         return math.sqrt(self.main_queue_size_variance(pi, mean_queue_length))
+
+    def main_queue_size_analysis(self, pi) -> Dict[str, float]:
+        avg = self.main_queue_size_average(pi)
+        var = self.main_queue_size_variance(pi, avg)
+        std = self.main_queue_size_std(pi, avg)
+        return {"avg": avg, "var": var, "std": std}
