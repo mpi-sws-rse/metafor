@@ -288,21 +288,20 @@ class SingleServerCTMC(CTMC):
             )
         return val[0]
 
-    def latency_variance(self, pi, job_type: int) -> float:
-        mu0_p = self.mu0_ps[job_type]
-        ave = self.latency_average(pi, job_type)
+    def latency_variance(self, pi, mean: float, req_type: int = 0) -> float:
+        mu0_p = self.mu0_ps[req_type]
         # use the law of total variance
-        var1 = 1 / (mu0_p**2)  # var1 := Var(E(Y|X))
+        var1 = 1 / (mu0_p * mu0_p)  # var1 := Var(E(Y|X))
         for n_main_queue in range(self.main_queue_size):
             for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 weight = pi[state]
                 var1 += weight * (
                     (
-                        (self.lambdaas[job_type] / self.lambdaa)
+                        (self.lambdaas[req_type] / self.lambdaa)
                         * n_main_queue
                         * (1 / mu0_p)
-                        - ave
+                        - mean
                     )
                     ** 2
                 )
@@ -314,7 +313,7 @@ class SingleServerCTMC(CTMC):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             var2 += (
                 weight
-                * (self.lambdaas[job_type] / self.lambdaa)
+                * (self.lambdaas[req_type] / self.lambdaa)
                 * n_main_queue
                 * (1 / self.mu0_p**2)
             )
