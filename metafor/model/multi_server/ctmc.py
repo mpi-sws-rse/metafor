@@ -77,7 +77,7 @@ class MultiServerCTMC(CTMC):
         if o_max_list is None:
             self.o_max_list = [2 for _ in range(server_num)]
 
-    def _index_decomposer(self, total_ind):
+    def _index_decomposer(self, total_ind) -> List[List[int]]:
         """This function converts a given index in range [0, state_num]
         into two indices corresponding to (1) number of jobs in orbit and (2) jobs in the queue.
         """
@@ -98,9 +98,13 @@ class MultiServerCTMC(CTMC):
             ]  # state index within SS of node_id
             n_main_queue.append(s % self.main_queue_sizes[node_id])
             n_retry_queue.append(s // self.main_queue_sizes[node_id])
+
+        for node_id in range(self.server_num):
+            assert 0 <= n_main_queue[node_id] < self.state_num[node_id]
+            assert 0 <= n_retry_queue[node_id] < self.state_num[node_id]
         return [n_main_queue, n_retry_queue]
 
-    def _index_composer(self, n_main_queue_list, n_retry_queue_list):
+    def _index_composer(self, n_main_queue_list, n_retry_queue_list) -> int:
         """This function converts two given input indices into one universal index in range [0, state_num].
         The input indices correspond to number of (1) jobs in queue and (2) jobs in the orbit.
         """
@@ -116,6 +120,7 @@ class MultiServerCTMC(CTMC):
                 n_main_queue_list[node_id]
                 + n_retry_queue_list[node_id] * self.main_queue_sizes[node_id]
             ) * ss_size_bias
+        assert 0 <= total_ind < self.state_num_prod
         return total_ind
 
     def tail_prob_computer(self, total_ind):
@@ -141,6 +146,8 @@ class MultiServerCTMC(CTMC):
                 tail_prob[node_id] = k_inv**2
             else:
                 tail_prob[node_id] = 1
+        for node_id in range(self.server_num):
+            assert 0 <= tail_prob[node_id] <= 1
         return tail_prob
 
     def cumulative_prob_computer(self, pi, q_range, o_range):

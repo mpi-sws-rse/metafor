@@ -1,6 +1,8 @@
 import argparse
 
+from analysis.multi_server_ctmc_analysis import fault_scenario_analysis
 from model.multi_server.ctmc import MultiServerCTMC
+from utils.plot_parameters import PlotParameters
 
 
 def main():
@@ -174,6 +176,8 @@ def main():
         o_min_list,
         o_max_list,
     )
+    plot_params = PlotParameters(step_time, sim_time, lambda_fault=lambda_fault, start_time_fault=start_time_fault,
+                                 lambda_reset=lambda_reset, reset_time=reset_time, config_set=config_set)
     file_name = "multi_server_results.png"
     pi = ctmc.get_stationary_distribution()
     print(pi)
@@ -181,6 +185,7 @@ def main():
     print(main_queue_length)
     main_queue_variance = ctmc.main_queue_size_variance(pi, main_queue_length)
     print(main_queue_variance)
+    fault_scenario_analysis(ctmc, file_name, plot_params)
 
 
 if __name__ == "__main__":
