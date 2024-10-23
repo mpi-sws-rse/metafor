@@ -27,7 +27,7 @@ def simple_analysis(p: Program):
     print("Building CTMC")
     ctmc = timed_call(Program.build, p)
     print("Computing stationary distribution")
-    pi = timed_call(SingleServerCTMC.get_stationary_distribution, ctmc)
+    pi = ctmc.get_stationary_distribution()
     print(pi)
     print("Average queue size = ", ctmc.main_queue_size_average(pi))
     print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
@@ -179,7 +179,7 @@ class TestDSL(unittest.TestCase):
                 10,
                 [
                     DependentCall(
-                        "server2", "server", "rd", Constants.CLOSED, 8.5, 10, 3
+                        "server2", "server", "rd", Constants.CLOSED, 10, 3
                     )
                 ],
             )
@@ -194,6 +194,7 @@ class TestDSL(unittest.TestCase):
         p.add_server(s2)
         p.add_source(rd_src)
         p.connect("client", "server")
+        timed_call(lambda: simple_analysis(p))
 
 
 class TestBasic(unittest.TestCase):

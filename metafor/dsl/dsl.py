@@ -111,17 +111,12 @@ class DependentCall:
         parent_server_name: str,
         api_name: str,
         call_type: Constants,
-        arrival_rate: float,  # do we need this? this should be set by the processing speed, no?
         timeout: int,
         retry: int,
     ):
         self.callee = server_name
         self.caller = parent_server_name
         self.api_name = api_name
-        assert arrival_rate >= 0.0
-        self.arrival_rate = (
-            arrival_rate  # lambda for the exponential distribution: check if needed
-        )
         self.call_type = call_type
         self.timeout = timeout
         self.retry = retry
@@ -218,6 +213,18 @@ class Program:
     def get_source(self, sname) -> Optional[Source]:
         return self.sources.get(sname, None)
 
+    @staticmethod
+    def get_job(server: Server, dependant_call: DependentCall) -> Work:
+        for job in server.apis.values():
+            if dependant_call in job.downstream:
+                return job
+        return None
+
+    def get_job_processing_rate(self, dependant_call: DependentCall):
+        parent_server: Server = self.get_server(dependant_call.caller)
+        job: Work = self.get_job(parent_server, dependant_call)
+        return job.processing_rate
+
     def get_params(
         self, server: Server, connections: List[Tuple[str, str]]
     ) -> Tuple[List[float], List[float], List[int], List[int], List[Work]]:
@@ -287,7 +294,7 @@ class Program:
 
             for job in jobs:
                 for dependent_call in job.downstream:
-                    arrival_rates.append(dependent_call.arrival_rate)
+                    arrival_rates.append(self.get_job_processing_rate(dependent_call))
                     processing_rates.append(job.processing_rate)
                     timeouts.append(dependent_call.timeout)
                     retries.append(dependent_call.retry)
