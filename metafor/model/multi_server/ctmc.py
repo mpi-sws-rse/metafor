@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -28,10 +28,10 @@ class MultiServerCTMC(CTMC):
         thread_pools: List[int],
         parent_list: List[List[int]],
         sub_tree_list: List[List[int]],
-        q_min_list: List[int] = None,
-        q_max_list: List[int] = None,
-        o_min_list: List[int] = None,
-        o_max_list: List[int] = None,
+        q_min_list: Optional[List[int]] = None,
+        q_max_list: Optional[List[int]] = None,
+        o_min_list: Optional[List[int]] = None,
+        o_max_list: Optional[List[int]] = None,
     ):
         super().__init__()
         assert (

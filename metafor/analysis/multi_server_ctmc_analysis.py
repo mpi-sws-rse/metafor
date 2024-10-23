@@ -144,7 +144,7 @@ def fault_simulation_data_generator(
                 else:
                     q_range_u.append([0, ctmc.main_queue_sizes[server_id]])
                     o_range_u.append([0, ctmc.retry_queue_sizes[server_id]])
-            # compute the probability assigned to stable portion of the state space of the individual servers
+            # compute the probability assigned to unstable portion of the state space of the individual servers
             cumulative_prob_unstable.append(
                 ctmc.cumulative_prob_computer(pi_ss, q_range_u, o_range_u)
             )
@@ -155,7 +155,7 @@ def fault_simulation_data_generator(
         start = time.time()
         eigenvalues_Q_sorted, eigenvectors_Q_sorted = eigs(Q_op, k=2, which="LR")
         print(eigenvalues_Q_sorted)
-        if lambda_config == plot_params.config_set[0]:
+        if lambda_config == ctmc.lambdaas:
             np.save("eigenvectors_Q_sorted", eigenvectors_Q_sorted)
         print("time taken to compute clustering is", time.time() - start)
         if len(clusters) == 1:

@@ -196,6 +196,32 @@ class TestDSL(unittest.TestCase):
         p.connect("client", "server")
         timed_call(lambda: simple_analysis(p))
 
+    def test_two_servers_small_queues(self):
+        """Two servers in series and a single source processing API call `rd`: the source sends requests at rate 9.5,
+        with a timeout of 10 and 3 retries. The first server processes `rd` with rate 10, pushes work to the second
+        server"""
+        rates = {
+            "rd": Work(
+                10,
+                [
+                    DependentCall(
+                        "server2", "server", "rd", Constants.CLOSED, 10, 3
+                    )
+                ],
+            )
+        }
+        apis = {"rd": Work(10, [])}
+        s = Server("server", rates, 20, 10, 1)
+        rd_src = Source("client", "rd", 9.5, 5, 3)
+
+        s2 = Server("server2", apis, 10, 10, 1)
+        p = Program("two_servers")
+        p.add_server(s)
+        p.add_server(s2)
+        p.add_source(rd_src)
+        p.connect("client", "server")
+        timed_call(lambda: simple_analysis(p))
+
 
 class TestBasic(unittest.TestCase):
     def test_sources(self):
