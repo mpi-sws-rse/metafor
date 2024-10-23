@@ -31,3 +31,7 @@ class CTMC(ABC):
         var = self.main_queue_size_variance(pi, avg)
         std = self.main_queue_size_std(pi, avg)
         return {"avg": avg, "var": var, "std": std}
+
+    @abstractmethod
+    def retry_queue_size_average(self, pi: npt.NDArray[np.float64]):
+        pass
