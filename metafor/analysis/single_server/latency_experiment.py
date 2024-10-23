@@ -55,7 +55,7 @@ class LatencyExperiment(Experiment):
         results = []
         for i, req in enumerate(p.get_requests(server.name)):
             latency = ctmc.latency_average(pi, i)
-            variance = ctmc.latency_variance(pi, i)
+            variance = ctmc.latency_variance(pi, latency)
             stddev = math.sqrt(variance)
             results = results + [latency, stddev]
         return [param_setting] + results
@@ -69,6 +69,33 @@ class LatencyExperiment(Experiment):
         pd = pandas.DataFrame(results, columns=columns)
         print(pd)
 
+
+class EquilibriumValuesExperiment(Experiment):
+    def __init__(self, p: Program):
+        self.p = p
+        self.main_color = "#A9A9A9"
+        self.fade_color = "#D3D3D3"
+
+    def build(self, param) -> Program:
+        return self.update(self.p, param)
+
+    def analyze(self, param_setting, p: Program):
+        ctmc: SingleServerCTMC = p.build()
+        pi = ctmc.get_stationary_distribution()
+        server = p.get_root_server()
+
+        results = [param_setting]
+        mainqavg = ctmc.main_queue_size_average(pi)
+        mainqstd = ctmc.main_queue_size_std(pi, mainqavg)
+        results.append(mainqavg)
+        results.append(mainqstd)
+        return results
+
+    def show(self, results):
+        # print(results)
+        columns = ["parameter", "qsize", "std"]
+        pd = pandas.DataFrame(results, columns=columns)
+        print(pd)
 
 class FiniteHorizonExperiment(Experiment):
     def __init__(
@@ -107,7 +134,7 @@ class FiniteHorizonExperiment(Experiment):
         return (param_setting, thisresult)
 
     def show(self, results):
-        print(results)
+        # print(results)
         for param, values in results:
             print("Parameter: ", param)
             columns = ["time"] + list(self.analyses.keys())
@@ -149,13 +176,66 @@ class TestExperiments(unittest.TestCase):
         p3 = Parameter(("source", "reader", "timeout"), range(2, 8))
         t.sweep(ParameterList([p3]))
 
-    def test_finite_time(self):
+    def test_convergence_v_qsize(self):
         p = self.program()
         t = FiniteHorizonExperiment(
             p, {"main_q_size": lambda ctmc: ctmc.main_queue_size_average}
         )
         p1 = Parameter(("server", "server", "qsize"), range(80, 160, 10))
         t.sweep(ParameterList([p1]))
+
+    def test_convergence_v_arrival_rate(self):
+        p = self.program()
+        t = FiniteHorizonExperiment(
+            p, {"main_q_size": lambda ctmc: ctmc.main_queue_size_average}, sim_time=200, sim_step=10
+        )
+        p1 = Parameter(("source", "writer", "arrival_rate"), linspace(2.0, 6.0, 8))
+        t.sweep(ParameterList([p1]))
+
+    def test_average_qsize_v_arrival_rate(self):
+        p = self.program()
+        t = EquilibriumValuesExperiment(p)
+        p1 = Parameter(("source", "writer", "arrival_rate"), linspace(2.0, 6.0, 8))
+        t.sweep(ParameterList([p1]))
+
+
+
+class TestExperimentsLarge(unittest.TestCase):
+    def storage_server(self) -> Program:
+        apis = {
+            "get": Work(10, []),
+            "put": Work(20, []),
+            "list": Work(2, []),
+        }
+        node = Server("node", apis, qsize=300, orbit_size=5, thread_pool=32)
+
+        putsrc = Source("putsrc", "put", 2, 5, 1)
+        getsrc = Source("getsrc", "get", 2, 3, 1)
+        listsrc = Source("listsrc", "list", 2, 5, 1)
+
+        p = Program("storage_node")
+        p.add_server(node)
+        p.add_source(putsrc)
+        p.add_source(getsrc)
+        p.add_source(listsrc)
+        p.connect("putsrc", "node")
+        p.connect("getsrc", "node")
+        p.connect("listsrc", "node")
+        return p
+
+    def test_storage_system(self):
+        storage_server_model = self.storage_server()
+        qsizes = Parameter(("server", "node", "qsize"), range(500, 1300, 200))
+        t = LatencyExperiment(storage_server_model)
+        t.sweep(ParameterList([qsizes]))
+
+    def test_finite_horizon(self):
+        storage_server_model = self.storage_server()
+        qsizes = Parameter(("server", "node", "qsize"), range(500, 1300, 200))
+        t = FiniteHorizonExperiment(
+            storage_server_model, {"main_q_size": lambda ctmc: ctmc.main_queue_size_average}, sim_time=30, sim_step=5
+        )
+        t.sweep(ParameterList([qsizes]))
 
 
 if __name__ == "__main__":

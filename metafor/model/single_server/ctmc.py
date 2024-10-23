@@ -55,15 +55,15 @@ class SingleServerCTMC(CTMC):
         self.timeout = timeout
         self.max_retries = max_retries
 
-        print(
-            "main qsize = ",
-            self.main_queue_size,
-            " retry qsize = ",
-            self.retry_queue_size,
-        )
-        print("lambdaas = ", self.lambdaas)
-        print("lambdaa = ", self.lambdaa)
-        print("mu = ", self.mu0_ps)
+        #print(
+        #    "main qsize = ",
+        #    self.main_queue_size,
+        #    " retry qsize = ",
+        #    self.retry_queue_size,
+        #)
+        #print("lambdaas = ", self.lambdaas)
+        #print("lambdaa = ", self.lambdaa)
+        #print("mu = ", self.mu0_ps)
 
         # the rate of retrying jobs in the retry queue
         self.mu_retry_base = max_retries * self.lambdaa / ((max_retries + 1) * timeout)
@@ -228,7 +228,7 @@ class SingleServerCTMC(CTMC):
                 result[analysis_name] = v
 
             results[t] = result
-            print(result)
+            # print(result)
         return results
 
     ########### Various analyses built on top of probability distributions ###############

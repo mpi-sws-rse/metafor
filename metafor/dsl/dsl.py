@@ -321,7 +321,7 @@ class Program:
     def print(self):
         print("Program: ", self.name)
         for s, c in self.connections:
-            print(s, " --> ", c)
+            print(s, "\t -->\t ", c)
         print("Servers: ", end=" ")
         for sname, s in self.servers.items():
             print("\t", end=" ")

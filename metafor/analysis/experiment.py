@@ -1,6 +1,7 @@
 import itertools
 from abc import abstractmethod
 
+import time
 from typing import Any, Iterable
 
 from dsl.dsl import Program
@@ -119,10 +120,16 @@ class Experiment:
     def sweep(self, plist: ParameterList):
         # NOTE: sweep mutates program structure
         results = []
+        print("\n")
+        start = time.time()
         for params in plist:
+            print("==========================================================")
             print("Running experiment with parameters ", params)
             program = self.build(params)
             program.print()
+            analyze_start = time.time()
             results.append(self.analyze(params, program))
+            print("Analysis time = ", time.time() - analyze_start, " seconds")
         # print("Sweep: \n", results)
+        print("Sweep finished in ", time.time() - start, " seconds.\n\n")
         self.show(results)
