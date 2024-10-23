@@ -67,15 +67,9 @@ class MixtureSource(Source):
 # Q: is this a special case of a Phase type distribution?
 class StateMachineSource(Source):
     # TBD: HANDLE THESE IN CTMC CREATION
-    def __init__(
-        self,
-        name: str,
-        api_name: str,
-        transition_matrix: npt.NDArray[np.float64],
-        lambda_map: npt.NDArray[tuple[float64, int, int]],
-    ):
-        self.name = name
-        self.api_name = api_name
+    def __init__(self, name: str, api_name: str, transition_matrix: npt.NDArray[np.float64],
+                 lambda_map: npt.NDArray[tuple[float64, int, int]], arrival_rate: float, timeout: int):
+        super().__init__(name, api_name, arrival_rate, timeout)
         assert np.all(
             np.vectorize(lambda x: x >= 0.0)(transition_matrix)
         ), "All entries in the transition map should be nonnegative"
@@ -117,17 +111,12 @@ class DependentCall:
         parent_server_name: str,
         api_name: str,
         call_type: Constants,
-        arrival_rate: float,  # do we need this? this should be set by the processing speed, no?
         timeout: int,
         retry: int,
     ):
         self.callee = server_name
         self.caller = parent_server_name
         self.api_name = api_name
-        assert arrival_rate >= 0.0
-        self.arrival_rate = (
-            arrival_rate  # lambda for the exponential distribution: check if needed
-        )
         self.call_type = call_type
         self.timeout = timeout
         self.retry = retry
@@ -224,6 +213,18 @@ class Program:
     def get_source(self, sname) -> Optional[Source]:
         return self.sources.get(sname, None)
 
+    @staticmethod
+    def get_job(server: Server, dependant_call: DependentCall) -> Work:
+        for job in server.apis.values():
+            if dependant_call in job.downstream:
+                return job
+        return None
+
+    def get_job_processing_rate(self, dependant_call: DependentCall):
+        parent_server: Server = self.get_server(dependant_call.caller)
+        job: Work = self.get_job(parent_server, dependant_call)
+        return job.processing_rate
+
     def get_params(
         self, server: Server, connections: List[Tuple[str, str]]
     ) -> Tuple[List[float], List[float], List[int], List[int], List[Work]]:
@@ -293,7 +294,7 @@ class Program:
 
             for job in jobs:
                 for dependent_call in job.downstream:
-                    arrival_rates.append(dependent_call.arrival_rate)
+                    arrival_rates.append(self.get_job_processing_rate(dependent_call))
                     processing_rates.append(job.processing_rate)
                     timeouts.append(dependent_call.timeout)
                     retries.append(dependent_call.retry)
@@ -330,34 +331,3 @@ class Program:
         for sname, s in self.sources.items():
             print("\t", end=" ")
             s.print()
-
-
-"""
-    def average_lengths_analysis(self, plot_params: PlotParameters):
-        ctmc: CTMC = self.build()
-        file_name = self.name + ".png"
-        analyzer: Analyzer = Analyzer(ctmc, file_name)
-        analyzer.average_lengths_analysis(plot_params)
-
-    def fault_scenario_analysis(self, plot_params: PlotParameters):
-        ctmc: CTMC = self.build()
-        file_name = self.name + ".png"
-        analyzer: Analyzer = Analyzer(ctmc, file_name)
-        analyzer.fault_scenario_analysis(plot_params)
-
-    def latency_analysis(self, plot_params: PlotParameters):
-        ctmc: CTMC = self.build()
-        file_name = self.name + ".png"
-        analyzer: Analyzer = Analyzer(ctmc, file_name)
-
-        _, server_name = self.connections[0]
-        server: Server = self.servers[server_name]
-        sources: List[Source] = [
-            self.sources[source_name] for source_name, _ in self.connections
-        ]
-        jobs: List[Work] = [server.apis[source.api_name] for source in sources]
-        job_types = [job_type for job_type in range(0, len(jobs))]
-
-        for job_type in job_types:
-            analyzer.latency_analysis(plot_params, job_type)
-"""

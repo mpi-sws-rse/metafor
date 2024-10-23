@@ -66,8 +66,6 @@ class ParameterList:
 
 
 class Experiment:
-    def __init__(self, p: Program):
-        self.p = p
 
     @abstractmethod
     def build(self, params) -> Program:

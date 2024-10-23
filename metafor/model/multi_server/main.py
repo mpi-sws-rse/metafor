@@ -175,7 +175,12 @@ def main():
         o_max_list,
     )
     file_name = "multi_server_results.png"
-    print(ctmc.get_stationary_distribution())
+    pi = ctmc.get_stationary_distribution()
+    print(pi)
+    main_queue_length = ctmc.main_queue_size_average(pi)
+    print(main_queue_length)
+    main_queue_variance = ctmc.main_queue_size_variance(pi, main_queue_length)
+    print(main_queue_variance)
 
 
 if __name__ == "__main__":

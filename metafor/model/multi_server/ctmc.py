@@ -163,7 +163,7 @@ class MultiServerCTMC(CTMC):
             cumulative_prob += pi[state]
         return cumulative_prob
 
-    def main_queue_size_average(self, pi: npt.NDArray[np.float64]) -> float:
+    def main_queue_size_average(self, pi: npt.NDArray[np.float64]) -> List[float]:
         q_len = [0 for _ in range(self.server_num)]
         for node_id in range(self.server_num):
             q_len_node = 0
@@ -186,6 +186,30 @@ class MultiServerCTMC(CTMC):
                 q_len_node += q_node * p
             q_len[node_id] = q_len_node
         return q_len
+
+    def main_queue_size_variance(self, pi: npt.NDArray[np.float64], mean_queue_length: List[float]) -> List[float]:
+        q_var = [0 for _ in range(self.server_num)]
+        for node_id in range(self.server_num):
+            q_var_node = 0
+            for q_node in range(self.main_queue_sizes[node_id]):
+                q_range = []
+                o_range = []
+                for server_id in range(self.server_num):
+                    if server_id != node_id:
+                        q_range.append(list(range(self.main_queue_sizes[server_id])))
+                    else:
+                        q_range.append([q_node])
+                for server_id in range(self.server_num):
+                    o_range.append(list(range(self.retry_queue_sizes[server_id])))
+                q_prod_list = list(itertools.product(*q_range))
+                o_prod_list = list(itertools.product(*o_range))
+                p = 0
+                for q in q_prod_list:
+                    for o in o_prod_list:
+                        p += pi[self._index_composer(q, o)]
+                q_var_node += p * (q_node - mean_queue_length[node_id]) * (q_node - mean_queue_length[node_id])
+            q_var[node_id] = q_var_node
+        return q_var
 
     def sparse_info_calculator(
         self, lambda_list, node_selected, q_range, o_range

@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, Tuple, Dict
+from typing import Any, Callable, List
 
 import numpy as np
 import numpy.typing as npt
@@ -10,7 +10,6 @@ import time
 
 from utils.plot_parameters import PlotParameters
 from model.ctmc import CTMC
-from utils.calculate import tail_prob_computer
 
 
 class SingleServerCTMC(CTMC):
@@ -99,6 +98,26 @@ class SingleServerCTMC(CTMC):
         else:
             return self.pi
 
+    @staticmethod
+    def tail_prob_computer(qsize: float, service_rate: float, timeout: float):
+        """Compute the timeout probabilities for the case that service time is distributed exponentially."""
+        mu = service_rate  # to remain close to the math symbol
+        mu_x_timeout = mu * timeout
+        exp_mu_timeout = math.exp(-mu_x_timeout)
+        if exp_mu_timeout == 0:
+            return [0] * qsize
+
+        tail_seq = [0]  # The timeout prob is zero when there is no job in the queue!
+        current_sum = 0
+        last = 1
+        for job_num in range(
+                1, qsize
+        ):  # compute the timeout prob for all different queue sizes.
+            last = last * mu_x_timeout / job_num
+            current_sum = current_sum + last
+            tail_seq.append(current_sum * exp_mu_timeout)
+        return tail_seq
+
     def get_eigenvalues(self):
         eigenvalues = np.linalg.eigvals(self.Q)
         sorted_eigenvalues = np.sort(eigenvalues.real)[::-1]
@@ -129,7 +148,7 @@ class SingleServerCTMC(CTMC):
 
     def generator_mat_exact(self, transition_matrix: bool = False):
         Q = np.zeros((self.state_num, self.state_num))
-        tail_seq = tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
+        tail_seq = self.tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
         for total_ind in range(self.state_num):
             n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
             tail_main = tail_seq[n_main_queue]
@@ -212,7 +231,7 @@ class SingleServerCTMC(CTMC):
         print("Matrix exponentiation took %f s" % (time.time() - start))
 
         piq = pi0
-        for t in range(sim_step, sim_time, sim_step):
+        for t in range(sim_step, sim_time + 1, sim_step):
             result = {}
             start = time.time()
             piq = np.transpose(np.matmul(matexp, piq))
@@ -234,8 +253,6 @@ class SingleServerCTMC(CTMC):
     ########### Various analyses built on top of probability distributions ###############
     def main_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
-        retry_queue_size = self.retry_queue_size
-
         length = 0.0
         for n_main_queue in range(self.main_queue_size):
             weight = 0.0
@@ -244,7 +261,7 @@ class SingleServerCTMC(CTMC):
             length += weight * n_main_queue
         return length
 
-    def main_queue_size_variance(self, pi, mean_queue_length) -> float:
+    def main_queue_size_variance(self, pi: npt.NDArray[np.float64], mean_queue_length: float) -> float:
         """This function computes the variance over queue length for a given prob distribution pi"""
         var = 0
         for n_main_queue in range(self.main_queue_size):
@@ -257,14 +274,6 @@ class SingleServerCTMC(CTMC):
                 * (n_main_queue - mean_queue_length)
             )
         return var
-
-    def main_queue_size_std(self, pi, mean_queue_length) -> float:
-        return math.sqrt(self.main_queue_size_variance(pi, mean_queue_length))
-
-    def main_queue_size_analysis(self, pi) -> Dict[str, float]:
-        avg = self.main_queue_size_average(pi)
-        std = self.main_queue_size_std(pi, avg)
-        return {"avg": avg, "std": std}
 
     def retry_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
@@ -292,6 +301,16 @@ class SingleServerCTMC(CTMC):
 
     def retry_queue_size_std(self, pi, mean_queue_length) -> float:
         return math.sqrt(self.retry_queue_size_variance(pi, mean_queue_length))
+
+    def throughput_average(self, pi) -> float:
+        main_queue_length = self.main_queue_size_average(pi)
+        return main_queue_length/self.mu0_p
+
+    def failure_rate_average(self, pi, req_type: int = 0) -> float:
+        main_queue_length = self.main_queue_size_average(pi)
+        total_reqs = self.lambdaas[req_type] * self.latency_average(pi, req_type)
+        successful_reqs = main_queue_length * self.lambdaas[req_type] / self.lambdaa
+        return abs(total_reqs - successful_reqs)/total_reqs
 
     # req_type represents the index of the request
     def latency_average(self, pi, req_type: int = 0) -> float:
@@ -481,7 +500,7 @@ class SingleServerCTMC(CTMC):
         col_ind = []
         data_point = []
 
-        tail_seq = tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
+        tail_seq = self.tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
         for total_ind in range(self.state_num):
             data_sum = 0
             n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
