@@ -1,7 +1,7 @@
 import math
 from typing import Any, Callable
 import unittest
-from analysis.experiment import Experiment, Parameter, ParameterList
+from analysis.experiment import Experiment, Parameter, ParameterList, extract_name_val
 from dsl.dsl import Source, Server, Work, Program
 
 from numpy import linspace
@@ -40,7 +40,8 @@ class LatencyExperiment(Experiment):
         plt.ylabel(y_axis, fontsize=14)
         plt.grid("on")
         plt.xlim(min(x_vals), max(x_vals))
-        plt.savefig(figure_name)
+        #plt.savefig(figure_name)
+        plt.show()
         plt.close()
 
     def build(self, param) -> Program:
@@ -62,11 +63,27 @@ class LatencyExperiment(Experiment):
 
     def show(self, results):
         # print(results)
-        columns = ["parameter"]
+        PARAMETER = "parameter"
+        columns = [PARAMETER]
         server = self.p.get_root_server()
-        for req in self.p.get_requests(server.name):
+        reqs = self.p.get_requests(server.name)
+        for req in reqs:
             columns = columns + ([req + "_avg", req + "_std"])
         pd = pandas.DataFrame(results, columns=columns)
+        paramvals = list(map(lambda pmap: extract_name_val(pmap), pd[PARAMETER]))
+        parameter_name = ".".join(paramvals[0][0][1:])
+        pd["parameter_values"] = list(map(lambda v: v[1], paramvals))
+        
+        for req in reqs:
+            pd[req + "_lowerbd"] = pd[req + "_avg"] - pd[req + "_std"]
+            pd[req + "_upperbd"] = pd[req + "_avg"] + pd[req + "_std"]
+            self.plot("Average latency for " + req, 
+                      x_axis= parameter_name, 
+                      y_axis="Latency of " + req,
+                      x_vals = pd["parameter_values"],
+                      mean_seq=pd[req + "_avg"], 
+                      lower_bound_seq=pd[req + "_lowerbd"], 
+                      upper_bound_seq=pd[req+"_upperbd"])
         print(pd)
 
 
@@ -115,6 +132,34 @@ class FiniteHorizonExperiment(Experiment):
 
     def build(self, param) -> Program:
         return self.update(self.p, param)
+    
+    def plot(
+        self,
+        filename,
+        figure_name: str,
+        df: pandas.DataFrame
+    ):
+        colors = plt.cm.viridis(linspace(0, 1, len(df.columns) - 1))
+
+        plt.rc("font", size=14)
+        plt.rcParams["figure.figsize"] = [5, 5]
+        plt.rcParams["figure.autolayout"] = True
+
+        plt.figure()  # row 0, col 0
+        x_vals = df["time"]
+        for i, column in enumerate(df.columns[1:]):
+            plt.plot(df['time'], df[column], marker='o', color=colors[i], label=column)
+
+        plt.title(figure_name)
+        y_axis_label = "Average values for " + ", ".join(df.columns[1:])    
+        plt.xlabel("Time", fontsize=14)
+        plt.ylabel(y_axis_label, fontsize=14)
+        plt.grid("on")
+
+        plt.xlim(df["time"].min(), df["time"].max())        
+        plt.savefig(filename)
+        plt.show()
+        plt.close()
 
     def analyze(self, param_setting, p: Program):
         ctmc: SingleServerCTMC = p.build()
@@ -141,6 +186,7 @@ class FiniteHorizonExperiment(Experiment):
             # print(columns)
             pd = pandas.DataFrame(values, columns=columns)
             print(pd)
+            self.plot("trends_v_time", "Trends of " + str(param) + " vs time", pd)
 
 
 class TestExperiments(unittest.TestCase):

@@ -51,6 +51,15 @@ def create_nested_map(pairs):
         temp[keys[-1]] = value  # Set the last key to the value
     return result
 
+def extract_name_val(nestedmap):
+    def extract_worker(name, nestedmap):
+        if isinstance(nestedmap, dict):
+            assert(len(nestedmap) == 1)
+            for k, v in nestedmap.items():
+                return extract_worker(name + (k, ), v)
+        else:
+            return (name, nestedmap)
+    return extract_worker((), nestedmap)
 
 class ParameterList:
     def __init__(self, paramlist: list[Parameter]):
@@ -130,4 +139,5 @@ class Experiment:
             print("Analysis time = ", time.time() - analyze_start, " seconds")
         # print("Sweep: \n", results)
         print("Sweep finished in ", time.time() - start, " seconds.\n\n")
+        print("==========================================================")
         self.show(results)

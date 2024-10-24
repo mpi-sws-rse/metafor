@@ -91,9 +91,13 @@ class SingleServerCTMC(CTMC):
             # calculate the stationary distribution
             QT = np.transpose(self.Q)
             ns = scipy.linalg.null_space(QT)
+            # print("ns = ", ns)
             self.pi = ns / np.linalg.norm(ns, ord=1)
             if sum(self.pi) < -0.01:  # the null space may return `-pi`
                 self.pi = -self.pi
+            # print(self.pi)
+            # print(self.pi[:,0])
+            # print(QT * self.pi[:,0])
             return self.pi
         else:
             return self.pi
