@@ -197,6 +197,37 @@ class MultiServerCTMC(CTMC):
             cumulative_prob += pi[state]
         return cumulative_prob
 
+    def finite_time_analysis(self, pi0, analyses: dict[str, Callable[[Any], Any]], sim_time: int, sim_step: int):
+        initial_result = {n: 0.0 for n in analyses}
+        # XXX: we are assuming the initial result for the analyses is 0, which may not be true
+        initial_result["pi"] = pi0
+        results = {0: initial_result}
+        print(
+            "Computing finite time statistics for time quantum %d time units with step size %d"
+            % (sim_time, sim_step)
+        )
+        start = time.time()
+        print("Starting matrix exponentiation...", end=" ")
+        matexp = scipy.sparse.linalg.expm(self.Q_op_T * sim_step)
+        print("Matrix exponentiation took %f s" % (time.time() - start))
+
+        piq = pi0
+        for t in range(sim_step, sim_time + 1, sim_step):
+            result = {}
+            start = time.time()
+            piq = np.transpose(np.matmul(matexp, piq))
+            elapsed_time = time.time() - start
+            result["step"] = t
+            result["pi"] = piq
+            result["wallclock_time"] = elapsed_time
+            # now run all the analyses passed to this function with the current distribution
+            for analysis_name, analysis_fn in analyses.items():
+                v = analysis_fn(piq)
+                result[analysis_name] = v
+
+            results[t] = result
+        return results
+
     def main_queue_size_average(self, pi: npt.NDArray[np.float64]) -> List[float]:
         q_len = [0 for _ in range(self.server_num)]
         for node_id in range(self.server_num):
@@ -446,13 +477,16 @@ class MultiServerCTMC(CTMC):
         pi[0] = 1.0  # Initially the queue is empty
         return pi
 
-    def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
+    def compute_stationary_distribution(self, remove_non_negative: bool = True) -> npt.NDArray[np.float64]:
         start = time.time()
         _, eigenvectors = eigs(self.Q_op_T, k=1, which="SM")
+        if remove_non_negative:
+            eigenvectors = np.array([abs(val) for val in eigenvectors])
         pi = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
         if pi[0] < -0.00000001:
             pi = -pi
         print("Computing the stationary distribution took ", time.time() - start)
+        assert 0.99999999 <= sum(pi) <= 1
         for prob in pi:
             assert 0 <= prob <= 1
         return pi
