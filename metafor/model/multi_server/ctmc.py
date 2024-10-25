@@ -150,7 +150,7 @@ class MultiServerCTMC(CTMC):
         assert 0 <= total_ind < self.state_num_prod
         return total_ind
 
-    def tail_prob_computer(self, total_ind):
+    def _tail_prob_computer(self, total_ind):
         """This function computes the timeout probabilities for the case
         that service time is distributed exponentially."""
 
@@ -286,7 +286,7 @@ class MultiServerCTMC(CTMC):
 
             if not absorbing_flg:
                 val_sum = 0
-                tail_prob_list = self.tail_prob_computer(total_ind)
+                tail_prob_list = self._tail_prob_computer(total_ind)
                 q_next = [0 * i for i in range(self.server_num)]
                 o_next = [0 * i for i in range(self.server_num)]
                 # compute the non-synchronized transitions' rates of the generator matrix
@@ -442,7 +442,6 @@ class MultiServerCTMC(CTMC):
         return [row_ind, col_ind, data]
 
     def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
-
         start = time.time()
         _, eigenvectors = eigs(self.Q_op_T, k=1, which="SM")
         pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
@@ -450,11 +449,6 @@ class MultiServerCTMC(CTMC):
             pi_ss = -pi_ss
         print("Computing the stationary distribution took ", time.time() - start)
         return pi_ss
-
-    def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
-        if self.pi is None:
-            self.pi = self.compute_stationary_distribution()
-        return self.pi
 
     def hitting_time_average(self, Q, S1, S2) -> float:
         A = copy.deepcopy(Q)

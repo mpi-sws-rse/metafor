@@ -85,25 +85,22 @@ class SingleServerCTMC(CTMC):
         pi[0] = 1.0  # Initially the queue is empty
         return pi
 
-    # compute the stationary distribution and cache it
-    def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
-        if self.pi is None:
-            # calculate the stationary distribution
-            QT = np.transpose(self.Q)
-            ns = scipy.linalg.null_space(QT)
-            # print("ns = ", ns)
-            self.pi = ns / np.linalg.norm(ns, ord=1)
-            if sum(self.pi) < -0.01:  # the null space may return `-pi`
-                self.pi = -self.pi
-            # print(self.pi)
-            # print(self.pi[:,0])
-            # print(QT * self.pi[:,0])
-            return self.pi
-        else:
-            return self.pi
+    # compute the stationary distribution
+    def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
+        # calculate the stationary distribution
+        QT = np.transpose(self.Q)
+        ns = scipy.linalg.null_space(QT)
+        # print("ns = ", ns)
+        pi = ns / np.linalg.norm(ns, ord=1)
+        if sum(pi) < -0.01:  # the null space may return `-pi`
+            pi = -pi
+        # print(pi)
+        # print(pi[:,0])
+        # print(QT * pi[:,0])
+        return pi
 
     @staticmethod
-    def tail_prob_computer(qsize: float, service_rate: float, timeout: float):
+    def _tail_prob_computer(qsize: float, service_rate: float, timeout: float):
         """Compute the timeout probabilities for the case that service time is distributed exponentially."""
         mu = service_rate  # to remain close to the math symbol
         mu_x_timeout = mu * timeout
@@ -152,7 +149,7 @@ class SingleServerCTMC(CTMC):
 
     def generator_mat_exact(self, transition_matrix: bool = False):
         Q = np.zeros((self.state_num, self.state_num))
-        tail_seq = self.tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
+        tail_seq = self._tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
         for total_ind in range(self.state_num):
             n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
             tail_main = tail_seq[n_main_queue]
@@ -504,7 +501,7 @@ class SingleServerCTMC(CTMC):
         col_ind = []
         data_point = []
 
-        tail_seq = self.tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
+        tail_seq = self._tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
         for total_ind in range(self.state_num):
             data_sum = 0
             n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
