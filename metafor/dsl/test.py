@@ -54,17 +54,6 @@ def simple_analysis(p: Program):
     timed_call(sparse_analysis, ctmc)
 
 
-def length_analysis(p: Program):
-    print("Building CTMC")
-    ctmc = timed_call(Program.build, p)
-    print("Computing stationary distribution")
-    pi = ctmc.get_stationary_distribution()
-    print(pi)
-    print(pi.shape)
-    print("Average queue size = ", ctmc.main_queue_size_average(pi))
-    print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
-
-
 class TestDSL(unittest.TestCase):
     def test_single_server_single_request(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 5,
@@ -216,7 +205,7 @@ class TestDSL(unittest.TestCase):
         p.add_server(s2)
         p.add_source(rd_src)
         p.connect("client", "server")
-        timed_call(lambda: length_analysis(p))
+        timed_call(lambda: simple_analysis(p))
 
     def test_two_servers_small_queues(self):
         """Two servers in series and a single source processing API call `rd`: the source sends requests at rate 9.5,
@@ -242,7 +231,7 @@ class TestDSL(unittest.TestCase):
         p.add_server(s2)
         p.add_source(rd_src)
         p.connect("client", "server")
-        timed_call(lambda: length_analysis(p))
+        timed_call(lambda: simple_analysis(p))
 
     def test_two_identical_servers(self):
         """Two servers in series (with the same parameters) and a single source processing API call `rd`: the source
@@ -268,7 +257,7 @@ class TestDSL(unittest.TestCase):
         p.add_server(s2)
         p.add_source(rd_src)
         p.connect("client", "server")
-        timed_call(lambda: length_analysis(p))
+        timed_call(lambda: simple_analysis(p))
 
 
 class TestBasic(unittest.TestCase):

@@ -338,6 +338,9 @@ class SingleServerCTMC(CTMC):
             )
         return var
 
+    def main_queue_size_std(self, pi, mean_queue_length):
+        return math.sqrt(self.main_queue_size_variance(pi, mean_queue_length))
+
     def retry_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
         length = 0

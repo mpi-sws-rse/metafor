@@ -206,16 +206,11 @@ class MultiServerCTMC(CTMC):
             "Computing finite time statistics for time quantum %d time units with step size %d"
             % (sim_time, sim_step)
         )
-        start = time.time()
-        print("Starting matrix exponentiation...", end=" ")
-        matexp = scipy.sparse.linalg.expm(self.Q_op_T * sim_step)
-        print("Matrix exponentiation took %f s" % (time.time() - start))
-
         piq = pi0
         for t in range(sim_step, sim_time + 1, sim_step):
             result = {}
             start = time.time()
-            piq = np.transpose(np.matmul(matexp, piq))
+            piq = scipy.sparse.linalg.expm_multiply(self.Q_op_T, piq)
             elapsed_time = time.time() - start
             result["step"] = t
             result["pi"] = piq
@@ -274,6 +269,10 @@ class MultiServerCTMC(CTMC):
                 q_var_node += p * (q_node - mean_queue_length[node_id]) * (q_node - mean_queue_length[node_id])
             q_var[node_id] = q_var_node
         return q_var
+
+    def main_queue_size_std(self, pi, mean_queue_length):
+        variances = self.main_queue_size_variance(pi, mean_queue_length)
+        return [math.sqrt(variance) for variance in variances]
 
     def retry_queue_size_average(self, pi: npt.NDArray[np.float64]) -> List[float]:
         q_len = [0 for _ in range(self.server_num)]

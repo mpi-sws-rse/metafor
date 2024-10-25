@@ -32,8 +32,9 @@ class CTMC(ABC):
     def main_queue_size_variance(self, pi: npt.NDArray[np.float64], mean_queue_length):
         pass
 
+    @abstractmethod
     def main_queue_size_std(self, pi, mean_queue_length):
-        return math.sqrt(self.main_queue_size_variance(pi, mean_queue_length))
+        pass
 
     def main_queue_size_analysis(self, pi) -> Dict[str, float]:
         avg = self.main_queue_size_average(pi)
