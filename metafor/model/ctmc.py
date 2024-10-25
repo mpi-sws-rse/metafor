@@ -35,3 +35,7 @@ class CTMC(ABC):
     @abstractmethod
     def retry_queue_size_average(self, pi: npt.NDArray[np.float64]):
         pass
+
+    @abstractmethod
+    def latency_average(self, pi: npt.NDArray[np.float64], req_type: int = 0):
+        pass

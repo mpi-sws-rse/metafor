@@ -499,3 +499,7 @@ class MultiServerCTMC(CTMC):
                         state = self._index_composer([q1, q2, 0], [o1, o2, 0])
                         new_set.append(state)
         return new_set
+
+    def latency_average(self, pi: npt.NDArray[np.float64], req_type: int = 0):
+        # TODO: implement this
+        return 0
