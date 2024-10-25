@@ -97,6 +97,8 @@ class SingleServerCTMC(CTMC):
         # print(pi)
         # print(pi[:,0])
         # print(QT * pi[:,0])
+        for prob in pi:
+            assert 0 <= prob <= 1
         return pi
 
     @staticmethod

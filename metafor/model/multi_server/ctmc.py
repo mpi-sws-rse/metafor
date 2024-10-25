@@ -444,11 +444,13 @@ class MultiServerCTMC(CTMC):
     def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
         start = time.time()
         _, eigenvectors = eigs(self.Q_op_T, k=1, which="SM")
-        pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
-        if pi_ss[0] < -0.00000001:
-            pi_ss = -pi_ss
+        pi = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
+        if pi[0] < -0.00000001:
+            pi = -pi
         print("Computing the stationary distribution took ", time.time() - start)
-        return pi_ss
+        for prob in pi:
+            assert 0 <= prob <= 1
+        return pi
 
     def hitting_time_average(self, Q, S1, S2) -> float:
         A = copy.deepcopy(Q)
