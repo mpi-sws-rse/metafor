@@ -12,8 +12,13 @@ class CTMC(ABC):
         self.pi: Optional[npt.NDArray[np.float64]] = None
 
     @abstractmethod
-    def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
+    def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
         pass
+
+    def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
+        if self.pi is None:
+            self.pi = self.compute_stationary_distribution()
+        return self.pi
 
     @abstractmethod
     def main_queue_size_average(self, pi: npt.NDArray[np.float64]):
@@ -34,4 +39,8 @@ class CTMC(ABC):
 
     @abstractmethod
     def retry_queue_size_average(self, pi: npt.NDArray[np.float64]):
+        pass
+
+    @abstractmethod
+    def latency_average(self, pi: npt.NDArray[np.float64], req_type: int = 0):
         pass

@@ -77,6 +77,33 @@ class MultiServerCTMC(CTMC):
         if o_max_list is None:
             self.o_max_list = [2 for _ in range(server_num)]
 
+        self.row_ind, self.col_ind, self.data = self.sparse_info_calculator(
+            self.lambdaas, -1, [0, 0], [0, 0]
+        )
+        self.Q = scipy.sparse.csr_matrix(
+            (self.data, (self.row_ind, self.col_ind)), shape=(self.state_num_prod, self.state_num_prod)
+        )
+
+        def matvec_func(x):
+            return self.Q.T.dot(x)
+
+        def rmatvec_func(x):
+            return self.Q.dot(x)
+
+        self.Q_op = GeneratorMatrix(
+            shape=(self.state_num_prod, self.state_num_prod),
+            matvec=rmatvec_func,
+            rmatvec=matvec_func,
+            dtype=self.Q.dtype,
+        )
+
+        self.Q_op_T = GeneratorMatrix(
+            shape=(self.state_num_prod, self.state_num_prod),
+            matvec=matvec_func,
+            rmatvec=rmatvec_func,
+            dtype=self.Q.dtype,
+        )
+
     def _index_decomposer(self, total_ind) -> List[List[int]]:
         """This function converts a given index in range [0, state_num]
         into two indices corresponding to (1) number of jobs in orbit and (2) jobs in the queue.
@@ -123,7 +150,7 @@ class MultiServerCTMC(CTMC):
         assert 0 <= total_ind < self.state_num_prod
         return total_ind
 
-    def tail_prob_computer(self, total_ind):
+    def _tail_prob_computer(self, total_ind):
         """This function computes the timeout probabilities for the case
         that service time is distributed exponentially."""
 
@@ -259,7 +286,7 @@ class MultiServerCTMC(CTMC):
 
             if not absorbing_flg:
                 val_sum = 0
-                tail_prob_list = self.tail_prob_computer(total_ind)
+                tail_prob_list = self._tail_prob_computer(total_ind)
                 q_next = [0 * i for i in range(self.server_num)]
                 o_next = [0 * i for i in range(self.server_num)]
                 # compute the non-synchronized transitions' rates of the generator matrix
@@ -414,48 +441,16 @@ class MultiServerCTMC(CTMC):
                 row_ind.append(total_ind)
         return [row_ind, col_ind, data]
 
-    def compute_stationary_distribution(
-        self, lambda_config
-    ) -> Tuple[
-        npt.NDArray[np.float64], int, int, List, GeneratorMatrix
-    ]:
-        row_ind, col_ind, data = self.sparse_info_calculator(
-            lambda_config, -1, [0, 0], [0, 0]
-        )
-        Q = scipy.sparse.csr_matrix(
-            (data, (row_ind, col_ind)), shape=(self.state_num_prod, self.state_num_prod)
-        )
-
-        def matvec_func(x):
-            return Q.T.dot(x)
-
-        def rmatvec_func(x):
-            return Q.dot(x)
-
-        Q_op = GeneratorMatrix(
-            shape=(self.state_num_prod, self.state_num_prod),
-            matvec=rmatvec_func,
-            rmatvec=matvec_func,
-            dtype=Q.dtype,
-        )
-        Q_op_T = GeneratorMatrix(
-            shape=(self.state_num_prod, self.state_num_prod),
-            matvec=matvec_func,
-            rmatvec=rmatvec_func,
-            dtype=Q.dtype,
-        )
+    def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
         start = time.time()
-        _, eigenvectors = eigs(Q_op_T, k=1, which="SM")
-        pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
-        if pi_ss[0] < -0.00000001:
-            pi_ss = -pi_ss
+        _, eigenvectors = eigs(self.Q_op_T, k=1, which="SM")
+        pi = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
+        if pi[0] < -0.00000001:
+            pi = -pi
         print("Computing the stationary distribution took ", time.time() - start)
-        return pi_ss, row_ind, col_ind, data, Q_op
-
-    def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
-        if self.pi is None:
-            self.pi, _, _, _, _ = self.compute_stationary_distribution(self.lambdaas)
-        return self.pi
+        for prob in pi:
+            assert 0 <= prob <= 1
+        return pi
 
     def hitting_time_average(self, Q, S1, S2) -> float:
         A = copy.deepcopy(Q)
@@ -499,3 +494,7 @@ class MultiServerCTMC(CTMC):
                         state = self._index_composer([q1, q2, 0], [o1, o2, 0])
                         new_set.append(state)
         return new_set
+
+    def latency_average(self, pi: npt.NDArray[np.float64], req_type: int = 0):
+        # TODO: implement this
+        return 0
