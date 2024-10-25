@@ -26,7 +26,7 @@ class Matrix:
             case CTMCRepresentation.EXPLICIT: 
                 try:
                     self.Q = np.zeros((self.dim, self.dim))
-                except numpy._core._exceptions._ArrayMemoryError:
+                except np._core._exceptions._ArrayMemoryError:
                     raise "State space (%d states) too large for an explicit representation. Try a sparse representation." % (self.dim)
             case CTMCRepresentation.COO:
                 # since our matrices have a few entries in each row, we can optimize this representation as
