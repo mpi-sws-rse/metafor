@@ -77,6 +77,33 @@ class MultiServerCTMC(CTMC):
         if o_max_list is None:
             self.o_max_list = [2 for _ in range(server_num)]
 
+        self.row_ind, self.col_ind, self.data = self.sparse_info_calculator(
+            self.lambdaas, -1, [0, 0], [0, 0]
+        )
+        self.Q = scipy.sparse.csr_matrix(
+            (self.data, (self.row_ind, self.col_ind)), shape=(self.state_num_prod, self.state_num_prod)
+        )
+
+        def matvec_func(x):
+            return self.Q.T.dot(x)
+
+        def rmatvec_func(x):
+            return self.Q.dot(x)
+
+        self.Q_op = GeneratorMatrix(
+            shape=(self.state_num_prod, self.state_num_prod),
+            matvec=rmatvec_func,
+            rmatvec=matvec_func,
+            dtype=self.Q.dtype,
+        )
+
+        self.Q_op_T = GeneratorMatrix(
+            shape=(self.state_num_prod, self.state_num_prod),
+            matvec=matvec_func,
+            rmatvec=rmatvec_func,
+            dtype=self.Q.dtype,
+        )
+
     def _index_decomposer(self, total_ind) -> List[List[int]]:
         """This function converts a given index in range [0, state_num]
         into two indices corresponding to (1) number of jobs in orbit and (2) jobs in the queue.
@@ -414,47 +441,19 @@ class MultiServerCTMC(CTMC):
                 row_ind.append(total_ind)
         return [row_ind, col_ind, data]
 
-    def compute_stationary_distribution(
-        self, lambda_config
-    ) -> Tuple[
-        npt.NDArray[np.float64], int, int, List, GeneratorMatrix
-    ]:
-        row_ind, col_ind, data = self.sparse_info_calculator(
-            lambda_config, -1, [0, 0], [0, 0]
-        )
-        Q = scipy.sparse.csr_matrix(
-            (data, (row_ind, col_ind)), shape=(self.state_num_prod, self.state_num_prod)
-        )
+    def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
 
-        def matvec_func(x):
-            return Q.T.dot(x)
-
-        def rmatvec_func(x):
-            return Q.dot(x)
-
-        Q_op = GeneratorMatrix(
-            shape=(self.state_num_prod, self.state_num_prod),
-            matvec=rmatvec_func,
-            rmatvec=matvec_func,
-            dtype=Q.dtype,
-        )
-        Q_op_T = GeneratorMatrix(
-            shape=(self.state_num_prod, self.state_num_prod),
-            matvec=matvec_func,
-            rmatvec=rmatvec_func,
-            dtype=Q.dtype,
-        )
         start = time.time()
-        _, eigenvectors = eigs(Q_op_T, k=1, which="SM")
+        _, eigenvectors = eigs(self.Q_op_T, k=1, which="SM")
         pi_ss = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
         if pi_ss[0] < -0.00000001:
             pi_ss = -pi_ss
         print("Computing the stationary distribution took ", time.time() - start)
-        return pi_ss, row_ind, col_ind, data, Q_op
+        return pi_ss
 
     def get_stationary_distribution(self) -> npt.NDArray[np.float64]:
         if self.pi is None:
-            self.pi, _, _, _, _ = self.compute_stationary_distribution(self.lambdaas)
+            self.pi = self.compute_stationary_distribution()
         return self.pi
 
     def hitting_time_average(self, Q, S1, S2) -> float:
