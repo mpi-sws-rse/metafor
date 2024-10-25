@@ -1,4 +1,3 @@
-import copy
 import math
 from typing import List
 
@@ -7,50 +6,12 @@ import scipy
 
 from model.single_server.ctmc import SingleServerCTMC
 from utils.plot import (
-    plot_results,
     trigger_plot_generator,
     plot_bar_data,
     plot_results_latency,
     plot_results_reset,
 )
 from utils.plot_parameters import PlotParameters
-
-
-def average_lengths_analysis(
-    ctmc: SingleServerCTMC, file_name: str, plot_params: PlotParameters
-):
-    print("Started the average lengths analysis")
-
-    pi_q_new = np.zeros(ctmc.state_num)
-    pi_q_new[0] = 1  # Initially the queue is empty
-    pi_q_seq = [copy.copy(pi_q_new)]  # Initializing the initial distribution
-
-    Q = ctmc.generator_mat_exact()
-    (
-        main_queue_avg_len,
-        main_queue_var_len,
-        main_queue_std_len,
-        retry_queue_avg_len,
-        runtime,
-    ) = ctmc.server_population_queue_model(Q, pi_q_seq, plot_params)
-
-    print("Main queue average length")
-    print(main_queue_avg_len)
-    print("Retry queue average length")
-    print(retry_queue_avg_len)
-
-    plot_results(
-        plot_params.step_time,
-        main_queue_avg_len,
-        main_queue_var_len,
-        main_queue_std_len,
-        runtime,
-        file_name,
-    )
-
-    ctmc.reach_prob_computation(Q, plot_params)
-
-    print("Finished the average lengths analysis\n")
 
 
 def fault_scenario_plot_generator(
@@ -585,8 +546,7 @@ def latency_plot_generator(
             ctmc.prob_dist_accumulator(pi_ss, math.ceil(qlen * 0.9), qlen, 0, olen)
         )
         mean_latency = ctmc.latency_average(pi_ss, job_type)
-        var_latency = ctmc.latency_var(pi_ss, job_type)
-        std_latency = ctmc.main_queue_size_std(var_latency)
+        std_latency = ctmc.main_queue_size_std(pi_ss, mean_latency)
         mean_latency_seq.append(mean_latency)
         std_latency_seq.append(std_latency)
         lower_bound_latency_seq.append(mean_latency - std_latency)

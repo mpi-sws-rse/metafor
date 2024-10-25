@@ -1,4 +1,4 @@
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Callable, Any
 
 import numpy as np
 import numpy.typing as npt
@@ -440,6 +440,11 @@ class MultiServerCTMC(CTMC):
                 data.append(val)
                 row_ind.append(total_ind)
         return [row_ind, col_ind, data]
+
+    def get_init_state(self) -> npt.NDArray[np.float64]:
+        pi = np.zeros(self.state_num_prod)
+        pi[0] = 1.0  # Initially the queue is empty
+        return pi
 
     def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
         start = time.time()

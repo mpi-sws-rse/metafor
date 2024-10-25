@@ -32,7 +32,6 @@ def sparse_analysis(ctmc):
     print(s)
 
 
-
 def simple_analysis(p: Program):
     print("Building CTMC")
     ctmc = timed_call(Program.build, p)
@@ -61,6 +60,7 @@ def length_analysis(p: Program):
     print("Computing stationary distribution")
     pi = ctmc.get_stationary_distribution()
     print(pi)
+    print(pi.shape)
     print("Average queue size = ", ctmc.main_queue_size_average(pi))
     print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
 

@@ -1,6 +1,6 @@
 import math
 from abc import ABC, abstractmethod
-from typing import Optional, Dict
+from typing import Optional, Dict, Callable, Any
 
 import numpy as np
 import numpy.typing as npt
@@ -10,6 +10,10 @@ class CTMC(ABC):
 
     def __init__(self):
         self.pi: Optional[npt.NDArray[np.float64]] = None
+
+    @abstractmethod
+    def get_init_state(self) -> npt.NDArray[np.float64]:
+        pass
 
     @abstractmethod
     def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
@@ -43,4 +47,9 @@ class CTMC(ABC):
 
     @abstractmethod
     def latency_average(self, pi: npt.NDArray[np.float64], req_type: int = 0):
+        pass
+
+    @abstractmethod
+    def finite_time_analysis(self, pi0: npt.NDArray[np.float64], analyses: dict[str, Callable[[Any], Any]],
+                             sim_time: int, sim_step: int):
         pass
