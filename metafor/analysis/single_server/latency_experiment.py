@@ -233,7 +233,11 @@ class TestExperiments(unittest.TestCase):
     def test_convergence_v_arrival_rate(self):
         p = self.program()
         t = FiniteHorizonExperiment(
-            p, {"main_q_size": lambda ctmc: ctmc.main_queue_size_average}, sim_time=200, sim_step=10
+            p, 
+            { "main_q_size": lambda ctmc: ctmc.main_queue_size_average,
+              "latency" : lambda ctmc: (lambda pi: ctmc.latency_average(pi, req_type=0)),
+            }, 
+            sim_time=200, sim_step=10
         )
         p1 = Parameter(("source", "writer", "arrival_rate"), linspace(2.0, 6.0, 8))
         t.sweep(ParameterList([p1]))

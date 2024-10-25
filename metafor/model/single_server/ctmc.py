@@ -6,11 +6,65 @@ import numpy.typing as npt
 import math
 import copy
 import scipy
+from scipy.sparse import coo_matrix
 import time
 
 from utils.plot_parameters import PlotParameters
 from model.ctmc import CTMC
 
+class CTMCRepresentation:
+    EXPLICIT = 0
+    COO = 1
+    CSC = 2
+    LINOP = 3
+
+class Matrix:
+    def __init__(self, dim: int, representation: CTMCRepresentation = CTMCRepresentation.EXPLICIT):
+        self.representation = representation # not used yet
+        self.dim = dim
+        match self.representation:
+            case CTMCRepresentation.EXPLICIT: 
+                try:
+                    self.Q = np.zeros((self.dim, self.dim))
+                except numpy._core._exceptions._ArrayMemoryError:
+                    raise "State space (%d states) too large for an explicit representation. Try a sparse representation." % (self.dim)
+            case CTMCRepresentation.COO:
+                # since our matrices have a few entries in each row, we can optimize this representation as
+                # an array of (column, data)
+                # this will also improve row sum
+                self.rows = []
+                self.columns = []
+                self.data = []
+            case _: raise NotImplementedError
+        
+    def set(self, i, j, value):
+        match self.representation:
+            case CTMCRepresentation.EXPLICIT: self.Q[i][j] = value
+            case CTMCRepresentation.COO:
+                self.rows.append(i)
+                self.columns.append(j)
+                self.data.append(value)
+            case _: raise NotImplementedError
+
+    def matrix(self):
+        match self.representation:
+            case CTMCRepresentation.EXPLICIT:
+                return self.Q
+            case CTMCRepresentation.COO:
+                return coo_matrix((self.data, (self.rows, self.columns)), shape=(self.dim, self.dim))
+            case _: raise NotImplementedError
+    
+    def sum(self, index):
+        match self.representation:
+            case CTMCRepresentation.EXPLICIT:
+                return np.sum(self.Q[index, :])
+            case CTMCRepresentation.COO:
+                sum = 0.0
+                for (i, j, v) in zip(self.rows, self.columns, self.data):
+                    if i == index:
+                        sum += v
+                return sum
+            case _: raise NotImplementedError
 
 class SingleServerCTMC(CTMC):
 
@@ -23,6 +77,7 @@ class SingleServerCTMC(CTMC):
         timeouts: List[int],
         retries: List[int],
         thread_pool: int,
+        representation=CTMCRepresentation.EXPLICIT,
         alpha: float = 0.25,
     ):
         """alpha is a parameter that allows us to adjust the CTMC with simulation data"""
@@ -70,9 +125,11 @@ class SingleServerCTMC(CTMC):
         self.mu_drop_base = self.lambdaa / ((max_retries + 1) * timeout)
 
         self.thread_pool = thread_pool
-        self.alpha = alpha
 
-        self.Q = self.generator_mat_exact(transition_matrix=False)
+        self.alpha = alpha
+        self.representation = representation
+
+        self.Q = self.generator_mat_exact(transition_matrix=False, representation=representation)
 
         # Debug: check that each row sums to 0 (approximately)
         # np.set_printoptions(threshold=sys.maxsize)
@@ -150,38 +207,34 @@ class SingleServerCTMC(CTMC):
         assert 0 <= total_ind < self.state_num
         return total_ind
 
-    def generator_mat_exact(self, transition_matrix: bool = False):
-        Q = np.zeros((self.state_num, self.state_num))
+    def generator_mat_exact(self, transition_matrix: bool = False, representation=CTMCRepresentation.EXPLICIT):
+        Q = Matrix(self.state_num, representation=representation)
         tail_seq = self.tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
         for total_ind in range(self.state_num):
             n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
             tail_main = tail_seq[n_main_queue]
             if n_main_queue == 0:  # queue is empty
-                Q[total_ind, self._index_composer(n_main_queue + 1, n_retry_queue)] = (
-                    self.lambdaa
-                )
+                Q.set(total_ind, self._index_composer(n_main_queue + 1, n_retry_queue), self.lambdaa)
                 if n_retry_queue > 0:
-                    Q[
-                        total_ind, self._index_composer(n_main_queue, n_retry_queue - 1)
-                    ] = (n_retry_queue * self.mu_drop_base)
-                    Q[
+                    Q.set(
+                        total_ind, self._index_composer(n_main_queue, n_retry_queue - 1),
+                     (n_retry_queue * self.mu_drop_base))
+                    Q.set(
                         total_ind,
                         self._index_composer(n_main_queue + 1, n_retry_queue - 1),
-                    ] = (
                         n_retry_queue * self.mu_retry_base
                     )
             elif n_main_queue == self.main_queue_size - 1:  # queue is full
-                Q[total_ind, self._index_composer(n_main_queue - 1, n_retry_queue)] = (
+                Q.set(total_ind, self._index_composer(n_main_queue - 1, n_retry_queue),
                     min(self.main_queue_size, self.thread_pool) * self.mu0_p
                 )
                 if n_retry_queue > 0:
-                    Q[
-                        total_ind, self._index_composer(n_main_queue, n_retry_queue - 1)
-                    ] = (n_retry_queue * self.mu_drop_base)
+                    Q.set(
+                        total_ind, self._index_composer(n_main_queue, n_retry_queue - 1),
+                     (n_retry_queue * self.mu_drop_base))
                 if n_retry_queue < self.retry_queue_size - 1:
-                    Q[
-                        total_ind, self._index_composer(n_main_queue, n_retry_queue + 1)
-                    ] = (
+                    Q.set(
+                        total_ind, self._index_composer(n_main_queue, n_retry_queue + 1),
                         self.alpha
                         * (self.lambdaa + n_retry_queue * self.mu_retry_base)
                         * tail_main
@@ -189,29 +242,28 @@ class SingleServerCTMC(CTMC):
             else:  # queue is neither full nor empty
                 alpha_tail_prob_sum = self.alpha * self.lambdaa * tail_main
                 if n_retry_queue < self.retry_queue_size - 1:
-                    Q[
+                    Q.set(
                         total_ind,
                         self._index_composer(n_main_queue + 1, n_retry_queue + 1),
-                    ] = alpha_tail_prob_sum
-                Q[total_ind, self._index_composer(n_main_queue + 1, n_retry_queue)] = (
+                    alpha_tail_prob_sum)
+                Q.set(total_ind, self._index_composer(n_main_queue + 1, n_retry_queue),
                     self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main
                 )
                 if n_retry_queue > 0:
-                    Q[
+                    Q.set(
                         total_ind,
                         self._index_composer(n_main_queue + 1, n_retry_queue - 1),
-                    ] = (
                         n_retry_queue * self.mu_retry_base * (1 - tail_main)
                     )
-                    Q[
-                        total_ind, self._index_composer(n_main_queue, n_retry_queue - 1)
-                    ] = (n_retry_queue * self.mu_drop_base)
-                Q[total_ind, self._index_composer(n_main_queue - 1, n_retry_queue)] = (
+                    Q.set(
+                        total_ind, self._index_composer(n_main_queue, n_retry_queue - 1),
+                        (n_retry_queue * self.mu_drop_base))
+                Q.set(total_ind, self._index_composer(n_main_queue - 1, n_retry_queue),
                     min(self.main_queue_size, self.thread_pool) * self.mu0_p
                 )
             if not transition_matrix:
-                Q[total_ind, total_ind] = -np.sum(Q[total_ind, :])
-        return Q
+                Q.set(total_ind, total_ind, -Q.sum(total_ind))
+        return Q.matrix()
 
     def finite_time_analysis(
         self,
@@ -255,6 +307,13 @@ class SingleServerCTMC(CTMC):
         return results
 
     ########### Various analyses built on top of probability distributions ###############
+    def queue_full_probability(self, pi) -> float:
+        qfull = self.main_queue_size - 1
+        weight = 0.0
+        for n_retry_queue in range(self.retry_queue_size):
+            weight += pi[self._index_composer(qfull, n_retry_queue)]
+        return weight
+
     def main_queue_size_average(self, pi) -> float:
         """This function computes the average queue length for a given prob distribution pi"""
         length = 0.0
@@ -321,29 +380,32 @@ class SingleServerCTMC(CTMC):
         # use the law of total expectation
         mu0_p = self.mu0_ps[req_type]
         val = 1 / mu0_p
+        arr_rate = self.lambdaas[req_type]
+
         for n_main_queue in range(self.main_queue_size):
             weight = 0
             for n_retry_queue in range(self.retry_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             val += (
                 weight
-                * (self.lambdaas[req_type] / self.lambdaa)
+                * (arr_rate / self.lambdaa)
                 * n_main_queue
                 * (1 / mu0_p)
             )
-        return val[0]
+        return val
 
     def latency_variance(self, pi, mean: float, req_type: int = 0) -> float:
         mu0_p = self.mu0_ps[req_type]
         # use the law of total variance
         var1 = 1 / (mu0_p * mu0_p)  # var1 := Var(E(Y|X))
+        arr_rate = self.lambdaas[req_type]
         for n_main_queue in range(self.main_queue_size):
             for n_retry_queue in range(self.retry_queue_size):
                 state = self._index_composer(n_main_queue, n_retry_queue)
                 weight = pi[state]
                 var1 += weight * (
                     (
-                        (self.lambdaas[req_type] / self.lambdaa)
+                        (arr_rate / self.lambdaa)
                         * n_main_queue
                         * (1 / mu0_p)
                         - mean
@@ -358,15 +420,16 @@ class SingleServerCTMC(CTMC):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
             var2 += (
                 weight
-                * (self.lambdaas[req_type] / self.lambdaa)
+                * (arr_rate / self.lambdaa)
                 * n_main_queue
                 * (1 / self.mu0_p**2)
             )
 
         var = var1 + var2
-        return var[0]
+        return var
 
     def latency_percentile(self, pi, req_type: int = 0, percentile: float = 50.0):
+        # BUGGY
         assert percentile <= 100.0
         retry_queue_size = self.retry_queue_size
         main_queue_size = self.main_queue_size
@@ -499,6 +562,7 @@ class SingleServerCTMC(CTMC):
         probabilities = self.reach_prob_computation(Q, plot_params)
         return probabilities[int(plot_params.sim_time / t)]
 
+    """ DOES NOT WORK and SUPERCEDED
     def sparse_info_calculator(self):
         row_ind = []
         col_ind = []
@@ -590,7 +654,7 @@ class SingleServerCTMC(CTMC):
             row_ind.append(total_ind)
             col_ind.append(total_ind)
             data_point.append(-data_sum)
-        return [row_ind, col_ind, data_point]
+        return [row_ind, col_ind, data_point] """
 
     def prob_dist_accumulator(self, pi, q1, q2, o1, o2):
         val = 0

@@ -23,6 +23,16 @@ def timed_call(f, *args, **kwargs):
     return v
 
 
+def sparse_analysis(ctmc):
+    print("SPARSE METHODS")
+    from scipy.sparse import coo_matrix, csc_matrix
+    from scipy.sparse.linalg import svds
+    Qcoo = coo_matrix(ctmc.Q)
+    s = svds(Qcoo)
+    print(s)
+
+
+
 def simple_analysis(p: Program):
     print("Building CTMC")
     ctmc = timed_call(Program.build, p)
@@ -41,6 +51,8 @@ def simple_analysis(p: Program):
         sim_time=10000,
         sim_step=10,
     )
+    # try out sparse representations
+    timed_call(sparse_analysis, ctmc)
 
 
 class TestDSL(unittest.TestCase):
