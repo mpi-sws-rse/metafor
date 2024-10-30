@@ -40,7 +40,8 @@ def simple_analysis(p: Program):
     print(pi)
     print("Average queue size = ", ctmc.main_queue_size_average(pi))
     print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
-    requests = p.get_requests("server")
+    root_server = p.get_root_server()
+    requests = p.get_requests(root_server.name)
     print(requests)
     for i, r in enumerate(requests):
         print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
@@ -190,21 +191,21 @@ class TestDSL(unittest.TestCase):
                 10,
                 [
                     DependentCall(
-                        "server2", "server", "rd", Constants.CLOSED, 10, 3
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
                     )
                 ],
             )
         }
         apis = {"rd": Work(10, [])}
-        s = Server("server", rates, 20, 100, 1)
+        s1 = Server("server1", rates, 20, 100, 1)
         rd_src = Source("client", "rd", 9.5, 5, 3)
 
         s2 = Server("server2", apis, 100, 100, 1)
         p = Program("two_servers")
-        p.add_server(s)
+        p.add_server(s1)
         p.add_server(s2)
         p.add_source(rd_src)
-        p.connect("client", "server")
+        p.connect("client", "server1")
         timed_call(lambda: simple_analysis(p))
 
     def test_two_servers_small_queues(self):
@@ -216,21 +217,21 @@ class TestDSL(unittest.TestCase):
                 10,
                 [
                     DependentCall(
-                        "server2", "server", "rd", Constants.CLOSED, 10, 3
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
                     )
                 ],
             )
         }
         apis = {"rd": Work(10, [])}
-        s = Server("server", rates, 20, 10, 1)
+        s1 = Server("server1", rates, 20, 10, 1)
         rd_src = Source("client", "rd", 9.5, 5, 3)
 
         s2 = Server("server2", apis, 10, 10, 1)
         p = Program("two_servers_small_queue")
-        p.add_server(s)
+        p.add_server(s1)
         p.add_server(s2)
         p.add_source(rd_src)
-        p.connect("client", "server")
+        p.connect("client", "server1")
         timed_call(lambda: simple_analysis(p))
 
     def test_two_identical_servers(self):
@@ -242,21 +243,59 @@ class TestDSL(unittest.TestCase):
                 10,
                 [
                     DependentCall(
-                        "server2", "server", "rd", Constants.CLOSED, 10, 3
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
                     )
                 ],
             )
         }
         apis = {"rd": Work(10, [])}
-        s = Server("server", rates, 10, 5, 1)
+        s1 = Server("server", rates, 10, 5, 1)
         rd_src = Source("client", "rd", 9.5, 5, 3)
 
         s2 = Server("server2", apis, 10, 5, 1)
         p = Program("two_identical_servers")
-        p.add_server(s)
+        p.add_server(s1)
         p.add_server(s2)
         p.add_source(rd_src)
-        p.connect("client", "server")
+        p.connect("client", "server1")
+        timed_call(lambda: simple_analysis(p))
+
+    def test_three_servers(self):
+        """Three servers in series and a single source processing API call `rd`: the source sends requests at rate 9.5,
+        with a timeout of 10 and 3 retries. The first server processes `rd` with rate 10, pushes the work to the second
+        server, which pushes the work to the third server"""
+        rates12 = {
+            "rd": Work(
+                10,
+                [
+                    DependentCall(
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
+                    )
+                ],
+            )
+        }
+        rates23 = {
+            "rd": Work(
+                10,
+                [
+                    DependentCall(
+                        "server3", "server2", "rd", Constants.CLOSED, 5, 1
+                    )
+                ]
+            )
+        }
+        apis = {"rd": Work(10, [])}
+        s1 = Server("server1", rates12, 10, 5, 1)
+        rd_src = Source("client", "rd", 9.5, 5, 3)
+
+        s2 = Server("server2", rates23, 20, 5, 1)
+        s3 = Server("server3", apis, 30, 10, 1)
+        p = Program("three_servers")
+        p.add_server(s1)
+        p.add_server(s2)
+        p.add_server(s3)
+        p.add_source(rd_src)
+        p.connect("client", "server1")
         timed_call(lambda: simple_analysis(p))
 
 

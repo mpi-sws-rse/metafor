@@ -17,12 +17,12 @@ class Constants:
 # a source of requests: an exponential distribution with rate `arrival_rate`
 class Source:
     def __init__(
-        self,
-        name: str,
-        api_name: str,
-        arrival_rate: float,
-        timeout: int,
-        retries: int = 0,
+            self,
+            name: str,
+            api_name: str,
+            arrival_rate: float,
+            timeout: int,
+            retries: int = 0,
     ):
         self.name = name  # unique name for this source, eg `client1`
         self.api_name = api_name  # name of the API call, e.g., `rd`
@@ -77,9 +77,9 @@ class StateMachineSource(Source):
             np.vectorize(lambda x: x >= 0.0)(lambda_map)
         ), "All entries in the lambda map should be nonnegative"
         assert (
-            lambda_map.shape[0]
-            == transition_matrix.shape[0]
-            == transition_matrix.shape[1]
+                lambda_map.shape[0]
+                == transition_matrix.shape[0]
+                == transition_matrix.shape[1]
         ), "Transition map and lambda map have different dimensions"
         self.lambda_map = lambda_map
         self.transition_matrix = transition_matrix
@@ -106,13 +106,13 @@ class DependentCall:
     # caller is the server that forwarded the request (the parent server)
     # api_name is the name of the API call, e.g., `rd`
     def __init__(
-        self,
-        server_name: str,
-        parent_server_name: str,
-        api_name: str,
-        call_type: Constants,
-        timeout: int,
-        retry: int,
+            self,
+            server_name: str,
+            parent_server_name: str,
+            api_name: str,
+            call_type: Constants,
+            timeout: int,
+            retry: int,
     ):
         self.callee = server_name
         self.caller = parent_server_name
@@ -138,12 +138,12 @@ class Work:
 # `work` is a map from name to `Work`
 class Server:
     def __init__(
-        self,
-        name: str,
-        apis: dict[str, Work],
-        qsize: int,
-        orbit_size: int,
-        thread_pool: int = 1,
+            self,
+            name: str,
+            apis: dict[str, Work],
+            qsize: int,
+            orbit_size: int,
+            thread_pool: int = 1,
     ):
         self.name = name
         self.apis = apis
@@ -214,8 +214,11 @@ class Program:
         return self.sources.get(sname, None)
 
     @staticmethod
-    def get_job(server: Server, dependant_call: DependentCall) -> Work:
-        for job in server.apis.values():
+    def get_jobs(server: Server) -> List[Work]:
+        return [job for job in server.apis.values()]
+
+    def get_job(self, server: Server, dependant_call: DependentCall) -> Work:
+        for job in self.get_jobs(server):
             if dependant_call in job.downstream:
                 return job
         return None
@@ -226,17 +229,17 @@ class Program:
         return job.processing_rate
 
     def get_params(
-        self, server: Server, connections: List[Tuple[str, str]]
-    ) -> Tuple[List[float], List[float], List[int], List[int], List[Work]]:
+            self, server: Server, connections: List[Tuple[str, str]]
+    ) -> Tuple[List[float], List[float], List[int], List[int]]:
         sources: List[Source] = [
             self.sources[source_name] for source_name, _ in connections
         ]
         arrival_rates: List[float] = [source.arrival_rate for source in sources]
-        jobs: List[Work] = [server.apis[source.api_name] for source in sources]
-        processing_rates: List[float] = [job.processing_rate for job in jobs]
+        processing_rates: List[float] = [job.processing_rate for job in self.get_jobs(server)]
         timeouts: List[int] = [source.timeout for source in sources]
         retries: List[int] = [source.retries for source in sources]
-        return arrival_rates, processing_rates, timeouts, retries, jobs
+        assert len(arrival_rates) == len(processing_rates) == len(timeouts) == len(retries)
+        return arrival_rates, processing_rates, timeouts, retries
 
     def get_connections(self, server: Server) -> List[Tuple[str, str]]:
         connections = [
@@ -262,9 +265,7 @@ class Program:
         if len(self.servers) == 1:  # single server
             _, server_name = self.connections[0]
             server: Server = self.servers[server_name]
-            arrival_rates, processing_rates, timeouts, retries, _ = self.get_params(
-                server, self.connections
-            )
+            arrival_rates, processing_rates, timeouts, retries = self.get_params(server, self.connections)
             ctmc = SingleServerCTMC(
                 server.qsize,
                 server.orbit_size,
@@ -288,10 +289,12 @@ class Program:
             ]
 
             connections = self.get_connections(root_server)
-            arrival_rates, processing_rates, timeouts, retries, jobs = self.get_params(
+            arrival_rates, processing_rates, timeouts, retries = self.get_params(
                 root_server, connections
             )
-
+            jobs: List[Work] = []
+            for server in serial_servers:
+                jobs += self.get_jobs(server)
             for job in jobs:
                 for dependent_call in job.downstream:
                     arrival_rates.append(self.get_job_processing_rate(dependent_call))
