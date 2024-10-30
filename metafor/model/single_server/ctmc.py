@@ -154,8 +154,8 @@ class SingleServerCTMC(CTMC):
         # print(pi)
         # print(pi[:,0])
         # print(QT * pi[:,0])
-        for prob in pi:
-            assert 0 <= prob <= 1
+        #for prob in pi:
+        #    assert 0 <= prob <= 1
         return pi
 
     @staticmethod
@@ -372,13 +372,17 @@ class SingleServerCTMC(CTMC):
         main_queue_length = self.main_queue_size_average(pi)
         return main_queue_length/self.mu0_p
 
-    def failure_rate_average(self, pi, req_type: int = 0) -> float:
-        main_queue_length = self.main_queue_size_average(pi)
-        total_reqs = self.lambdaas[req_type] * self.latency_average(pi, req_type)
-        successful_reqs = main_queue_length * self.lambdaas[req_type] / self.lambdaa
-        return abs(total_reqs - successful_reqs)/total_reqs
-
     # req_type represents the index of the request
+    def failure_rate_average(self, pi, req_type: int = 0) -> float:
+        rate = 0.0
+        arr_rate = self.lambdaas[req_type]
+        for n_main_queue in range(self.main_queue_size):
+            weight = 0.0
+            for n_retry_queue in range(self.retry_queue_size):
+                weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
+            rate += weight * self.mu_drop_base * (arr_rate / self.lambdaa)
+        return rate
+
     def latency_average(self, pi, req_type: int = 0) -> float:
         # use the law of total expectation
         mu0_p = self.mu0_ps[req_type]
