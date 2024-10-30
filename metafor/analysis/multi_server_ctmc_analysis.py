@@ -9,7 +9,6 @@ from scipy.sparse.linalg import eigs
 
 from model.multi_server.generator_matrix import GeneratorMatrix
 from model.multi_server.ctmc import MultiServerCTMC
-from utils.plot_parameters import PlotParameters
 
 
 def hitting_time_approx(ctmc: MultiServerCTMC, Q):
@@ -39,17 +38,18 @@ def fault_simulation_data_generator(
     pi_q_seq,
     main_queue_ave_len_seq,
     lambda_seq,
-    plot_params: PlotParameters,
+    step_time,
+    sim_time,
+    lambda_fault,
+    fault_time,
+    lambda_reset,
+    reset_time,
+    config_set
 ):
     """To compute the simulation data corresponding to the fixed fault scenario"""
     stable_configs = []
     unstable_configs = []
     metastable_configs = []
-    lambda_reset = plot_params.lambda_reset
-    fault_time = plot_params.start_time_fault
-    reset_time = plot_params.reset_time
-    lambda_fault = plot_params.lambda_fault
-    step_time = plot_params.step_time
 
     data_init = []
     row_ind_init = 0
@@ -61,7 +61,7 @@ def fault_simulation_data_generator(
     row_ind_reset = 0
     col_ind_reset = 0
 
-    for lambda_config in plot_params.config_set:
+    for lambda_config in config_set:
         # Computing the generator matrices and the stationary distributions
         pi_ss, row_ind, col_ind, data, Q_op = (
             ctmc.compute_stationary_distribution(lambda_config)
@@ -212,7 +212,7 @@ def fault_simulation_data_generator(
 
         print("config_type is", config_type)
     # SIMULATION
-    for t in range(0, plot_params.sim_time, plot_params.step_time):
+    for t in range(0, sim_time, step_time):
         if t <= fault_time:
             lambda_seq.append(ctmc.lambdaas[1])
             data = [data_init[i] * step_time for i in range(len(data_init))]
@@ -258,7 +258,8 @@ def fault_simulation_data_generator(
 
 
 def fault_scenario_analysis(
-    ctmc: MultiServerCTMC, file_name: str, plot_params: PlotParameters
+    ctmc: MultiServerCTMC, file_name: str, step_time, sim_time, lambda_fault, start_time_fault, lambda_reset,
+        reset_time, config_set
 ):
     print("Started the fault scenario analysis")
 
@@ -269,12 +270,13 @@ def fault_scenario_analysis(
     main_queue_ave_len_seq = [0]
 
     fault_simulation_data_generator(
-        ctmc, pi_q_seq, main_queue_ave_len_seq, lambda_seq, plot_params
+        ctmc, pi_q_seq, main_queue_ave_len_seq, lambda_seq, step_time, sim_time, lambda_fault, start_time_fault,
+        lambda_reset, reset_time, config_set
     )
 
     print("Creating the plots")
     timee = [
-        i * plot_params.step_time
+        i * step_time
         for i in list(range(0, len(main_queue_ave_len_seq) - 1))
     ]
     # Create 4x1 sub plots

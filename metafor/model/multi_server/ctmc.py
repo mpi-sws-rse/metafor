@@ -484,7 +484,7 @@ class MultiServerCTMC(CTMC):
         pi = np.real(eigenvectors) / np.linalg.norm(np.real(eigenvectors), ord=1)
         if pi[0] < -0.00000001:
             pi = -pi
-        print("Computing the stationary distribution took ", time.time() - start)
+        print("Computing the stationary distribution took ", time.time() - start, " seconds")
         assert 0.99999999 <= sum(pi) <= 1
         for prob in pi:
             assert 0 <= prob <= 1

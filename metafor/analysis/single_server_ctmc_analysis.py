@@ -11,7 +11,6 @@ from utils.plot import (
     plot_results_latency,
     plot_results_reset,
 )
-from utils.plot_parameters import PlotParameters
 
 
 def fault_scenario_plot_generator(
@@ -286,21 +285,10 @@ def fault_scenario_plot_generator(
 
 
 def fault_scenario_analysis(
-    ctmc: SingleServerCTMC, file_name: str, plot_params: PlotParameters
+    ctmc: SingleServerCTMC, file_name: str, timeout_min, timeout_max, mu_min, mu_max, mu_step, lambda_fault,
+        start_time_fault, duration_fault, reset_lambda_min, reset_lambda_max, reset_lambda_step
 ):
     print("Started the fault scenario analysis")
-
-    timeout_min = plot_params.timeout_min
-    timeout_max = plot_params.timeout_max
-    mu_min = plot_params.mu_min
-    mu_max = plot_params.mu_max
-    mu_step = plot_params.mu_step
-    lambda_fault = plot_params.lambda_fault[0]
-    start_time_fault = plot_params.start_time_fault
-    duration_fault = plot_params.duration_fault
-    reset_lambda_min = plot_params.reset_lambda_min
-    reset_lambda_max = plot_params.reset_lambda_max
-    reset_lambda_step = plot_params.reset_lambda_step
 
     # fault scenario plots
     trigger_plot_generator(
@@ -586,26 +574,21 @@ def latency_plot_generator(
 def latency_analysis(
     ctmc: SingleServerCTMC,
     file_name: str,
-    plot_params: PlotParameters,
-    job_type: int = -1,
+    timeout_min,
+    timeout_max,
+    mu_min,
+    mu_max,
+    mu_step,
+    lambda_min,
+    lambda_max,
+    lambda_step,
+    qlen_max,
+    qlen_step,
+    olen_max,
+    olen_step,
+    job_type: int = 0,
 ):
-    job_details = ""
-    if job_type != -1:
-        job_details = " for job " + str(job_type)
-    print("Started latency analysis" + job_details)
-
-    timeout_min = plot_params.timeout_min
-    timeout_max = plot_params.timeout_max
-    mu_min = plot_params.mu_min
-    mu_max = plot_params.mu_max
-    mu_step = plot_params.mu_step
-    lambda_min = plot_params.lambda_min
-    lambda_max = plot_params.lambda_max
-    lambda_step = plot_params.lambda_step
-    qlen_max = plot_params.qlen_max
-    qlen_step = plot_params.qlen_step
-    olen_max = plot_params.olen_max
-    olen_step = plot_params.olen_step
+    print("Started latency analysis for job " + str(job_type))
 
     # latency analysis for retrial orbits
     print("Creating the latency plots")
@@ -731,4 +714,4 @@ def latency_analysis(
         file_name,
         job_type,
     )
-    print("Finished latency analysis" + job_details + "\n")
+    print("Finished latency analysis for job " + str(job_type) + "\n")
