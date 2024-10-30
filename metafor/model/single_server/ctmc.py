@@ -146,7 +146,7 @@ class SingleServerCTMC(CTMC):
         # np.set_printoptions(threshold=None)
 
     def get_init_state(self) -> npt.NDArray[np.float64]:
-        pi = np.zeros(self.state_num)
+        pi = np.zeros(self.state_num,)
         pi[0] = 1.0  # Initially the queue is empty
         return pi
 
@@ -409,7 +409,9 @@ class SingleServerCTMC(CTMC):
                     * n_main_queue
                     * (1 / mu0_p)
             )
-        return val
+        if isinstance(val, float):
+            return val
+        return val[0]
 
     def latency_variance(self, pi, mean: float, req_type: int = 0) -> float:
         mu0_p = self.mu0_ps[req_type]
@@ -443,7 +445,9 @@ class SingleServerCTMC(CTMC):
             )
 
         var = var1 + var2
-        return var
+        if isinstance(var, float):
+            return var
+        return var[0]
 
     def latency_percentile(self, pi, req_type: int = 0, percentile: float = 50.0):
         # BUGGY
