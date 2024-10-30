@@ -151,19 +151,21 @@ class SingleServerCTMC(CTMC):
         return pi
 
     # compute the stationary distribution
-    def compute_stationary_distribution(self) -> npt.NDArray[np.float64]:
+    def compute_stationary_distribution(self, remove_non_negative: bool = True) -> npt.NDArray[np.float64]:
         # calculate the stationary distribution
         QT = np.transpose(self.Q)
         ns = scipy.linalg.null_space(QT)
         # print("ns = ", ns)
+        if remove_non_negative:
+            ns = np.array([abs(val) for val in ns])
         pi = ns / np.linalg.norm(ns, ord=1)
         if sum(pi) < -0.01:  # the null space may return `-pi`
             pi = -pi
         # print(pi)
         # print(pi[:,0])
         # print(QT * pi[:,0])
-        # for prob in pi:
-        #    assert 0 <= prob <= 1
+        for prob in pi:
+            assert 0 <= prob <= 1
         return pi
 
     @staticmethod
