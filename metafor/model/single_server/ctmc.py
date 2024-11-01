@@ -379,9 +379,15 @@ class SingleServerCTMC(CTMC):
     def retry_queue_size_std(self, pi, mean_queue_length) -> float:
         return math.sqrt(self.retry_queue_size_variance(pi, mean_queue_length))
 
-    def throughput_average(self, pi) -> float:
-        main_queue_length = self.main_queue_size_average(pi)
-        return main_queue_length / self.mu0_p
+    def throughput_average(self, pi, req_type: int = 0) -> float:
+        arr_rate = self.lambdaas[req_type]
+        proc_rate = self.mu0_ps[req_type]
+        # compute the probability with which server is idle
+        idle_prob = 0
+        for n_retry_queue in range(self.retry_queue_size):
+            idle_prob += pi[self._index_composer(0, n_retry_queue)]
+        thp = proc_rate * (1 - idle_prob) * (arr_rate / self.lambdaa)
+        return thp
 
     # req_type represents the index of the request
     def failure_rate_average(self, pi, req_type: int = 0) -> float:
