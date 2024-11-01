@@ -128,9 +128,10 @@ class SingleServerCTMC(CTMC):
         # print("mu = ", self.mu0_ps)
 
         # the rate of retrying jobs in the retry queue
-        self.mu_retry_base = max_retries * self.lambdaa / ((max_retries + 1) * timeout)
+        # Todo: These rates must be checked through validation data...
+        self.mu_retry_base = max_retries / ((max_retries + 1) * timeout)
         # the rate of dropping jobs in the retry queue
-        self.mu_drop_base = self.lambdaa / ((max_retries + 1) * timeout)
+        self.mu_drop_base = 1 / ((max_retries + 1) * timeout)
 
         self.thread_pool = thread_pool
 
@@ -386,11 +387,11 @@ class SingleServerCTMC(CTMC):
     def failure_rate_average(self, pi, req_type: int = 0) -> float:
         rate = 0.0
         arr_rate = self.lambdaas[req_type]
-        for n_main_queue in range(self.main_queue_size):
+        for n_retry_queue in range(self.retry_queue_size):
             weight = 0.0
-            for n_retry_queue in range(self.retry_queue_size):
+            for n_main_queue in range(self.main_queue_size):
                 weight += pi[self._index_composer(n_main_queue, n_retry_queue)]
-            rate += weight * self.mu_drop_base * (arr_rate / self.lambdaa)
+            rate += weight * self.mu_drop_base * (arr_rate / self.lambdaa) * n_retry_queue
         return rate
 
     def latency_average(self, pi, req_type: int = 0) -> float:
