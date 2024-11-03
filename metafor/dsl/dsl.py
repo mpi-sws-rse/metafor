@@ -32,7 +32,7 @@ class Source:
         self.timeout = timeout
         self.retries = retries if retries >= 0 else 0
 
-    def __to_string__(self):
+    def __str__(self):
         return "%s: generates %s: (arr %f, to %d, re %d)" % (
             self.name,
             self.api_name,
@@ -42,7 +42,7 @@ class Source:
         )
 
     def print(self):
-        print(self.__to_string__())
+        print(self.__str__())
 
     def num_states(self):
         return 1
@@ -85,7 +85,7 @@ class StateMachineSource(Source):
         self.transition_matrix = transition_matrix
         self.nstates = lambda_map.shape[0]
 
-    def __to_string__(self):
+    def __str__(self):
         return "%s: generates %s: (arr %f, to %d, re %d)" % (
             self.name,
             self.api_name,
@@ -95,7 +95,7 @@ class StateMachineSource(Source):
         )
 
     def print(self):
-        print(self.__to_string__())
+        print(self.__str__())
 
     def num_states(self):
         return self.nstates
@@ -152,7 +152,7 @@ class Server:
         assert thread_pool >= 1
         self.thread_pool = thread_pool
 
-    def __to_string__(self):
+    def __str__(self):
         api_strings = ",".join(self.apis.keys())
         return "%s: serves %s [q %d orbit %d threads %d]" % (
             self.name,
@@ -163,7 +163,7 @@ class Server:
         )
 
     def print(self):
-        print(self.__to_string__())
+        print(self.__str__)
 
     def num_states(self) -> int:
         return self.qsize * self.orbit_size
@@ -195,7 +195,8 @@ class Program:
         jobs: List[Work] = [job for job in server.apis.values()]
         for job in jobs:
             for dependent_call in job.downstream:
-                callees.add(self.servers.get(dependent_call.callee))
+                if dependent_call.caller == server.name:
+                    callees.add(self.servers.get(dependent_call.callee))
         return callees
 
     def get_root_server(self) -> Server:
@@ -222,31 +223,30 @@ class Program:
             jobs_with_sources[job] = sources_for_job
         return jobs_with_sources
 
-    def get_job(self, server: Server, dependant_call: DependentCall) -> Work:
-        for job in self.get_jobs_with_sources(server).keys():
-            if dependant_call in job.downstream:
-                return job
-        return None
+    @staticmethod
+    def get_job(jobs: List[Work], dependant_call: DependentCall) -> Work:
+        return [job for job in jobs if dependant_call in job.downstream][0]
 
-    def get_job_processing_rate(self, dependant_call: DependentCall):
-        parent_server: Server = self.get_server(dependant_call.caller)
-        job: Work = self.get_job(parent_server, dependant_call)
+    def get_job_processing_rate(self, jobs: List[Work], dependant_call: DependentCall):
+        job: Work = self.get_job(jobs, dependant_call)
         return job.processing_rate
 
     def get_sources(self, server: Server) -> List[Source]:
         return [self.sources[source_name] for source_name, _ in self.get_connections(server)]
 
-    def get_params(self, server: Server) -> Tuple[List[float], List[float], List[int], List[int]]:
+    def get_params(self, server: Server) -> Tuple[List[float], List[float], List[int], List[int], List[Work]]:
         sources: List[Source] = self.get_sources(server)
         arrival_rates: List[float] = [source.arrival_rate for source in sources]
         processing_rates: List[float] = []
-        for job, sources_for_job in self.get_jobs_with_sources(server).items():
+        jobs_with_sources = self.get_jobs_with_sources(server)
+        jobs: List[Work] = [job for job in jobs_with_sources.keys()]
+        for job, sources_for_job in jobs_with_sources.items():
             for i in range(len(sources_for_job)):
                 processing_rates.append(job.processing_rate)
         timeouts: List[int] = [source.timeout for source in sources]
         retries: List[int] = [source.retries for source in sources]
         assert len(arrival_rates) == len(processing_rates) == len(timeouts) == len(retries)
-        return arrival_rates, processing_rates, timeouts, retries
+        return arrival_rates, processing_rates, timeouts, retries, jobs
 
     def get_connections(self, server: Server) -> List[Tuple[str, str]]:
         connections = [
@@ -272,7 +272,7 @@ class Program:
         if len(self.servers) == 1:  # single server
             _, server_name = self.connections[0]
             server: Server = self.servers[server_name]
-            arrival_rates, processing_rates, timeouts, retries = self.get_params(server)
+            arrival_rates, processing_rates, timeouts, retries, _ = self.get_params(server)
             ctmc = SingleServerCTMC(
                 server.qsize,
                 server.orbit_size,
@@ -295,10 +295,10 @@ class Program:
                 server.orbit_size for server in serial_servers
             ]
 
-            arrival_rates, processing_rates, timeouts, retries = self.get_params(root_server)
-            for job in self.get_jobs_with_sources(root_server).keys():
+            arrival_rates, processing_rates, timeouts, retries, jobs = self.get_params(root_server)
+            for job in jobs:
                 for dependent_call in job.downstream:
-                    arrival_rates.append(self.get_job_processing_rate(dependent_call))
+                    arrival_rates.append(self.get_job_processing_rate(jobs, dependent_call))
                     processing_rates.append(job.processing_rate)
                     timeouts.append(dependent_call.timeout)
                     retries.append(dependent_call.retry)

@@ -99,7 +99,6 @@ class EquilibriumValuesExperiment(Experiment):
     def analyze(self, param_setting, p: Program):
         ctmc: SingleServerCTMC = p.build()
         pi = ctmc.get_stationary_distribution()
-        server = p.get_root_server()
 
         results = [param_setting]
         mainqavg = ctmc.main_queue_size_average(pi)
