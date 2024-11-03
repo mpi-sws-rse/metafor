@@ -1,5 +1,5 @@
 import functools
-from typing import List, Set, Tuple, Optional
+from typing import List, Set, Tuple, Optional, Dict
 import numpy as np
 import numpy.typing as npt
 from numpy import float64
@@ -213,12 +213,17 @@ class Program:
     def get_source(self, sname) -> Optional[Source]:
         return self.sources.get(sname, None)
 
-    @staticmethod
-    def get_jobs(server: Server) -> List[Work]:
-        return [job for job in server.apis.values()]
+    def get_jobs_with_sources(self, server: Server) -> Dict[Work, List[Source]]:
+        jobs_with_sources: Dict[Work, List[Source]] = dict()
+        sources = self.get_sources(server)
+        for api_name, job in server.apis.items():
+            sources_for_job = [source for source in sources if source.api_name == api_name]
+            assert len(sources_for_job) >= 1
+            jobs_with_sources[job] = sources_for_job
+        return jobs_with_sources
 
     def get_job(self, server: Server, dependant_call: DependentCall) -> Work:
-        for job in self.get_jobs(server):
+        for job in self.get_jobs_with_sources(server).keys():
             if dependant_call in job.downstream:
                 return job
         return None
@@ -228,14 +233,16 @@ class Program:
         job: Work = self.get_job(parent_server, dependant_call)
         return job.processing_rate
 
-    def get_params(
-            self, server: Server, connections: List[Tuple[str, str]]
-    ) -> Tuple[List[float], List[float], List[int], List[int]]:
-        sources: List[Source] = [
-            self.sources[source_name] for source_name, _ in connections
-        ]
+    def get_sources(self, server: Server) -> List[Source]:
+        return [self.sources[source_name] for source_name, _ in self.get_connections(server)]
+
+    def get_params(self, server: Server) -> Tuple[List[float], List[float], List[int], List[int]]:
+        sources: List[Source] = self.get_sources(server)
         arrival_rates: List[float] = [source.arrival_rate for source in sources]
-        processing_rates: List[float] = [job.processing_rate for job in self.get_jobs(server)]
+        processing_rates: List[float] = []
+        for job, sources_for_job in self.get_jobs_with_sources(server).items():
+            for i in range(len(sources_for_job)):
+                processing_rates.append(job.processing_rate)
         timeouts: List[int] = [source.timeout for source in sources]
         retries: List[int] = [source.retries for source in sources]
         assert len(arrival_rates) == len(processing_rates) == len(timeouts) == len(retries)
@@ -265,7 +272,7 @@ class Program:
         if len(self.servers) == 1:  # single server
             _, server_name = self.connections[0]
             server: Server = self.servers[server_name]
-            arrival_rates, processing_rates, timeouts, retries = self.get_params(server, self.connections)
+            arrival_rates, processing_rates, timeouts, retries = self.get_params(server)
             ctmc = SingleServerCTMC(
                 server.qsize,
                 server.orbit_size,
@@ -288,14 +295,8 @@ class Program:
                 server.orbit_size for server in serial_servers
             ]
 
-            connections = self.get_connections(root_server)
-            arrival_rates, processing_rates, timeouts, retries = self.get_params(
-                root_server, connections
-            )
-            jobs: List[Work] = []
-            for server in serial_servers:
-                jobs += self.get_jobs(server)
-            for job in jobs:
+            arrival_rates, processing_rates, timeouts, retries = self.get_params(root_server)
+            for job in self.get_jobs_with_sources(root_server).keys():
                 for dependent_call in job.downstream:
                     arrival_rates.append(self.get_job_processing_rate(dependent_call))
                     processing_rates.append(job.processing_rate)
