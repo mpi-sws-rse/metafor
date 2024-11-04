@@ -163,7 +163,7 @@ class Server:
         )
 
     def print(self):
-        print(self.__str__)
+        print(self.__str__())
 
     def num_states(self) -> int:
         return self.qsize * self.orbit_size
