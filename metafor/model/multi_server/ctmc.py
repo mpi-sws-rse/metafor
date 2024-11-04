@@ -485,7 +485,7 @@ class MultiServerCTMC(CTMC):
         if pi[0] < -0.00000001:
             pi = -pi
         print("Computing the stationary distribution took ", time.time() - start, " seconds")
-        assert 0.99999999 <= sum(pi) <= 1
+        assert 0.99999999 <= sum(pi) <= 1.00000001
         for prob in pi:
             assert 0 <= prob <= 1
         return pi
