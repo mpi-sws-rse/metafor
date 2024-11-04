@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 import scipy
 
-from model.single_server.ctmc import SingleServerCTMC
+from model.single_server.ctmc import SingleServerCTMC, CTMCRepresentation
 from utils.plot import (
     trigger_plot_generator,
     plot_bar_data,
@@ -55,7 +55,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_during_fault = SingleServerCTMC(
                 qlen0,
@@ -65,7 +66,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_after_fault = SingleServerCTMC(
                 val,
@@ -75,7 +77,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             qlen = val
             x_axis_label = "Queue length"
@@ -90,7 +93,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_during_fault = SingleServerCTMC(
                 qlen0,
@@ -100,10 +104,19 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_after_fault = SingleServerCTMC(
-                qlen0, val, lambdaas, mu0_ps, timeouts, retries, thread_pool, alpha
+                qlen0,
+                val,
+                lambdaas,
+                mu0_ps,
+                timeouts,
+                retries,
+                thread_pool,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             olen = val
             x_axis_label = "Orbit length"
@@ -118,7 +131,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_during_fault = SingleServerCTMC(
                 qlen0,
@@ -128,7 +142,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_after_fault = SingleServerCTMC(
                 qlen0,
@@ -138,7 +153,8 @@ def fault_scenario_plot_generator(
                 [val] * len(mu0_ps),
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             x_axis_label = "Timeout"
             main_color = "tab:red"
@@ -152,7 +168,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_during_fault = SingleServerCTMC(
                 qlen0,
@@ -162,7 +179,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_after_fault = SingleServerCTMC(
                 qlen0,
@@ -172,7 +190,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 val,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             x_axis_label = "Maximum number of retries"
         elif variable1 == "lambda":
@@ -184,7 +203,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_during_fault = SingleServerCTMC(
                 qlen0,
@@ -194,7 +214,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_after_fault = SingleServerCTMC(
                 qlen0,
@@ -204,7 +225,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             x_axis_label = "Arrival rate"
             main_color = "#301934"  # 'tab:blue'
@@ -218,7 +240,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_during_fault = SingleServerCTMC(
                 qlen0,
@@ -228,7 +251,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             ctmc_after_fault = SingleServerCTMC(
                 qlen0,
@@ -238,7 +262,8 @@ def fault_scenario_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
-                alpha,
+                CTMCRepresentation.EXPLICIT,
+                alpha
             )
             x_axis_label = "Processing rate"
             main_color = "#FF1493"  # 'tab:green'

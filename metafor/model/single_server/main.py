@@ -2,6 +2,7 @@ import argparse
 import os
 from typing import List
 
+from analysis.single_server_ctmc_analysis import fault_scenario_analysis
 from simulator.simulate import run_discrete_experiment
 from model.single_server.ctmc import SingleServerCTMC, CTMCRepresentation
 
@@ -287,6 +288,8 @@ def main():
         print(ctmc.throughput_average(pi))
         print('Average failure rate')
         print(ctmc.failure_rate_average(pi))
+        fault_scenario_analysis(ctmc, file_name, timeout_min, timeout_max, mu_min, mu_max, mu_step, lambda_fault,
+                                start_time_fault, duration_fault, reset_lambda_min, reset_lambda_max, reset_lambda_step)
 
 
 if __name__ == "__main__":
