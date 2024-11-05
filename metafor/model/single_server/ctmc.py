@@ -156,6 +156,7 @@ class SingleServerCTMC(CTMC):
         # calculate the stationary distribution
         QT = np.transpose(self.Q)
         ns = scipy.linalg.null_space(QT)
+        assert ns.shape == (self.state_num, 1)
         # print("ns = ", ns)
         if remove_non_negative:
             ns = np.array([abs(val) for val in ns])
