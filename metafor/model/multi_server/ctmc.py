@@ -329,7 +329,7 @@ class MultiServerCTMC(CTMC):
         max_retries = self.max_retries
         main_queue_size = self.main_queue_size
         retry_queue_size = self.retry_queue_size
-        num_threads = self.num_threads
+        num_threads = self.thread_pools
         row_ind = []
         col_ind = []
         data = []
@@ -353,7 +353,6 @@ class MultiServerCTMC(CTMC):
 
             else:
                 val_sum_row = 0
-                # tail_prob_list = self.tail_prob_computer(total_ind)
                 q_next = [0 * i for i in range(server_no)]
                 o_next = [0 * i for i in range(server_no)]
                 # compute the non-synchronized transitions' rates of the generator matrix
@@ -407,12 +406,12 @@ class MultiServerCTMC(CTMC):
         server_no = self.server_no
         parent_list = self.parent_list
         mu0_p = self.mu0_ps
-        timeout = self.timeout
+        timeout = self.timeouts
         max_retries = self.max_retries
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
-        num_threads = self.num_threads
-        tail_prob_list = self._tail_prob_computer(self.index_composer(q, o))
+        main_queue_size = self.main_queue_sizes
+        retry_queue_size = self.retry_queue_sizes
+        num_threads = self.thread_pools
+        tail_prob_list = self._tail_prob_computer(self._index_composer(q, o))
         mu_drop_base = 1 / (timeout[node_id] * (max_retries[node_id] + 1))
         mu_retry_base = max_retries[node_id] / (timeout[node_id] * (max_retries[node_id] + 1))
         # Check which arrival source is active for the selected node_id
@@ -449,15 +448,15 @@ class MultiServerCTMC(CTMC):
     def effective_mu(self, node_id, closed, q, o):
         if closed == True:  # if the system is closed
             if self.sub_tree_list[node_id] == [node_id]:
-                rate = self.mu0_ps[node_id] * min(q[node_id], self.num_threads[node_id])
+                rate = self.mu0_ps[node_id] * min(q[node_id], self.thread_pools[node_id])
             else:
                 for node in self.sub_tree_list[node_id]:  #
                     if node == node_id:
-                        rate = self.mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+                        rate = self.mu0_p[node_id] * min(q[node_id], self.thread_pools[node_id])
                     else:
-                        rate = min(rate, self.mu0_p[node] * min(q[node], self.num_threads[node]))
+                        rate = min(rate, self.mu0_p[node] * min(q[node], self.thread_pools[node]))
         else:  # if the system is open
-            rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+            rate = mu0_p[node_id] * min(q[node_id], self.thread_pools[node_id])
         return rate
 
     def effective_lambda(self, node_id, closed, lambda_list, q, o):
@@ -470,7 +469,7 @@ class MultiServerCTMC(CTMC):
             ancestor = self.parent_list[ancestor[0]]
         added_lambda = 0
         for node in reversed(ancestors):
-            num_jobs_upstream = min(q[node], self.num_threads[node])
+            num_jobs_upstream = min(q[node], self.thread_pools[node])
             mu_retry_base_node = self.max_retries[node] / (self.timeout[node] * (self.max_retries[node] + 1))
             effective_arr_rate_node = added_lambda + lambda_list[node] + mu_retry_base_node * o[node]
             effective_proc_rate_node = self.effective_mu(node, closed, q, o)
