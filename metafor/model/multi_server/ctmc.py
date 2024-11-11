@@ -177,6 +177,28 @@ class MultiServerCTMC(CTMC):
             assert 0 <= tail_prob[node_id] <= 1
         return tail_prob
 
+
+    def kmeans_manual(self, vector, k=2, max_iters=100):
+        # Step 1: Randomly initialize centroids
+        vector = vector.squeeze()
+        centroids = np.random.choice(vector, k)
+
+        for _ in range(max_iters):
+            # Step 2: Assign points to the nearest centroid
+            distances = np.abs(vector[:, np.newaxis] - centroids)
+            labels = np.argmin(distances, axis=1)
+
+            # Update centroids
+            new_centroids = np.array([vector[labels == i].mean() for i in range(k)])
+
+            # Check for convergence
+            if np.all(centroids == new_centroids):
+                break
+
+            centroids = new_centroids
+
+        return labels, centroids
+
     def cumulative_prob_computer(self, pi, q_range, o_range):
         """To compute the probability mass of set of states with queue length between q_min and q_max,
         and orbit length between o_min and o_max"""
