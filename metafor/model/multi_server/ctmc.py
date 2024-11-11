@@ -477,7 +477,150 @@ class MultiServerCTMC(CTMC):
         rate += added_lambda
         return rate
 
-    
+    def sparse_info_calculator_symmetric(self, lambda_list, node_selected, q_range, o_range):
+        state_num = self.state_num_prod
+        server_no = self.server_no
+        parent_list = self.parent_list
+        mu0_p = self.mu0_ps
+        timeout = self.timeouts
+        max_retries = self.max_retries
+        main_queue_size = self.main_queue_sizes
+        retry_queue_size = self.retry_queue_sizes
+        num_threads = self.thread_pools
+        row_ind = []
+        col_ind = []
+        data = []
+        #val_sum_col = np.zeros(state_num)
+        #val_sum_row = np.zeros(state_num)
+        for total_ind in range(state_num):
+            start = time.time()
+            q, o = self._index_decomposer(total_ind)
+            absorbing_flg = False
+            for node_id in range(server_no):
+                if node_id == node_selected:
+                    if q[node_id] < q_range[1] and q[node_id] >= q_range[0] and o[node_id] < o_range[1] and o[
+                        node_id] >= o_range[0]:
+                        absorbing_flg = True
+
+            if absorbing_flg:
+                do_nothing = True
+
+            else:
+                val_sum_row = 0
+                q_next = [0 * i for i in range(server_no)]
+                o_next = [0 * i for i in range(server_no)]
+                # compute the non-synchronized transitions' rates of the generator matrix
+                for node_id in range(server_no):
+                    q_next[:] = q
+                    o_next[:] = o
+                    # Setting the rates related to job arrivals
+                    for i in range(-1, 2):
+                        for j in range(-1, 2):
+                            q_next[node_id] = q[node_id] + i
+                            o_next[node_id] = o[node_id] + j
+                            total_ind_next = self._index_composer(q_next, o_next)
+                            if total_ind == 9 and total_ind_next == 10:
+                                stoppp = 1
+                            if min(q) >= 0 and min(o) >= 0 and min(q_next) >= 0 and min(o_next) >= 0:
+                                if ((np.array(q)-np.array(main_queue_size))<0).all() and ((np.array(o)-np.array(retry_queue_size))<0).all() and ((np.array(q_next)-np.array(main_queue_size))<0).all() and ((np.array(o_next)-np.array(retry_queue_size))<0).all():
+                                    if (i != 0 or j != 0) and (total_ind < state_num) and (total_ind_next < state_num):
+                                        break_flg = False
+                                        for node in range(server_no):
+                                            if node == node_id:
+                                                do_nothing = True
+                                            else:
+                                                if q[node] != q_next[node] or o[node] != o_next[node]:
+                                                    break_flg = True
+                                        if break_flg == False:
+                                            val_forw = self.forward_trans_computer(lambda_list, q, o, q_next, o_next, node_id)
+                                            val_back = self.forward_trans_computer(lambda_list, q_next, o_next, q, o, node_id)
+                                            val = (val_forw + val_back) / 2
+                                            row_ind.append(total_ind)
+                                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                                            data.append(val)
+                                            val_sum_row += val
+                            q_next[:] = q
+                            o_next[:] = o
+                val = - val_sum_row
+                row_ind.append(total_ind)
+                col_ind.append(total_ind)
+                data.append(val)
+        return [row_ind, col_ind, data]
+
+    def sparse_info_calculator_reversible(self, lambda_list, node_selected, q_range, o_range, pi_ss):
+        state_num = self.state_num_prod
+        server_no = self.server_no
+        parent_list = self.parent_list
+        mu0_p = self.mu0_ps
+        timeout = self.timeouts
+        max_retries = self.max_retries
+        main_queue_size = self.main_queue_sizes
+        retry_queue_size = self.retry_queue_sizes
+        num_threads = self.num_threads
+        row_ind = []
+        col_ind = []
+        data = []
+        #val_sum_col = np.zeros(state_num)
+        #val_sum_row = np.zeros(state_num)
+        for total_ind in range(state_num):
+            start = time.time()
+            q, o = self._index_decomposer(total_ind)
+            absorbing_flg = False
+            for node_id in range(server_no):
+                if node_id == node_selected:
+                    if q[node_id] < q_range[1] and q[node_id] >= q_range[0] and o[node_id] < o_range[1] and o[
+                        node_id] >= o_range[0]:
+                        absorbing_flg = True
+
+            if absorbing_flg:
+                do_nothing = True
+                val = 1
+                row_ind.append(total_ind)
+                col_ind.append(total_ind)
+                data.append(val)
+
+            else:
+                val_sum_row = 0
+                # tail_prob_list = self.tail_prob_computer(total_ind)
+                q_next = [0 * i for i in range(server_no)]
+                o_next = [0 * i for i in range(server_no)]
+                # compute the non-synchronized transitions' rates of the generator matrix
+                for node_id in range(server_no):
+                    q_next[:] = q
+                    o_next[:] = o
+                    # Setting the rates related to job arrivals
+                    for i in range(-1, 2):
+                        for j in range(-1, 2):
+                            q_next[node_id] = q[node_id] + i
+                            o_next[node_id] = o[node_id] + j
+                            total_ind_next = self._index_composer(q_next, o_next)
+                            if min(q) >= 0 and min(o) >= 0 and min(q_next) >= 0 and min(o_next) >= 0:
+                                if ((np.array(q)-np.array(main_queue_size))<0).all() and ((np.array(o)-np.array(retry_queue_size))<0).all() and ((np.array(q_next)-np.array(main_queue_size))<0).all() and ((np.array(o_next)-np.array(retry_queue_size))<0).all():
+                                    if (i != 0 or j != 0) and (total_ind < state_num) and (total_ind_next < state_num):
+                                        break_flg = False
+                                        for node in range(server_no):
+                                            if node == node_id:
+                                                do_nothing = True
+                                            else:
+                                                if q[node] != q_next[node] or o[node] != o_next[node]:
+                                                    break_flg = True
+                                        if break_flg == False:
+                                            val_forw = self.forward_trans_computer(lambda_list, q, o, q_next, o_next, node_id)
+                                            val_back = self.forward_trans_computer(lambda_list, q_next, o_next, q, o, node_id)
+                                            val_back *= pi_ss[total_ind_next]/pi_ss[total_ind]
+                                            val = (val_forw + val_back) / 2
+                                            row_ind.append(total_ind)
+                                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                                            data.append(val)
+                                            val_sum_row += val
+                            q_next[:] = q
+                            o_next[:] = o
+                val = - val_sum_row
+                row_ind.append(total_ind)
+                col_ind.append(total_ind)
+                data.append(val)
+                # print(time.time() - start)
+        return [row_ind, col_ind, data]
 
     def get_init_state(self) -> npt.NDArray[np.float64]:
         pi = np.zeros(self.state_num_prod)
