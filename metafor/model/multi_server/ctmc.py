@@ -161,6 +161,7 @@ class MultiServerCTMC(CTMC):
             var = 0
             sub_tree = self.sub_tree_list[node_id]
             for downstream_node_id in sub_tree:
+                # effective_mu = self.effective_mu(node_id, 1, q_list, o_list) # to generalize, code must be modified...
                 ave += q_list[downstream_node_id] / self.mu0_ps[downstream_node_id]
                 var += (
                     q_list[downstream_node_id]
@@ -318,6 +319,164 @@ class MultiServerCTMC(CTMC):
                 q_len_node += q_node * p
             q_len[node_id] = q_len_node
         return q_len
+
+    def sparse_info_calculator_CTMC(self, lambda_list, node_selected, q_range, o_range):
+        state_num = self.state_num_prod
+        server_no = self.server_no
+        parent_list = self.parent_list
+        mu0_p = self.mu0_ps
+        timeout = self.timeout
+        max_retries = self.max_retries
+        main_queue_size = self.main_queue_size
+        retry_queue_size = self.retry_queue_size
+        num_threads = self.num_threads
+        row_ind = []
+        col_ind = []
+        data = []
+        # val_sum_col = np.zeros(state_num)
+        # val_sum_row = np.zeros(state_num)
+        for total_ind in range(state_num):
+            start = time.time()
+            q, o = self._index_decomposer(total_ind)
+            absorbing_flg = False
+            for node_id in range(server_no):
+                if node_id == node_selected:
+                    if q[node_id] < q_range[1] and q[node_id] >= q_range[0] and o[node_id] < o_range[1] and o[
+                        node_id] >= o_range[0]:
+                        absorbing_flg = True
+
+            if absorbing_flg:
+                do_nothing = True
+                row_ind.append(total_ind)
+                col_ind.append(total_ind)
+                data.append(1)
+
+            else:
+                val_sum_row = 0
+                # tail_prob_list = self.tail_prob_computer(total_ind)
+                q_next = [0 * i for i in range(server_no)]
+                o_next = [0 * i for i in range(server_no)]
+                # compute the non-synchronized transitions' rates of the generator matrix
+                for node_id in range(server_no):
+                    q_next[:] = q
+                    o_next[:] = o
+                    # Setting the rates related to job arrivals
+                    for i in range(-1, 2):
+                        for j in range(-1, 2):
+                            q_next[node_id] = q[node_id] + i
+                            o_next[node_id] = o[node_id] + j
+                            total_ind_next = self._index_composer(q_next, o_next)
+                            skip_flg = False
+                            """for node_id in range(server_no):
+                                if node_id == node_selected:
+                                    if q_next[node_id] <= q_range[1] and q_next[node_id] >= q_range[0] and o_next[node_id] <= o_range[1] and o_next[node_id] >= o_range[0]:
+                                        skip_flg = True"""
+                            if skip_flg == False and min(q) >= 0 and min(o) >= 0 and min(q_next) >= 0 and min(o_next) >= 0:
+                                if ((np.array(q) - np.array(main_queue_size)) < 0).all() and (
+                                        (np.array(o) - np.array(retry_queue_size)) < 0).all() and (
+                                        (np.array(q_next) - np.array(main_queue_size)) < 0).all() and (
+                                        (np.array(o_next) - np.array(retry_queue_size)) < 0).all():
+                                    if (i != 0 or j != 0) and (total_ind < state_num) and (total_ind_next < state_num):
+                                        break_flg = False
+                                        for node in range(server_no):
+                                            if node == node_id:
+                                                do_nothing = True
+                                            else:
+                                                if q[node] != q_next[node] or o[node] != o_next[node]:
+                                                    break_flg = True
+                                        if break_flg == False:
+                                            val_forw = self.forward_trans_computer(lambda_list, q, o, q_next, o_next,
+                                                                                   node_id)
+                                            val_back = val_forw # self.forward_trans_computer(lambda_list, q_next, o_next, q, o,
+                                                                             #      node_id)
+                                            val = (val_forw + val_back) / 2
+                                            row_ind.append(total_ind)
+                                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                                            data.append(val)
+                                            val_sum_row += val
+                            q_next[:] = q
+                            o_next[:] = o
+                val = - val_sum_row
+                row_ind.append(total_ind)
+                col_ind.append(total_ind)
+                data.append(val)
+        return [row_ind, col_ind, data]
+
+    def forward_trans_computer(self, lambda_list, q, o, q_next, o_next, node_id):
+        state_num = self.state_num_prod
+        server_no = self.server_no
+        parent_list = self.parent_list
+        mu0_p = self.mu0_ps
+        timeout = self.timeout
+        max_retries = self.max_retries
+        main_queue_size = self.main_queue_size
+        retry_queue_size = self.retry_queue_size
+        num_threads = self.num_threads
+        tail_prob_list = self._tail_prob_computer(self.index_composer(q, o))
+        mu_drop_base = 1 / (timeout[node_id] * (max_retries[node_id] + 1))
+        mu_retry_base = max_retries[node_id] / (timeout[node_id] * (max_retries[node_id] + 1))
+        # Check which arrival source is active for the selected node_id
+        """lambdaa = lambda_list[node_id]
+        if parent_list[node_id] == []:  # if there exists only a local source of job arrival
+            lambda_summed = lambdaa
+        else:  # if there exists local and non-local sources of job arrival
+            num_jobs_upstream = min(q[parent_list[node_id][0]], num_threads[parent_list[node_id][0]])
+            lambda_summed = lambdaa + num_jobs_upstream * mu0_p[parent_list[node_id][0]]"""
+        lambda_summed = self.effective_lambda(node_id, 1, lambda_list, q, o)
+        if q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id] + 1:
+            rate = lambda_summed * tail_prob_list[node_id]
+        elif q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id]:
+            rate = lambda_summed * (1 - tail_prob_list[node_id]) + mu_retry_base * tail_prob_list[node_id] * o[node_id]
+        elif q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id] - 1:
+            rate = mu_retry_base * (1 - tail_prob_list[node_id]) * o[node_id]
+        elif q_next[node_id] == q[node_id] and o_next[node_id] == o[node_id] - 1:
+            rate = mu_drop_base * o[node_id]
+        elif q_next[node_id] == q[node_id] - 1 and o_next[node_id] == o[node_id]:
+            # assuming that the system is closed
+            """if self.sub_tree_list[node_id] == [node_id]:
+                rate = mu0_p[node_id] * min(q[node_id], num_threads[node_id])
+            else:
+                for node in self.sub_tree_list[node_id]:
+                    if node == node_id:
+                        rate = mu0_p[node_id] * min(q[node_id], num_threads[node_id])
+                    else:
+                        rate = min(rate, mu0_p[node] * min(q[node], num_threads[node]))"""
+            rate = self.effective_mu(node_id, 1, q, o)
+        else:
+            rate = 0
+        return rate
+
+    def effective_mu(self, node_id, closed, q, o):
+        if closed == True:  # if the system is closed
+            if self.sub_tree_list[node_id] == [node_id]:
+                rate = self.mu0_ps[node_id] * min(q[node_id], self.num_threads[node_id])
+            else:
+                for node in self.sub_tree_list[node_id]:  #
+                    if node == node_id:
+                        rate = self.mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+                    else:
+                        rate = min(rate, self.mu0_p[node] * min(q[node], self.num_threads[node]))
+        else:  # if the system is open
+            rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+        return rate
+
+    def effective_lambda(self, node_id, closed, lambda_list, q, o):
+        rate = lambda_list[node_id]
+        # finding the set of ancestors; must be changed when there are multiple branches!
+        ancestors = []
+        ancestor = self.parent_list[node_id]
+        while ancestor != []:
+            ancestors.append(ancestor[0])
+            ancestor = self.parent_list[ancestor[0]]
+        added_lambda = 0
+        for node in reversed(ancestors):
+            num_jobs_upstream = min(q[node], self.num_threads[node])
+            mu_retry_base_node = self.max_retries[node] / (self.timeout[node] * (self.max_retries[node] + 1))
+            effective_arr_rate_node = added_lambda + lambda_list[node] + mu_retry_base_node * o[node]
+            effective_proc_rate_node = self.effective_mu(node, closed, q, o)
+            added_lambda += min(effective_arr_rate_node, effective_proc_rate_node)
+        rate += added_lambda
+        return rate
 
     def sparse_info_calculator(
         self, lambda_list, node_selected, q_range, o_range
