@@ -622,6 +622,173 @@ class MultiServerCTMC(CTMC):
                 # print(time.time() - start)
         return [row_ind, col_ind, data]
 
+    def sparse_info_calculator_DTMC(self, lambda_list, node_selected, q_range, o_range):
+        state_num = self.state_num_prod
+        server_no = self.server_no
+        parent_list = self.parent_list
+        mu0_p = self.mu0_ps
+        timeout = self.timeouts
+        max_retries = self.max_retries
+        main_queue_size = self.main_queue_sizes
+        retry_queue_size = self.retry_queue_sizes
+        num_threads = self.thread_pools
+        row_ind = []
+        col_ind = []
+        data = []
+        # compute the maximum entry of Q to be used for uniformization
+        max_entry_value = self.max_entry_value # add this!!!
+        print(max_entry_value)
+        for total_ind in range(state_num):
+            q, o = self._index_decomposer(total_ind)
+            absorbing_flg = False
+            for node_id in range(server_no):
+                if node_id == node_selected:
+                    if q[node_id] <= q_range[1] and q[node_id] >= q_range[0] and o[node_id] <= o_range[1] and o[node_id] >= o_range[0]:
+                        absorbing_flg = True
+
+            if absorbing_flg:
+                #  only diagonal element for absorbing states gets non-zero value
+                col_ind.append(total_ind)
+                row_ind.append(total_ind)
+                data.append(1)
+            else:
+                val_sum = 0
+                tail_prob_list = self._tail_prob_computer(total_ind)
+                q_next = [0 * i for i in range(server_no)]
+                o_next = [0 * i for i in range(server_no)]
+                # compute the non-synchronized transitions' rates of the generator matrix
+                for node_id in range(server_no):
+                    mu_drop_base = 1 / (timeout[node_id] * (max_retries[node_id] + 1))
+                    mu_retry_base = max_retries[node_id] / (timeout[node_id] * (max_retries[node_id] + 1))
+                    # Check which arrival source is active for the selected node_id
+                    lambdaa = lambda_list[node_id]
+                    if parent_list[node_id] == []:  # if there exists only a local source of job arrival
+                        lambda_summed = lambdaa
+                    else:  # if there exists local and non-local sources of job arrival
+                        num_jobs_upstream = min(q[parent_list[node_id][0]], num_threads[parent_list[node_id][0]])
+                        lambda_summed = lambdaa + num_jobs_upstream * mu0_p[parent_list[node_id][0]]
+                    if q[node_id] == 0:  # queue is empty
+                        q_next[:] = q
+                        o_next[:] = o
+                        # Setting the rates related to job arrivals
+                        q_next[node_id] = q[node_id] + 1
+                        val = lambda_summed*(1-tail_prob_list[node_id])/max_entry_value
+                        col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                        data.append(val)
+                        val_sum += val
+                        row_ind.append(total_ind)
+                        q_next[:] = q
+                        o_next[:] = o
+                        # Setting the rates related to abandon and retry
+                        if o[node_id] > 0:  # if there is any job in the server's orbit
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_drop_base / max_entry_value  # drop rate
+                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[node_id] = q[node_id] + 1
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_retry_base / max_entry_value  # retry rate
+                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+
+                    elif q[node_id] == main_queue_size[node_id] - 1:  # queue is full
+                        q_next[:] = q
+                        o_next[:] = o
+                        # setting the rates related to job processing
+                        q_next[node_id] = q[node_id] - 1
+                        val = mu0_p[node_id] * min(q[node_id], num_threads[node_id]) / max_entry_value
+                        col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                        data.append(val)
+                        val_sum += val
+                        row_ind.append(total_ind)
+                        q_next[:] = q
+                        o_next[:] = o
+                        # setting the rates related to abandon
+                        if o[node_id] > 0:  # if there is any job in the server's orbit
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_drop_base / max_entry_value
+                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+                        # setting the rates related to moving to the orbit space
+                        if o[node_id] < retry_queue_size[node_id] - 1:  # if orbit isn't full
+                            o_next[node_id] = o[node_id] + 1
+                            val = (lambda_summed * 1 + o[node_id] * mu_retry_base * tail_prob_list[node_id])/max_entry_value
+                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+
+                    else:  # queue is neither full nor empty
+                        q_next[:] = q
+                        o_next[:] = o
+                        # Setting the rates related to job arrivals
+                        q_next[node_id] = q[node_id] + 1
+                        val = (lambda_summed * (1 - tail_prob_list[node_id]) +
+                               o[node_id] * mu_retry_base * tail_prob_list[node_id]) / max_entry_value
+                        col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                        data.append(val)
+                        val_sum += val
+                        row_ind.append(total_ind)
+                        q_next[:] = q
+                        o_next[:] = o
+                        # setting the rates related to job processing
+                        q_next[node_id] = q[node_id] - 1
+                        val = mu0_p[node_id] * min(q[node_id], num_threads[node_id]) / max_entry_value
+                        col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                        data.append(val)
+                        val_sum += val
+                        row_ind.append(total_ind)
+                        q_next[:] = q
+                        o_next[:] = o
+                        # Setting the rates related to abandon and retry
+                        if o[node_id] > 0:  # if there is any job in the server's orbit
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_drop_base / max_entry_value
+                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[node_id] = q[node_id] + 1
+                            o_next[node_id] = o[node_id] - 1
+                            val = o[node_id] * mu_retry_base * (1 - tail_prob_list[node_id]) / max_entry_value
+                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+                        # setting the rates related to moving to the orbit space
+                        if o[node_id] < retry_queue_size[node_id] - 1:  # if orbit isn't full
+                            q_next[node_id] = q[node_id] + 1
+                            o_next[node_id] = o[node_id] + 1
+                            val = lambda_summed * tail_prob_list[node_id] / max_entry_value
+                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
+                            data.append(val)
+                            val_sum += val
+                            row_ind.append(total_ind)
+                            q_next[:] = q
+                            o_next[:] = o
+                if val_sum > 1.01:
+                    print("I found a huge error!", val_sum)
+                val = 1 - val_sum
+                col_ind.append(total_ind)
+                data.append(val)
+                row_ind.append(total_ind)
+        return [row_ind, col_ind, data]
+
+
     def get_init_state(self) -> npt.NDArray[np.float64]:
         pi = np.zeros(self.state_num_prod)
         pi[0] = 1.0  # Initially the queue is empty
