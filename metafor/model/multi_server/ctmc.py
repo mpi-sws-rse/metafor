@@ -448,15 +448,16 @@ class MultiServerCTMC(CTMC):
     def effective_mu(self, node_id, closed, q, o):
         if closed == True:  # if the system is closed
             if self.sub_tree_list[node_id] == [node_id]:
-                rate = self.mu0_ps[node_id] * min(q[node_id], self.thread_pools[node_id])
+                rate = self.mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
             else:
                 for node in self.sub_tree_list[node_id]:  #
                     if node == node_id:
-                        rate = self.mu0_p[node_id] * min(q[node_id], self.thread_pools[node_id])
+                        rate = self.mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
                     else:
-                        rate = min(rate, self.mu0_p[node] * min(q[node], self.thread_pools[node]))
+                        # +1 is considered to avoid being stuck for all-ampty initialization
+                        rate = min(rate, self.mu0_p[node] * min(q[node] + 1, self.num_threads[node]))
         else:  # if the system is open
-            rate = mu0_p[node_id] * min(q[node_id], self.thread_pools[node_id])
+            rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
         return rate
 
     def effective_lambda(self, node_id, closed, lambda_list, q, o):
