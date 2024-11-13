@@ -407,45 +407,56 @@ class MultiServerCTMC(CTMC):
         state_num = self.state_num_prod
         server_no = self.server_no
         parent_list = self.parent_list
-        mu0_p = self.mu0_ps
-        timeout = self.timeouts
+        mu0_p = self.mu0_p
+        timeout = self.timeout
         max_retries = self.max_retries
-        main_queue_size = self.main_queue_sizes
-        retry_queue_size = self.retry_queue_sizes
-        num_threads = self.thread_pools
-        tail_prob_list = self._tail_prob_computer(self._index_composer(q, o))
+        main_queue_size = self.main_queue_size
+        retry_queue_size = self.retry_queue_size
+        num_threads = self.num_threads
+        tail_prob_list = self.tail_prob_computer(self.index_composer(q, o))
         mu_drop_base = 1 / (timeout[node_id] * (max_retries[node_id] + 1))
         mu_retry_base = max_retries[node_id] / (timeout[node_id] * (max_retries[node_id] + 1))
         # Check which arrival source is active for the selected node_id
-        """lambdaa = lambda_list[node_id]
-        if parent_list[node_id] == []:  # if there exists only a local source of job arrival
-            lambda_summed = lambdaa
-        else:  # if there exists local and non-local sources of job arrival
-            num_jobs_upstream = min(q[parent_list[node_id][0]], num_threads[parent_list[node_id][0]])
-            lambda_summed = lambdaa + num_jobs_upstream * mu0_p[parent_list[node_id][0]]"""
         lambda_summed = self.effective_lambda(node_id, 1, lambda_list, q, o)
+        q_next_mod = copy.deepcopy(q_next)  # will be used to analyze entries over the borders
+        o_next_mod = copy.deepcopy(o_next)  # will be used to analyze entries over the borders
         if q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id] + 1:
-            rate = lambda_summed * tail_prob_list[node_id]
+            if q[node_id] == main_queue_size[node_id] - 1:  # if queue was full
+                if o[node_id] == retry_queue_size[node_id] - 1:  # if orbit is full as well
+                    rate = 0  # will not be considered
+                    total_ind_next = []  # will not be considered
+                else:
+                    q_next_mod[node_id] = q[node_id]  # since there won't be any possibility to add jobs to the queue
+                    rate = lambda_summed * 1  # multiplier is changed to one
+                    total_ind_next = self.index_composer(q_next_mod, o_next)
+            elif o[node_id] == retry_queue_size[node_id] - 1:  # queue isn't full, whereas orbit is full
+                o_next_mod[node_id] = o[node_id]  # since there won't be any possibility to add jobs to the queue
+                rate = lambda_summed * 1  # multiplier is changed to one
+                total_ind_next = self.index_composer(q_next, o_next_mod)
+            else:
+                rate = lambda_summed * tail_prob_list[node_id]
+                total_ind_next = self.index_composer(q_next, o_next)
         elif q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id]:
-            rate = lambda_summed * (1 - tail_prob_list[node_id]) + mu_retry_base * tail_prob_list[node_id] * o[node_id]
+            if q[node_id] == main_queue_size[node_id] - 1:  # if queue was full
+                rate = 0  # will not be considered-->the effect was considered above
+                total_ind_next = []  # will not be considered-->the effect was considered above
+            else:  # if queue isn't full
+                rate = lambda_summed * (1 - tail_prob_list[node_id]) + mu_retry_base * tail_prob_list[node_id] * o[
+                    node_id]
+                total_ind_next = self.index_composer(q_next, o_next)
         elif q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id] - 1:
             rate = mu_retry_base * (1 - tail_prob_list[node_id]) * o[node_id]
+            total_ind_next = self.index_composer(q_next, o_next)
         elif q_next[node_id] == q[node_id] and o_next[node_id] == o[node_id] - 1:
             rate = mu_drop_base * o[node_id]
+            total_ind_next = self.index_composer(q_next, o_next)
         elif q_next[node_id] == q[node_id] - 1 and o_next[node_id] == o[node_id]:
             # assuming that the system is closed
-            """if self.sub_tree_list[node_id] == [node_id]:
-                rate = mu0_p[node_id] * min(q[node_id], num_threads[node_id])
-            else:
-                for node in self.sub_tree_list[node_id]:
-                    if node == node_id:
-                        rate = mu0_p[node_id] * min(q[node_id], num_threads[node_id])
-                    else:
-                        rate = min(rate, mu0_p[node] * min(q[node], num_threads[node]))"""
             rate = self.effective_mu(node_id, 1, q, o)
+            total_ind_next = self.index_composer(q_next, o_next)
         else:
-            rate = 0
-        return rate
+            print("why did I end up here?!")
+        return rate, total_ind_next
 
     def effective_mu(self, node_id, closed, q, o):
         if closed == True:  # if the system is closed
