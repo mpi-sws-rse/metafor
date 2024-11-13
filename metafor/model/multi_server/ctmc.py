@@ -324,20 +324,18 @@ class MultiServerCTMC(CTMC):
         state_num = self.state_num_prod
         server_no = self.server_no
         parent_list = self.parent_list
-        mu0_p = self.mu0_ps
+        mu0_p = self.mu0_p
         timeout = self.timeout
         max_retries = self.max_retries
         main_queue_size = self.main_queue_size
         retry_queue_size = self.retry_queue_size
-        num_threads = self.thread_pools
+        num_threads = self.num_threads
         row_ind = []
         col_ind = []
         data = []
-        # val_sum_col = np.zeros(state_num)
-        # val_sum_row = np.zeros(state_num)
         for total_ind in range(state_num):
             start = time.time()
-            q, o = self._index_decomposer(total_ind)
+            q, o = self.index_decomposer(total_ind)
             absorbing_flg = False
             for node_id in range(server_no):
                 if node_id == node_selected:
@@ -353,6 +351,7 @@ class MultiServerCTMC(CTMC):
 
             else:
                 val_sum_row = 0
+                # tail_prob_list = self.tail_prob_computer(total_ind)
                 q_next = [0 * i for i in range(server_no)]
                 o_next = [0 * i for i in range(server_no)]
                 # compute the non-synchronized transitions' rates of the generator matrix
@@ -364,18 +363,18 @@ class MultiServerCTMC(CTMC):
                         for j in range(-1, 2):
                             q_next[node_id] = q[node_id] + i
                             o_next[node_id] = o[node_id] + j
-                            total_ind_next = self._index_composer(q_next, o_next)
+                            # total_ind_next = self.index_composer(q_next, o_next)
                             skip_flg = False
-                            """for node_id in range(server_no):
-                                if node_id == node_selected:
-                                    if q_next[node_id] <= q_range[1] and q_next[node_id] >= q_range[0] and o_next[node_id] <= o_range[1] and o_next[node_id] >= o_range[0]:
-                                        skip_flg = True"""
-                            if skip_flg == False and min(q) >= 0 and min(o) >= 0 and min(q_next) >= 0 and min(o_next) >= 0:
+                            if skip_flg == False and min(q) >= 0 and min(o) >= 0 and min(q_next) >= 0 and min(
+                                    o_next) >= 0:
                                 if ((np.array(q) - np.array(main_queue_size)) < 0).all() and (
                                         (np.array(o) - np.array(retry_queue_size)) < 0).all() and (
-                                        (np.array(q_next) - np.array(main_queue_size)) < 0).all() and (
-                                        (np.array(o_next) - np.array(retry_queue_size)) < 0).all():
-                                    if (i != 0 or j != 0) and (total_ind < state_num) and (total_ind_next < state_num):
+                                        # let q_next & o_next go beyond the limits by one!
+                                        (np.array(q_next) - np.array(main_queue_size)) <= 0).all() and (
+                                        (np.array(o_next) - np.array(retry_queue_size)) <= 0).all():
+                                    # check if at most one node's state gets updated
+                                    if (
+                                            i != 0 or j != 0):  # and (total_ind < state_num) and (total_ind_next < state_num):
                                         break_flg = False
                                         for node in range(server_no):
                                             if node == node_id:
@@ -383,16 +382,19 @@ class MultiServerCTMC(CTMC):
                                             else:
                                                 if q[node] != q_next[node] or o[node] != o_next[node]:
                                                     break_flg = True
+                                        # exclude non-existing transitions
+                                        if [i, j] in [[0, 0], [-1, -1], [-1, 1], [0, 1]]:
+                                            break_flg = True
                                         if break_flg == False:
-                                            val_forw = self.forward_trans_computer(lambda_list, q, o, q_next, o_next,
-                                                                                   node_id)
-                                            val_back = val_forw # self.forward_trans_computer(lambda_list, q_next, o_next, q, o,
-                                                                             #      node_id)
-                                            val = (val_forw + val_back) / 2
-                                            row_ind.append(total_ind)
-                                            col_ind.append(self._index_composer(q_next[:], o_next[:]))
-                                            data.append(val)
-                                            val_sum_row += val
+                                            val_forw, total_ind_next = self.forward_trans_computer(lambda_list, q, o,
+                                                                                                   q_next, o_next,
+                                                                                                   node_id)
+                                            if total_ind_next != []:
+                                                val = val_forw
+                                                row_ind.append(total_ind)
+                                                col_ind.append(total_ind_next)
+                                                data.append(val)
+                                                val_sum_row += val
                             q_next[:] = q
                             o_next[:] = o
                 val = - val_sum_row
