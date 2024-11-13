@@ -77,7 +77,7 @@ class MultiServerCTMC(CTMC):
         if o_max_list is None:
             self.o_max_list = [2 for _ in range(server_num)]
 
-        self.row_ind, self.col_ind, self.data = self.sparse_info_calculator(
+        self.row_ind, self.col_ind, self.data = self.sparse_info_calculator_CTMC(
             self.lambdaas, -1, [0, 0], [0, 0]
         )
         self.Q = scipy.sparse.csr_matrix(
