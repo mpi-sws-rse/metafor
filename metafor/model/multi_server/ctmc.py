@@ -324,18 +324,18 @@ class MultiServerCTMC(CTMC):
         state_num = self.state_num_prod
         server_no = self.server_no
         parent_list = self.parent_list
-        mu0_p = self.mu0_p
-        timeout = self.timeout
+        mu0_p = self.mu0_ps
+        timeout = self.timeouts
         max_retries = self.max_retries
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
-        num_threads = self.num_threads
+        main_queue_size = self.main_queue_sizes
+        retry_queue_size = self.retry_queue_sizes
+        num_threads = self.thread_pool
         row_ind = []
         col_ind = []
         data = []
         for total_ind in range(state_num):
             start = time.time()
-            q, o = self.index_decomposer(total_ind)
+            q, o = self._index_decomposer(total_ind)
             absorbing_flg = False
             for node_id in range(server_no):
                 if node_id == node_selected:
@@ -351,7 +351,6 @@ class MultiServerCTMC(CTMC):
 
             else:
                 val_sum_row = 0
-                # tail_prob_list = self.tail_prob_computer(total_ind)
                 q_next = [0 * i for i in range(server_no)]
                 o_next = [0 * i for i in range(server_no)]
                 # compute the non-synchronized transitions' rates of the generator matrix
@@ -363,7 +362,6 @@ class MultiServerCTMC(CTMC):
                         for j in range(-1, 2):
                             q_next[node_id] = q[node_id] + i
                             o_next[node_id] = o[node_id] + j
-                            # total_ind_next = self.index_composer(q_next, o_next)
                             skip_flg = False
                             if skip_flg == False and min(q) >= 0 and min(o) >= 0 and min(q_next) >= 0 and min(
                                     o_next) >= 0:
@@ -382,19 +380,20 @@ class MultiServerCTMC(CTMC):
                                             else:
                                                 if q[node] != q_next[node] or o[node] != o_next[node]:
                                                     break_flg = True
-                                        # exclude non-existing transitions
-                                        if [i, j] in [[0, 0], [-1, -1], [-1, 1], [0, 1]]:
-                                            break_flg = True
-                                        if break_flg == False:
-                                            val_forw, total_ind_next = self.forward_trans_computer(lambda_list, q, o,
-                                                                                                   q_next, o_next,
-                                                                                                   node_id)
-                                            if total_ind_next != []:
-                                                val = val_forw
-                                                row_ind.append(total_ind)
-                                                col_ind.append(total_ind_next)
-                                                data.append(val)
-                                                val_sum_row += val
+                                                    break
+                                    # exclude non-existing transitions
+                                    if [i, j] in [[0, 0], [-1, -1], [-1, 1], [0, 1]]:
+                                        break_flg = True
+                                    if break_flg == False:
+                                        val_forw, total_ind_next = self.forward_trans_computer(lambda_list, q, o,
+                                                                                               q_next, o_next,
+                                                                                               node_id)
+                                        if total_ind_next != []:
+                                            val = val_forw
+                                            row_ind.append(total_ind)
+                                            col_ind.append(total_ind_next)
+                                            data.append(val)
+                                            val_sum_row += val
                             q_next[:] = q
                             o_next[:] = o
                 val = - val_sum_row
@@ -407,16 +406,15 @@ class MultiServerCTMC(CTMC):
         state_num = self.state_num_prod
         server_no = self.server_no
         parent_list = self.parent_list
-        mu0_p = self.mu0_p
-        timeout = self.timeout
+        mu0_p = self.mu0_ps
+        timeout = self.timeouts
         max_retries = self.max_retries
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
-        num_threads = self.num_threads
-        tail_prob_list = self.tail_prob_computer(self.index_composer(q, o))
+        main_queue_size = self.main_queue_sizes
+        retry_queue_size = self.retry_queue_sizes
+        num_threads = self.thread_pool
+        tail_prob_list = self._tail_prob_computer(self._index_composer(q, o))
         mu_drop_base = 1 / (timeout[node_id] * (max_retries[node_id] + 1))
         mu_retry_base = max_retries[node_id] / (timeout[node_id] * (max_retries[node_id] + 1))
-        # Check which arrival source is active for the selected node_id
         lambda_summed = self.effective_lambda(node_id, 1, lambda_list, q, o)
         q_next_mod = copy.deepcopy(q_next)  # will be used to analyze entries over the borders
         o_next_mod = copy.deepcopy(o_next)  # will be used to analyze entries over the borders
@@ -428,14 +426,14 @@ class MultiServerCTMC(CTMC):
                 else:
                     q_next_mod[node_id] = q[node_id]  # since there won't be any possibility to add jobs to the queue
                     rate = lambda_summed * 1  # multiplier is changed to one
-                    total_ind_next = self.index_composer(q_next_mod, o_next)
+                    total_ind_next = self._index_composer(q_next_mod, o_next)
             elif o[node_id] == retry_queue_size[node_id] - 1:  # queue isn't full, whereas orbit is full
                 o_next_mod[node_id] = o[node_id]  # since there won't be any possibility to add jobs to the queue
                 rate = lambda_summed * 1  # multiplier is changed to one
-                total_ind_next = self.index_composer(q_next, o_next_mod)
+                total_ind_next = self._index_composer(q_next, o_next_mod)
             else:
                 rate = lambda_summed * tail_prob_list[node_id]
-                total_ind_next = self.index_composer(q_next, o_next)
+                total_ind_next = self._index_composer(q_next, o_next)
         elif q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id]:
             if q[node_id] == main_queue_size[node_id] - 1:  # if queue was full
                 rate = 0  # will not be considered-->the effect was considered above
@@ -443,19 +441,24 @@ class MultiServerCTMC(CTMC):
             else:  # if queue isn't full
                 rate = lambda_summed * (1 - tail_prob_list[node_id]) + mu_retry_base * tail_prob_list[node_id] * o[
                     node_id]
-                total_ind_next = self.index_composer(q_next, o_next)
+                total_ind_next = self._index_composer(q_next, o_next)
         elif q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id] - 1:
-            rate = mu_retry_base * (1 - tail_prob_list[node_id]) * o[node_id]
-            total_ind_next = self.index_composer(q_next, o_next)
+            if q[node_id] != main_queue_size[node_id] - 1:  # if queue isn't full
+                rate = mu_retry_base * (1 - tail_prob_list[node_id]) * o[node_id]
+                total_ind_next = self._index_composer(q_next, o_next)
+            else:
+                rate = 0  # will not be considered
+                total_ind_next = []  # will not be considered
         elif q_next[node_id] == q[node_id] and o_next[node_id] == o[node_id] - 1:
             rate = mu_drop_base * o[node_id]
-            total_ind_next = self.index_composer(q_next, o_next)
+            total_ind_next = self._index_composer(q_next, o_next)
         elif q_next[node_id] == q[node_id] - 1 and o_next[node_id] == o[node_id]:
             # assuming that the system is closed
             rate = self.effective_mu(node_id, 1, q, o)
-            total_ind_next = self.index_composer(q_next, o_next)
+            total_ind_next = self._index_composer(q_next, o_next)
         else:
             print("why did I end up here?!")
+            assert 0 <= total_ind_next < state_num
         return rate, total_ind_next
 
     def effective_mu(self, node_id, closed, q, o):
