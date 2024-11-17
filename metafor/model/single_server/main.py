@@ -2,8 +2,9 @@ import argparse
 import os
 from typing import List
 
+from analysis.single_server_ctmc_analysis import fault_scenario_analysis
 from simulator.simulate import run_discrete_experiment
-from model.single_server.ctmc import SingleServerCTMC
+from model.single_server.ctmc import SingleServerCTMC, CTMCRepresentation
 
 
 def delete_files(folder: str, extension: str):
@@ -276,13 +277,19 @@ def main():
             timeouts,
             retries,
             thread_pool,
-            alpha,
+            CTMCRepresentation.EXPLICIT,
+            alpha
         )
         file_name = "single_server_results.png"
         pi = ctmc.get_stationary_distribution()
+        print('Stationary distribution:')
         print(pi)
+        print('Average throughout')
         print(ctmc.throughput_average(pi))
+        print('Average failure rate')
         print(ctmc.failure_rate_average(pi))
+        fault_scenario_analysis(ctmc, file_name, timeout_min, timeout_max, mu_min, mu_max, mu_step, lambda_fault,
+                                start_time_fault, duration_fault, reset_lambda_min, reset_lambda_max, reset_lambda_step)
 
 
 if __name__ == "__main__":

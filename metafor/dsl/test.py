@@ -40,7 +40,8 @@ def simple_analysis(p: Program):
     print(pi)
     print("Average queue size = ", ctmc.main_queue_size_average(pi))
     print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
-    requests = p.get_requests("server")
+    root_server = p.get_root_server()
+    requests = p.get_requests(root_server.name)
     print(requests)
     for i, r in enumerate(requests):
         print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
@@ -56,13 +57,13 @@ def simple_analysis(p: Program):
 
 class TestDSL(unittest.TestCase):
     def test_single_server_single_request(self):
-        """A single server and a single source processing API call `rd`: the source sends requests at rate 5,
-        with a timeout of 10 and 3 retries. The server processes `rd` with rate 3, and has no downstream work
+        """A single server and a single source processing API call `rd`: the source sends requests at rate 9.5,
+        with a timeout of 9 and 3 retries. The server processes `rd` with rate 10, and has no downstream work
         """
         apis = {
             "rd": Work(
                 10, []
-            )  # `rd` API call has service rate 3 and no downstream work
+            )  # `rd` API call has service rate 10 and no downstream work
         }
         s = Server("server", apis, 100, 20)
         rd_src = Source("reader", "rd", 9.5, 9, 3)
@@ -75,12 +76,12 @@ class TestDSL(unittest.TestCase):
 
     def test_single_server_fast(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 2,
-        with a timeout of 10 and 3 retries. The server processes `rd` with rate 3, and has no downstream work
+        with a timeout of 5 and 3 retries. The server processes `rd` with rate 500, and has no downstream work
         """
         apis = {
             "rd": Work(
                 1000 / 2, []
-            )  # `rd` API call has service rate 3 and no downstream work
+            )  # `rd` API call has service rate 500 and no downstream work
         }
         s = Server("server", apis, 280, 20)
         rd_src = Source("reader", "rd", 2, 5, 3)
@@ -91,13 +92,14 @@ class TestDSL(unittest.TestCase):
         p.connect("reader", "server")
         timed_call(lambda: simple_analysis(p))
 
-    def test_single_server_multiple_requests(self):
-        """A single server and two sources processing API call `rd`: the first source sends requests at rate 5 and the second at rate 2,
-        each with a timeout of 10 and 3 retries. The server processes `rd` with rate 10, and has no downstream work
+    def test_single_server_multiple_sources(self):
+        """A single server and two sources processing API call `rd`: the first source sends requests at rate 5 and the
+        second at rate 2, each with a timeout of 10 and 3 retries. The server processes `rd` with rate 3, and has no
+        downstream work
         """
-        apis = {"rd": Work(3, [])}  # `rd` API call has rate 10 and no downstream work
+        apis = {"rd": Work(3, [])}  # `rd` API call has processing rate 3 and no downstream work
         s = Server("server", apis, 100, 100)
-        rd_src1 = Source("reader1", "rd", 5, 5, 3)
+        rd_src1 = Source("reader1", "rd", 5, 10, 3)
         rd_src2 = Source("reader2", "rd", 2, 10, 3)
         p = Program("single_server_multiple_sources")
         p.add_server(s)
@@ -146,7 +148,7 @@ class TestDSL(unittest.TestCase):
 
     def test_single_server_single_request_multiple_threads(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 9.5,
-        with a timeout of 10 and 3 retries. The server processes `rd` with rate 10, and has no downstream work
+        with a timeout of 5 and 3 retries. The server processes `rd` with rate 10, and has no downstream work
         """
         apis = {"rd": Work(10, [])}  # `rd` API call has rate 10 and no downstream work
         s = Server("server", apis, 100, 100, 3)
@@ -158,9 +160,14 @@ class TestDSL(unittest.TestCase):
         p.connect("reader", "server")
         timed_call(lambda: simple_analysis(p))
 
-    def test_single_server_multiple_reqs(self):
-        """A single server and a single source processing API call `rd`: the source sends requests at rate 9.5,
-        with a timeout of 10 and 3 retries. The server processes `rd` with rate 10, and has no downstream work
+    def test_single_server_multiple_requests(self):
+        """A single server and three sources:
+         1. for the `rd` API call: the source sends requests at rate 9.5, with a timeout of 5 and 3 retries.
+         The server processes `rd` with rate 10, and has no downstream work
+         2. for the `wr` API call: the source sends requests at rate 4.5, with a timeout of 10 and 3 retries.
+         The server processes `wr` with rate 10, and has no downstream work
+         3. for the `bigwr` API call: the source sends requests at rate 1, with a timeout of 10 and 3 retries.
+         The server processes `bigwr` with rate 20, and has no downstream work
         """
         apis = {
             "rd": Work(10, []),  # `rd` API call has rate 10 and no downstream work
@@ -183,80 +190,107 @@ class TestDSL(unittest.TestCase):
 
     def test_two_servers(self):
         """Two servers in series and a single source processing API call `rd`: the source sends requests at rate 9.5,
-        with a timeout of 10 and 3 retries. The first server processes `rd` with rate 10, pushes work to the second
+        with a timeout of 5 and 3 retries. The first server processes `rd` with rate 10, pushes work to the second
         server"""
-        rates = {
+        apis = {
             "rd": Work(
                 10,
                 [
                     DependentCall(
-                        "server2", "server", "rd", Constants.CLOSED, 10, 3
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
                     )
                 ],
             )
         }
-        apis = {"rd": Work(10, [])}
-        s = Server("server", rates, 20, 100, 1)
+        s1 = Server("server1", apis, 20, 100, 1)
         rd_src = Source("client", "rd", 9.5, 5, 3)
 
         s2 = Server("server2", apis, 100, 100, 1)
         p = Program("two_servers")
-        p.add_server(s)
+        p.add_server(s1)
         p.add_server(s2)
         p.add_source(rd_src)
-        p.connect("client", "server")
+        p.connect("client", "server1")
         timed_call(lambda: simple_analysis(p))
 
     def test_two_servers_small_queues(self):
         """Two servers in series and a single source processing API call `rd`: the source sends requests at rate 9.5,
-        with a timeout of 10 and 3 retries. The first server processes `rd` with rate 10, pushes work to the second
+        with a timeout of 5 and 3 retries. The first server processes `rd` with rate 10, pushes work to the second
         server"""
-        rates = {
+        apis = {
             "rd": Work(
                 10,
                 [
                     DependentCall(
-                        "server2", "server", "rd", Constants.CLOSED, 10, 3
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
                     )
                 ],
             )
         }
-        apis = {"rd": Work(10, [])}
-        s = Server("server", rates, 20, 10, 1)
+        s1 = Server("server1", apis, 20, 10, 1)
         rd_src = Source("client", "rd", 9.5, 5, 3)
 
         s2 = Server("server2", apis, 10, 10, 1)
         p = Program("two_servers_small_queue")
-        p.add_server(s)
+        p.add_server(s1)
         p.add_server(s2)
         p.add_source(rd_src)
-        p.connect("client", "server")
+        p.connect("client", "server1")
         timed_call(lambda: simple_analysis(p))
 
     def test_two_identical_servers(self):
         """Two servers in series (with the same parameters) and a single source processing API call `rd`: the source
         sends requests at rate 9.5, with a timeout of 10 and 3 retries. The first server processes `rd` with rate 10,
         pushes work to the second server"""
-        rates = {
+        apis = {
             "rd": Work(
                 10,
                 [
                     DependentCall(
-                        "server2", "server", "rd", Constants.CLOSED, 10, 3
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
                     )
                 ],
             )
         }
-        apis = {"rd": Work(10, [])}
-        s = Server("server", rates, 10, 5, 1)
+        s1 = Server("server1", apis, 10, 5, 1)
         rd_src = Source("client", "rd", 9.5, 5, 3)
 
         s2 = Server("server2", apis, 10, 5, 1)
         p = Program("two_identical_servers")
-        p.add_server(s)
+        p.add_server(s1)
         p.add_server(s2)
         p.add_source(rd_src)
-        p.connect("client", "server")
+        p.connect("client", "server1")
+        timed_call(lambda: simple_analysis(p))
+
+    def test_three_servers(self):
+        """Three servers in series and a single source processing API call `rd`: the source sends requests at rate 9.5,
+        with a timeout of 5 and 3 retries. The first server processes `rd` with rate 10, pushes the work to the second
+        server, which pushes the work to the third server"""
+        apis = {
+            "rd": Work(
+                10,
+                [
+                    DependentCall(
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
+                    ),
+                    DependentCall(
+                        "server3", "server2", "rd", Constants.CLOSED, 5, 1
+                    )
+                ],
+            )
+        }
+        s1 = Server("server1", apis, 10, 5, 1)
+        rd_src = Source("client", "rd", 9.5, 5, 3)
+
+        s2 = Server("server2", apis, 20, 5, 1)
+        s3 = Server("server3", apis, 30, 10, 1)
+        p = Program("three_servers")
+        p.add_server(s1)
+        p.add_server(s2)
+        p.add_server(s3)
+        p.add_source(rd_src)
+        p.connect("client", "server1")
         timed_call(lambda: simple_analysis(p))
 
 
