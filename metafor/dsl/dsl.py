@@ -4,10 +4,9 @@ import numpy as np
 import numpy.typing as npt
 from numpy import float64
 
-from model.ctmc import CTMC
+from model.ctmc import CTMC, CTMCRepresentation
 from model.multi_server.ctmc import MultiServerCTMC
 from model.single_server.ctmc import SingleServerCTMC
-
 
 class Constants:
     CLOSED = 1
@@ -180,9 +179,17 @@ class Program:
         assert not (server.name in self.servers)
         self.servers[server.name] = server
 
+    def add_servers(self, servers: List[Server]):
+        for s in servers:
+            self.add_server(s)
+
     def add_source(self, source: Source):
         assert not (source.name in self.sources)
         self.sources[source.name] = source
+
+    def add_sources(self, sources: List[Source]):
+        for s in sources:
+            self.add_source(s)
 
     def connect(self, source_name: str, server_name: str):
         assert source_name in self.sources
@@ -253,7 +260,7 @@ class Program:
         return list(server.apis.keys())
 
     # build takes a program configuration and constructs a CTMC out of it
-    def build(self) -> CTMC:
+    def build(self, representation: CTMCRepresentation = CTMCRepresentation.EXPLICIT) -> CTMC:
         num_states = functools.reduce(
             lambda a, s: a * s.num_states(), self.servers.values(), 1
         ) * functools.reduce(lambda a, s: a * s.num_states(), self.sources.values(), 1)
@@ -273,6 +280,7 @@ class Program:
                 timeouts,
                 retries,
                 server.thread_pool,
+                representation=representation
             )
         else:  # multiple servers in serial connection
             root_server: Server = self.get_root_server()

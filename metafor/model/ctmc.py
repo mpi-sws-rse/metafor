@@ -5,6 +5,11 @@ from typing import Optional, Dict, Callable, Any
 import numpy as np
 import numpy.typing as npt
 
+class CTMCRepresentation:
+    EXPLICIT = 0
+    COO = 1
+    CSC = 2
+    LINOP = 3
 
 class CTMC(ABC):
 

@@ -10,13 +10,9 @@ from scipy.sparse import coo_matrix
 import time
 
 from utils.plot_parameters import PlotParameters
-from model.ctmc import CTMC
+from model.ctmc import CTMC, CTMCRepresentation
 
-class CTMCRepresentation:
-    EXPLICIT = 0
-    COO = 1
-    CSC = 2
-    LINOP = 3
+
 
 class Matrix:
     def __init__(self, dim: int, representation: CTMCRepresentation = CTMCRepresentation.EXPLICIT):
@@ -151,11 +147,13 @@ class SingleServerCTMC(CTMC):
         pi = ns / np.linalg.norm(ns, ord=1)
         if sum(pi) < -0.01:  # the null space may return `-pi`
             pi = -pi
+        # due to numerical imprecision, some entries may still be negative, so we force them to be positive
+        pi = abs(pi)
+
         # print(pi)
         # print(pi[:,0])
         # print(QT * pi[:,0])
-        for prob in pi:
-            assert 0 <= prob <= 1
+
         return pi
 
     @staticmethod
@@ -564,100 +562,6 @@ class SingleServerCTMC(CTMC):
         assert t % plot_params.step_time == 0
         probabilities = self.reach_prob_computation(Q, plot_params)
         return probabilities[int(plot_params.sim_time / t)]
-
-    """ DOES NOT WORK and SUPERCEDED
-    def sparse_info_calculator(self):
-        row_ind = []
-        col_ind = []
-        data_point = []
-
-        tail_seq = self._tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
-        for total_ind in range(self.state_num):
-            data_sum = 0
-            n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
-            tail_main = tail_seq[n_main_queue]
-            if n_main_queue == 0:  # queue is empty
-                row_ind.append(total_ind)
-                col_ind.append(self._index_composer(n_main_queue + 1, n_retry_queue))
-                data_point.append(self.lambdaa)
-                data_sum += self.lambdaa
-                if n_retry_queue > 0:
-                    row_ind.append(total_ind)
-                    col_ind.append(
-                        self._index_composer(n_main_queue, n_retry_queue - 1)
-                    )
-                    data_point.append(n_retry_queue * self.mu_drop_base)
-                    data_sum += n_retry_queue * self.mu_drop_base
-                    row_ind.append(total_ind)
-                    col_ind.append(
-                        self._index_composer(n_main_queue + 1, n_retry_queue - 1)
-                    )
-                    data_point.append(n_retry_queue * self.mu_retry_base)
-                    data_sum += n_retry_queue * self.mu_retry_base
-
-            elif n_main_queue == self.main_queue_size - 1:  # queue is full
-                row_ind.append(total_ind)
-                col_ind.append(self._index_composer(n_main_queue - 1, n_retry_queue))
-                data_point.append(self.mu0_p)
-                data_sum += self.mu0_p
-                if n_retry_queue > 0:
-                    row_ind.append(total_ind)
-                    col_ind.append(
-                        self._index_composer(n_main_queue, n_retry_queue - 1)
-                    )
-                    data_point.append(n_retry_queue * self.mu_drop_base)
-                    data_sum += n_retry_queue * self.mu_drop_base
-                if n_retry_queue < self.retry_queue_size - 1:
-                    row_ind.append(total_ind)
-                    col_ind.append(
-                        self._index_composer(n_main_queue, n_retry_queue + 1)
-                    )
-                    data_point.append(
-                        (self.lambdaa + n_retry_queue * self.mu_retry_base) * tail_main
-                    )
-                    data_sum += (
-                        self.lambdaa + n_retry_queue * self.mu_retry_base
-                    ) * tail_main
-            else:  # queue is neither full nor empty
-                alpha_tail_prob_sum = self.lambdaa * tail_main
-                if n_retry_queue < self.retry_queue_size - 1:
-                    row_ind.append(total_ind)
-                    col_ind.append(
-                        self._index_composer(n_main_queue + 1, n_retry_queue + 1)
-                    )
-                    data_point.append(alpha_tail_prob_sum)
-                    data_sum += alpha_tail_prob_sum
-                row_ind.append(total_ind)
-                col_ind.append(self._index_composer(n_main_queue + 1, n_retry_queue))
-                data_point.append(
-                    self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main
-                )
-                data_sum += (
-                    self.lambdaa + n_retry_queue * self.mu_retry_base * tail_main
-                )
-                if n_retry_queue > 0:
-                    row_ind.append(total_ind)
-                    col_ind.append(
-                        self._index_composer(n_main_queue + 1, n_retry_queue - 1)
-                    )
-                    data_point.append(
-                        n_retry_queue * self.mu_retry_base * (1 - tail_main)
-                    )
-                    data_sum += n_retry_queue * self.mu_retry_base * (1 - tail_main)
-                    row_ind.append(total_ind)
-                    col_ind.append(
-                        self._index_composer(n_main_queue, n_retry_queue - 1)
-                    )
-                    data_point.append(n_retry_queue * self.mu_drop_base)
-                    data_sum += n_retry_queue * self.mu_drop_base
-                row_ind.append(total_ind)
-                col_ind.append(self._index_composer(n_main_queue - 1, n_retry_queue))
-                data_point.append(self.mu0_p)
-                data_sum += self.mu0_p
-            row_ind.append(total_ind)
-            col_ind.append(total_ind)
-            data_point.append(-data_sum)
-        return [row_ind, col_ind, data_point] """
 
     def prob_dist_accumulator(self, pi, q1, q2, o1, o2):
         val = 0
