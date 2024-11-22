@@ -4,6 +4,8 @@ from typing import Optional, Dict, Callable, Any
 
 import numpy as np
 import numpy.typing as npt
+from scipy.sparse import coo_matrix
+
 
 class CTMCRepresentation:
     EXPLICIT = 0
@@ -11,6 +13,60 @@ class CTMCRepresentation:
     CSC = 2
     LINOP = 3
 
+class Matrix:
+    def __init__(self, dim: int, representation: CTMCRepresentation = CTMCRepresentation.EXPLICIT):
+        self.representation = representation  # not used yet
+        self.dim = dim
+        match self.representation:
+            case CTMCRepresentation.EXPLICIT:
+                try:
+                    self.Q = np.zeros((self.dim, self.dim))
+                except np._core._exceptions._ArrayMemoryError:
+                    raise "State space (%d states) too large for an explicit representation. Try a sparse " \
+                          "representation." % (self.dim)
+            case CTMCRepresentation.COO:
+                # since our matrices have a few entries in each row, we can optimize this representation as
+                # an array of (column, data)
+                # this will also improve row sum
+                self.rows = []
+                self.columns = []
+                self.data = []
+            case _:
+                raise NotImplementedError
+
+    def set(self, i, j, value):
+        match self.representation:
+            case CTMCRepresentation.EXPLICIT:
+                self.Q[i][j] = value
+            case CTMCRepresentation.COO:
+                self.rows.append(i)
+                self.columns.append(j)
+                self.data.append(value)
+            case _:
+                raise NotImplementedError
+
+    def matrix(self):
+        match self.representation:
+            case CTMCRepresentation.EXPLICIT:
+                return self.Q
+            case CTMCRepresentation.COO:
+                return coo_matrix((self.data, (self.rows, self.columns)), shape=(self.dim, self.dim))
+            case _:
+                raise NotImplementedError
+
+    def sum(self, index):
+        match self.representation:
+            case CTMCRepresentation.EXPLICIT:
+                return np.sum(self.Q[index, :])
+            case CTMCRepresentation.COO:
+                sum = 0.0
+                for (i, j, v) in zip(self.rows, self.columns, self.data):
+                    if i == index:
+                        sum += v
+                return sum
+            case _:
+                raise NotImplementedError
+            
 class CTMC(ABC):
 
     def __init__(self):

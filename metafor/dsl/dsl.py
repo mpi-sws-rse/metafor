@@ -1,5 +1,6 @@
 import functools
 from typing import List, Set, Tuple, Optional, Dict
+from metafor.utils.graph import Graph
 import numpy as np
 import numpy.typing as npt
 from numpy import float64
@@ -230,8 +231,7 @@ class Program:
             jobs_with_sources[job] = sources_for_job
         return jobs_with_sources
 
-    @staticmethod
-    def get_job(jobs: List[Work], dependant_call: DependentCall) -> Work:
+    def get_job(self, jobs: List[Work], dependant_call: DependentCall) -> Work:
         return [job for job in jobs if dependant_call in job.downstream][0]
 
     def get_job_processing_rate(self, jobs: List[Work], dependant_call: DependentCall):
@@ -268,6 +268,15 @@ class Program:
         if server is None:
             raise "Unknown server " + s
         return list(server.apis.keys())
+
+    def get_callgraph(self):
+        g = Graph()
+        for sname, s in self.servers.items():
+            g.add_node(sname)
+            callees = self.get_callees(s)
+            for c in callees:
+                g.add_edge(sname, c.name)
+        print(g.__str__())
 
     # build takes a program configuration and constructs a CTMC out of it
     def build(self, representation: CTMCRepresentation = CTMCRepresentation.EXPLICIT) -> CTMC:

@@ -56,6 +56,18 @@ def simple_analysis(p: Program):
 
 
 class TestDSL(unittest.TestCase):
+    def test_mm1(self):
+        apis = {
+            "rd" : Work(0.5, [])
+        }
+        s = Server("server", apis, 101, 1)
+        src = Source("client", "rd", 0.2, 10, 0)
+        p = Program("MM1")
+        p.add_server(s)
+        p.add_source(src)
+        p.connect("client", "server")
+        simple_analysis(p)
+
     def test_single_server_single_request(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 9.5,
         with a timeout of 9 and 3 retries. The server processes `rd` with rate 10, and has no downstream work
@@ -211,6 +223,7 @@ class TestDSL(unittest.TestCase):
         p.add_server(s2)
         p.add_source(rd_src)
         p.connect("client", "server1")
+        p.get_callgraph()
         timed_call(lambda: simple_analysis(p))
 
     def test_two_servers_small_queues(self):
@@ -291,6 +304,38 @@ class TestDSL(unittest.TestCase):
         p.add_server(s3)
         p.add_source(rd_src)
         p.connect("client", "server1")
+        p.get_callgraph()
+        timed_call(lambda: simple_analysis(p))
+
+    def test_fork_servers(self):
+        """Three servers and a single source processing API call `rd`
+        The first server processes `rd` with rate 10, pushes the work to the second and third
+        servers"""
+        apis = {
+            "rd": Work(
+                10,
+                [
+                    DependentCall(
+                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
+                    ),
+                    DependentCall(
+                        "server3", "server1", "rd", Constants.CLOSED, 5, 1
+                    )
+                ],
+            )
+        }
+        s1 = Server("server1", apis, 10, 5, 1)
+        rd_src = Source("client", "rd", 9.5, 5, 3)
+
+        s2 = Server("server2", apis, 20, 5, 1)
+        s3 = Server("server3", apis, 30, 10, 1)
+        p = Program("three_servers")
+        p.add_server(s1)
+        p.add_server(s2)
+        p.add_server(s3)
+        p.add_source(rd_src)
+        p.connect("client", "server1")
+        p.get_callgraph()
         timed_call(lambda: simple_analysis(p))
 
 
@@ -302,7 +347,6 @@ class TestBasic(unittest.TestCase):
         assert states.shape[0] == transitions.shape[1]
         s = StateMachineSource("bar", "foo", transitions, states)
         assert s.num_states() == 2
-
 
 if __name__ == "__main__":
     unittest.main()

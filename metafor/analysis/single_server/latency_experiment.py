@@ -188,6 +188,53 @@ class FiniteHorizonExperiment(Experiment):
             self.plot("trends_v_time", "Trends of " + str(param) + " vs time", pd)
 
 
+class MixingTimeExperiment(Experiment):
+    def __init__(self, p: Program):
+        self.p = p
+        self.main_color = "#A9A9A9"
+        self.fade_color = "#D3D3D3"
+
+    def plot(
+        self,
+        figure_name: str,
+        x_axis: str,
+        y_axis: str,
+        x_vals,
+        mixing_times,
+    ):
+        plt.rc("font", size=14)
+        plt.rcParams["figure.figsize"] = [5, 5]
+        plt.rcParams["figure.autolayout"] = True
+
+        plt.figure()  # row 0, col 0
+        plt.plot(x_vals, mixing_times, color=self.main_color)
+        
+        plt.xlabel(x_axis, fontsize=14)
+        plt.ylabel(y_axis, fontsize=14)
+        plt.grid("on")
+        plt.xlim(min(x_vals), max(x_vals))
+        plt.show()
+        plt.close()
+
+    def build(self, param) -> Program:
+        return self.update(self.p, param)
+
+    def analyze(self, param_setting, p: Program):
+        ctmc: SingleServerCTMC = p.build()
+        mixing_time = ctmc.get_mixing_time()
+        return [param_setting, mixing_time]
+
+    def show(self, results):
+        # print(results)
+        PARAMETER = "parameter"
+        MIXING_TIME = "Mixing time"
+        columns = [PARAMETER, MIXING_TIME]
+        
+        pd = pandas.DataFrame(results, columns=columns)
+    
+        print(pd)
+
+
 class TestExperiments(unittest.TestCase):
     def program(self) -> Program:
         apis = {"rd": Work(10, []), "wr": Work(10, [])}
@@ -285,6 +332,50 @@ class TestExperimentsLarge(unittest.TestCase):
             storage_server_model, {"main_q_size": lambda ctmc: ctmc.main_queue_size_average}, sim_time=30, sim_step=5
         )
         t.sweep(ParameterList([qsizes]))
+
+
+    def test_52(self):
+        api = { "insert": Work(1/.016, [],) }
+        server = Server("52", api, qsize=300, orbit_size=10, thread_pool=100)
+        src = Source('client', 'insert', 6200, timeout=3, retries=4)
+        p = Program("Service52")
+        p.add_server(server)
+        p.add_source(src)
+        p.connect('client', '52')
+
+        print("Building CTMC")
+        ctmc: SingleServerCTMC = p.build()
+        print("Computing stationary distribution")
+        # pi = ctmc.get_stationary_distribution()
+        # print(pi)
+        # print("Average queue size = ", ctmc.main_queue_size_average(pi))
+        # print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
+        # root_server = p.get_root_server()
+        # requests = p.get_requests(root_server.name)
+        # print(requests)
+        # for i, r in enumerate(requests):
+        #   print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
+        
+        qsizes = Parameter(("server", "52", "qsize"), range(200, 300, 90))
+        print("Running latency experiments")
+        # t = LatencyExperiment(p)
+        # .sweep(ParameterList([qsizes]))
+        print("Commented out")
+
+        print("Approximating recovery times")
+        tmix = MixingTimeExperiment(p)
+        tmix.sweep(ParameterList([qsizes]))
+
+        print("Now breaking the server: Approximating recovery times")
+
+        server = Server("52", api, qsize=300, orbit_size=10, thread_pool=20)
+        p = Program("Service52-broken")
+        p.add_server(server)
+        p.add_source(src)
+        p.connect('client', '52')
+        print("Approximating recovery times")
+        tmix = MixingTimeExperiment(p)
+        tmix.sweep(ParameterList([qsizes]))
 
 
 if __name__ == "__main__":
