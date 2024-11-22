@@ -167,7 +167,6 @@ class MultiServerCTMC():
             var = 0
             sub_tree = self.sub_tree_list[node_id]
             for downstream_node_id in sub_tree:
-                # effective_mu = self.effective_mu(node_id, 1, q_list, o_list) # to generalize, code must be modified...
                 ave += q_list[downstream_node_id] / mu0_ps[downstream_node_id]
                 var += (
                     q_list[downstream_node_id]

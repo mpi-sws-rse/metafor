@@ -20,7 +20,7 @@ def analysis(ctmc: MultiServerCTMC,
              reset_time
              ):
     # analyze mixing time variations against queue size changes
-    qsize_seq, mixing_time_q_seq = ctmc.mixing_time_vs_qsize_data_generator(lambda_init,
+    """qsize_seq, mixing_time_q_seq = ctmc.mixing_time_vs_qsize_data_generator(lambda_init,
                                                                           ctmc.mu0_ps, ctmc.timeouts,
                                                                           ctmc.retry_queue_sizes, 2, 10+1, 1)
     ctmc.plot_mixing_time(1, qsize_seq, mixing_time_q_seq, "Queue length", "Mixing time", "mix_time_vs_qsize", 'blue')
@@ -41,7 +41,7 @@ def analysis(ctmc: MultiServerCTMC,
     mu_seq, mixing_time_mu_seq = ctmc.mixing_time_vs_to_data_generator(lambda_init, ctmc.mu0_ps,
                                                                        ctmc.main_queue_sizes, ctmc.retry_queue_sizes,
                                                                        1, 9+1, 2)
-    ctmc.plot_mixing_time(2, mu_seq, mixing_time_mu_seq, "Timeout", "Mixing time", "mix_time_vs_to", 'brown')
+    ctmc.plot_mixing_time(2, mu_seq, mixing_time_mu_seq, "Timeout", "Mixing time", "mix_time_vs_to", 'brown')"""
 
 
     # analyze the fault scenario
@@ -90,7 +90,7 @@ def analysis(ctmc: MultiServerCTMC,
 
 
 analysis(MultiServerCTMC(server_no= 2, main_queue_sizes= [10, 10], retry_queue_sizes= [3, 3], lambdaas= [.5, 0],
-                        mu0_ps= [2.8, 2.8], timeouts= [5,5], max_retries= [5, 3], thread_pools= [32, 1],
+                        mu0_ps= [2.8, 2.8], timeouts= [5,5], max_retries= [5, 3], thread_pools= [1, 1],
                         parent_list= [[], [0]], sub_tree_list= [[0, 1], [1]], q_min_list= [90, 90], q_max_list= [10, 10],
                         o_min_list= [0, 0], o_max_list = [3, 3]),
              step_time= 1,
