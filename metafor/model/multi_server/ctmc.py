@@ -712,8 +712,8 @@ class MultiServerCTMC():
             # Computing the generator matrix
             print("computing the generator matrix for timeout", to)
             start = time.time()
-            row_ind, col_ind, data = self.sparse_info_calculator_CTMC(lambda_config, mu0_p, main_queue_size,
-                                                                      retry_queue_size, tos, -1, [0, 0], [0, 0])
+            row_ind, col_ind, data = self.sparse_info_calculator_CTMC(lambda_config, mu0_p, tos, main_queue_size,
+                                                                      retry_queue_size, -1, [0, 0], [0, 0])
             Q = scipy.sparse.csr_matrix((data, (row_ind, col_ind)), shape=(state_num_prod, state_num_prod))
 
             def matvec_func(x):

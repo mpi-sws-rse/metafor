@@ -20,7 +20,7 @@ def analysis(ctmc: MultiServerCTMC,
              reset_time
              ):
     # analyze mixing time variations against queue size changes
-    """qsize_seq, mixing_time_q_seq = ctmc.mixing_time_vs_qsize_data_generator(lambda_init,
+    qsize_seq, mixing_time_q_seq = ctmc.mixing_time_vs_qsize_data_generator(lambda_init,
                                                                           ctmc.mu0_ps, ctmc.timeouts,
                                                                           ctmc.retry_queue_sizes, 2, 10+1, 1)
     ctmc.plot_mixing_time(1, qsize_seq, mixing_time_q_seq, "Queue length", "Mixing time", "mix_time_vs_qsize", 'blue')
@@ -41,7 +41,7 @@ def analysis(ctmc: MultiServerCTMC,
     mu_seq, mixing_time_mu_seq = ctmc.mixing_time_vs_to_data_generator(lambda_init, ctmc.mu0_ps,
                                                                        ctmc.main_queue_sizes, ctmc.retry_queue_sizes,
                                                                        1, 9+1, 2)
-    ctmc.plot_mixing_time(2, mu_seq, mixing_time_mu_seq, "Timeout", "Mixing time", "mix_time_vs_to", 'brown')"""
+    ctmc.plot_mixing_time(2, mu_seq, mixing_time_mu_seq, "Timeout", "Mixing time", "mix_time_vs_to", 'brown')
 
 
     # analyze the fault scenario
