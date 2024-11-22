@@ -7,18 +7,18 @@ import copy
 
 import scipy
 
-from model.ctmc import CTMC
+#from model.ctmc import CTMC
 from model.multi_server.generator_matrix import GeneratorMatrix
 import time
 from scipy.sparse.linalg import gmres, eigs
 import itertools
+import matplotlib.pyplot as plt
 
-
-class MultiServerCTMC(CTMC):
+class MultiServerCTMC():
 
     def __init__(
         self,
-        server_num: int,
+        server_no: int,
         main_queue_sizes: List[int],
         retry_queue_sizes: List[int],
         lambdaas: List[float],
@@ -33,7 +33,7 @@ class MultiServerCTMC(CTMC):
         o_min_list: Optional[List[int]] = None,
         o_max_list: Optional[List[int]] = None,
     ):
-        super().__init__()
+        #super().__init__()
         assert (
             len(main_queue_sizes)
             == len(retry_queue_sizes)
@@ -42,10 +42,10 @@ class MultiServerCTMC(CTMC):
             == len(timeouts)
             == len(max_retries)
             == len(thread_pools)
-            == server_num
+            == server_no
         )
 
-        self.server_num = server_num
+        self.server_no = server_no
         self.main_queue_sizes = main_queue_sizes
         self.retry_queue_sizes = retry_queue_sizes
         self.lambdaas = lambdaas
@@ -68,14 +68,14 @@ class MultiServerCTMC(CTMC):
 
         if q_min_list is None:
             self.q_min_list = [
-                int(main_queue_sizes[i] * 0.9) for i in range(server_num)
+                int(main_queue_sizes[i] * 0.9) for i in range(server_no)
             ]
         if o_min_list is None:
-            self.o_min_list = [retry_queue_sizes[i] // 2 for i in range(server_num)]
+            self.o_min_list = [retry_queue_sizes[i] // 2 for i in range(server_no)]
         if q_max_list is None:
-            self.q_max_list = [main_queue_sizes[i] * 0.1 for i in range(server_num)]
+            self.q_max_list = [main_queue_sizes[i] * 0.1 for i in range(server_no)]
         if o_max_list is None:
-            self.o_max_list = [2 for _ in range(server_num)]
+            self.o_max_list = [2 for _ in range(server_no)]
 
         self.row_ind, self.col_ind, self.data = self.sparse_info_calculator_CTMC(
             self.lambdaas, self.mu0_ps, self.timeouts, self.main_queue_sizes, self.retry_queue_sizes, -1, [0, 0], [0, 0]
@@ -117,7 +117,7 @@ class MultiServerCTMC(CTMC):
             state_num_prod *= state_num[i]
         n_main_queue = []
         n_retry_queue = []
-        for node_id in range(self.server_num):
+        for node_id in range(self.server_no):
             ancestors = []
             ss_res = 1
             ancestor = self.parent_list[node_id]
@@ -132,7 +132,7 @@ class MultiServerCTMC(CTMC):
             n_main_queue.append(s % main_queue_sizes[node_id])
             n_retry_queue.append(s // main_queue_sizes[node_id])
 
-        for node_id in range(self.server_num):
+        for node_id in range(self.server_no):
             assert 0 <= n_main_queue[node_id] < state_num[node_id]
             assert 0 <= n_retry_queue[node_id] < state_num[node_id]
         return [n_main_queue, n_retry_queue]
@@ -146,17 +146,13 @@ class MultiServerCTMC(CTMC):
         for i in range(self.server_no):
             state_num.append(main_queue_sizes[i] * retry_queue_sizes[i])
             state_num_prod *= state_num[i]
-        total_ind = (
-            n_main_queue_list[0] + n_retry_queue_list[0] * main_queue_sizes[0]
-        )
-        for node_id in range(1, self.server_num):
+        total_ind = (n_main_queue_list[0] + n_retry_queue_list[0] * main_queue_sizes[0])
+        for node_id in range(1, self.server_no):
             ss_size_bias = 1
             for i in range(node_id):
                 ss_size_bias *= state_num[i]
-            total_ind += (
-                n_main_queue_list[node_id]
-                + n_retry_queue_list[node_id] * self.main_queue_sizes[node_id]
-            ) * ss_size_bias
+            total_ind += (n_main_queue_list[node_id] + n_retry_queue_list[node_id] * main_queue_sizes[
+                node_id]) * ss_size_bias
         assert 0 <= total_ind < state_num_prod
         return total_ind
 
@@ -165,8 +161,8 @@ class MultiServerCTMC(CTMC):
         that service time is distributed exponentially."""
 
         [q_list, o_list] = self._index_decomposer(total_ind, main_queue_sizes, retry_queue_sizes)
-        tail_prob = [0 for _ in range(self.server_num)]
-        for node_id in range(self.server_num):
+        tail_prob = [0 for _ in range(self.server_no)]
+        for node_id in range(self.server_no):
             ave = 0
             var = 0
             sub_tree = self.sub_tree_list[node_id]
@@ -184,7 +180,7 @@ class MultiServerCTMC(CTMC):
                 tail_prob[node_id] = k_inv**2
             else:
                 tail_prob[node_id] = 1
-        for node_id in range(self.server_num):
+        for node_id in range(self.server_no):
             assert 0 <= tail_prob[node_id] <= 1
         return tail_prob
 
@@ -216,7 +212,7 @@ class MultiServerCTMC(CTMC):
 
         q_local_list = []
         o_local_list = []
-        for node_id in range(self.server_num):
+        for node_id in range(self.server_no):
             q_local_list.append(list(range(q_range[node_id][0], q_range[node_id][1])))
             o_local_list.append(list(range(o_range[node_id][0], o_range[node_id][1])))
         q_prod_list = list(itertools.product(*q_local_list))
@@ -230,8 +226,8 @@ class MultiServerCTMC(CTMC):
             cumulative_prob += pi[state]
         return cumulative_prob
 
-    # The following requires Q_op_T
-    def finite_time_analysis(self, pi0, analyses: dict[str, Callable[[Any], Any]], sim_time: int, sim_step: int):
+    # must be fixed
+    """def finite_time_analysis(self, pi0, analyses: dict[str, Callable[[Any], Any]], sim_time: int, sim_step: int):
         initial_result = {n: 0.0 for n in analyses}
         # XXX: we are assuming the initial result for the analyses is 0, which may not be true
         initial_result["pi"] = pi0
@@ -255,28 +251,28 @@ class MultiServerCTMC(CTMC):
                 result[analysis_name] = v
 
             results[t] = result
-        return results
+        return results"""
 
-    def main_queue_average_size(self, pi: npt.NDArray[np.float64], main_queue_size, retry_queue_size) -> List[float]:
-        q_len = [0 for _ in range(self.server_num)]
-        for node_id in range(self.server_num):
+    def main_queue_average_size(self, pi: npt.NDArray[np.float64], main_queue_sizes, retry_queue_sizes) -> List[float]:
+        q_len = [0 for _ in range(self.server_no)]
+        for node_id in range(self.server_no):
             q_len_node = 0
             for q_node in range(main_queue_sizes[node_id]):
                 q_range = []
                 o_range = []
-                for server_id in range(self.server_num):
+                for server_id in range(self.server_no):
                     if server_id != node_id:
                         q_range.append(list(range(main_queue_sizes[server_id])))
                     else:
                         q_range.append([q_node])
-                for server_id in range(self.server_num):
+                for server_id in range(self.server_no):
                     o_range.append(list(range(retry_queue_sizes[server_id])))
                 q_prod_list = list(itertools.product(*q_range))
                 o_prod_list = list(itertools.product(*o_range))
                 p = 0
                 for q in q_prod_list:
                     for o in o_prod_list:
-                        p += pi[self._index_composer(q, o)]
+                        p += pi[self._index_composer(q, o, main_queue_sizes, retry_queue_sizes)]
                 q_len_node += q_node * p
             q_len[node_id] = q_len_node
         return q_len
@@ -286,7 +282,7 @@ class MultiServerCTMC(CTMC):
         o_len = [0 for i in range(server_no)]
         for node_id in range(server_no):
             o_len_node = 0
-            for o_node in range(main_queue_sizes[node_id]):
+            for o_node in range(retry_queue_sizes[node_id]):
                 q_range = []
                 o_range = []
                 for id in range(server_no):
@@ -301,20 +297,20 @@ class MultiServerCTMC(CTMC):
                 p = 0
                 for q in q_prod_list:
                     for o in o_prod_list:
-                        p += pi_vec[self.index_composer(q, o, main_queue_sizes, retry_queue_sizes)]
+                        p += pi_vec[self._index_composer(q, o, main_queue_sizes, retry_queue_sizes)]
                 o_len_node += o_node * p
             o_len[node_id] = o_len_node
         return o_len
 
     # must be modified
     def main_queue_size_variance(self, pi: npt.NDArray[np.float64], mean_queue_length: List[float]) -> List[float]:
-        q_var = [0 for _ in range(self.server_num)]
-        for node_id in range(self.server_num):
+        q_var = [0 for _ in range(self.server_no)]
+        for node_id in range(self.server_no):
             q_var_node = 0
             for q_node in range(self.main_queue_sizes[node_id]):
                 q_range = []
                 o_range = []
-                for server_id in range(self.server_num):
+                for server_id in range(self.server_no):
                     if server_id != node_id:
                         q_range.append(list(range(self.main_queue_sizes[server_id])))
                     else:
@@ -346,7 +342,7 @@ class MultiServerCTMC(CTMC):
             state_num_prod *= state_num[i]
         parent_list = self.parent_list
         max_retries = self.max_retries
-        num_threads = self.thread_pool
+        num_threads = self.thread_pools
         row_ind = []
         col_ind = []
         data = []
@@ -418,63 +414,62 @@ class MultiServerCTMC(CTMC):
                 data.append(val)
         return [row_ind, col_ind, data]
 
-    def forward_trans_computer(self, lambda_list, mu0_p, timeout, main_queue_size, retry_queue_size,
+    def forward_trans_computer(self, lambda_list, mu0_ps, timeouts, main_queue_sizes, retry_queue_sizes,
                                q, o, q_next, o_next, node_id):
         server_no = self.server_no
         state_num = []
         state_num_prod = 1
         for i in range(server_no):
-            state_num.append(main_queue_size[i] * retry_queue_size[i])
+            state_num.append(main_queue_sizes[i] * retry_queue_sizes[i])
             state_num_prod *= state_num[i]
         parent_list = self.parent_list
         max_retries = self.max_retries
-        main_queue_size = self.main_queue_sizes
-        retry_queue_size = self.retry_queue_sizes
-        num_threads = self.thread_pool
-        tail_prob_list = self._tail_prob_computer(self._index_composer(q, o))
-        mu_drop_base = 1 / (timeout[node_id] * (max_retries[node_id] + 1))
-        mu_retry_base = max_retries[node_id] / (timeout[node_id] * (max_retries[node_id] + 1))
-        lambda_summed = self.effective_lambda(node_id, timeout, mu0_p, 1, lambda_list, q, o)
+        num_threads = self.thread_pools
+        tail_prob_list = self._tail_prob_computer(self._index_composer(q, o, main_queue_sizes, retry_queue_sizes),
+                                                  mu0_ps, timeouts, main_queue_sizes, retry_queue_sizes)
+        mu_drop_base = 1 / (timeouts[node_id] * (max_retries[node_id] + 1))
+        mu_retry_base = max_retries[node_id] / (timeouts[node_id] * (max_retries[node_id] + 1))
+        lambda_summed = self.effective_lambda(node_id, timeouts, mu0_ps, 1, lambda_list, q, o)
         q_next_mod = copy.deepcopy(q_next)  # will be used to analyze entries over the borders
         o_next_mod = copy.deepcopy(o_next)  # will be used to analyze entries over the borders
         if q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id] + 1:
-            if q[node_id] == main_queue_size[node_id] - 1:  # if queue was full
-                if o[node_id] == retry_queue_size[node_id] - 1:  # if orbit is full as well
+            if q[node_id] == main_queue_sizes[node_id] - 1:  # if queue was full
+                if o[node_id] == retry_queue_sizes[node_id] - 1:  # if orbit is full as well
                     rate = 0  # will not be considered
                     total_ind_next = []  # will not be considered
                 else:
                     q_next_mod[node_id] = q[node_id]  # since there won't be any possibility to add jobs to the queue
                     rate = lambda_summed * 1  # multiplier is changed to one
-                    total_ind_next = self.index_composer(q_next_mod, o_next, main_queue_size, retry_queue_size)
-            elif o[node_id] == retry_queue_size[node_id] - 1:  # queue isn't full, whereas orbit is full
+                    total_ind_next = self._index_composer(q_next_mod, o_next, main_queue_sizes, retry_queue_sizes)
+            elif o[node_id] == retry_queue_sizes[node_id] - 1:  # queue isn't full, whereas orbit is full
                 o_next_mod[node_id] = o[node_id]  # since there won't be any possibility to add jobs to the queue
                 rate = lambda_summed * 1  # multiplier is changed to one
-                total_ind_next = self.index_composer(q_next, o_next_mod, main_queue_size, retry_queue_size)
+                total_ind_next = self._index_composer(q_next, o_next_mod, main_queue_sizes, retry_queue_sizes)
             else:
                 rate = lambda_summed * tail_prob_list[node_id]
-                total_ind_next = self.index_composer(q_next, o_next, main_queue_size, retry_queue_size)
+                total_ind_next = self._index_composer(q_next, o_next, main_queue_sizes, retry_queue_sizes)
         elif q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id]:
-            if q[node_id] == main_queue_size[node_id] - 1:  # if queue was full
+            if q[node_id] == main_queue_sizes[node_id] - 1:  # if queue was full
                 rate = 0  # will not be considered-->the effect was considered above
                 total_ind_next = []  # will not be considered-->the effect was considered above
             else:  # if queue isn't full
                 rate = lambda_summed * (1 - tail_prob_list[node_id]) + mu_retry_base * tail_prob_list[node_id] * o[
                     node_id]
-                total_ind_next = self.index_composer(q_next, o_next, main_queue_size, retry_queue_size)
+                total_ind_next = self._index_composer(q_next, o_next, main_queue_sizes, retry_queue_sizes)
         elif q_next[node_id] == q[node_id] + 1 and o_next[node_id] == o[node_id] - 1:
-            if q[node_id] != main_queue_size[node_id] - 1:  # if queue isn't full
+            if q[node_id] != main_queue_sizes[node_id] - 1:  # if queue isn't full
                 rate = mu_retry_base * (1 - tail_prob_list[node_id]) * o[node_id]
-                total_ind_next = self.index_composer(q_next, o_next, main_queue_size, retry_queue_size)
+                total_ind_next = self._index_composer(q_next, o_next, main_queue_sizes, retry_queue_sizes)
             else:
                 rate = 0  # will not be considered
                 total_ind_next = []  # will not be considered
         elif q_next[node_id] == q[node_id] and o_next[node_id] == o[node_id] - 1:
             rate = mu_drop_base * o[node_id]
-            total_ind_next = self.index_composer(q_next, o_next, main_queue_size, retry_queue_size)
+            total_ind_next = self._index_composer(q_next, o_next, main_queue_sizes, retry_queue_sizes)
         elif q_next[node_id] == q[node_id] - 1 and o_next[node_id] == o[node_id]:
             # assuming that the system is closed
-            rate = self.effective_mu(node_id, mu0_p, 1, q, o)
-            total_ind_next = self.index_composer(q_next, o_next, main_queue_size, retry_queue_size)
+            rate = self.effective_mu(node_id, mu0_ps, 1, q, o)
+            total_ind_next = self._index_composer(q_next, o_next, main_queue_sizes, retry_queue_sizes)
         else:
             print("why did I end up here?!")
             assert 0 <= total_ind_next < state_num_prod
@@ -483,16 +478,16 @@ class MultiServerCTMC(CTMC):
     def effective_mu(self, node_id, mu0_p, closed, q, o):
         if closed == True:  # if the system is closed
             if self.sub_tree_list[node_id] == [node_id]:
-                rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+                rate = mu0_p[node_id] * min(q[node_id], self.thread_pools[node_id])
             else:
                 for node in self.sub_tree_list[node_id]:  #
                     if node == node_id:
-                        rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+                        rate = mu0_p[node_id] * min(q[node_id], self.thread_pools[node_id])
                     else:
                         # +1 is considered to avoid being stuck for all-ampty initialization
-                        rate = min(rate, mu0_p[node] * min(q[node] + 1, self.num_threads[node]))
+                        rate = min(rate, mu0_p[node] * min(q[node] + 1, self.thread_pools[node]))
         else:  # if the system is open
-            rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+            rate = mu0_p[node_id] * min(q[node_id], self.thread_pools[node_id])
         return rate
 
     def effective_lambda(self, node_id, timeout, mu0_p, closed, lambda_list, q, o):
@@ -568,7 +563,7 @@ class MultiServerCTMC(CTMC):
         o_prod_list = list(itertools.product(*o_range))
         for q in q_prod_list:
             for o in o_prod_list:
-                state = self.index_composer(q, o, main_queue_size, retry_queue_size)
+                state = self._index_composer(q, o, main_queue_size, retry_queue_size)
                 set.append(state)
         return set
 
@@ -741,24 +736,26 @@ class MultiServerCTMC(CTMC):
             mixing_time_seq.append(mixing_time)
         return to_seq, mixing_time_seq
 
-    def fault_simulation_data_generator(self, pi_q_seq, main_queue_ave_len_seq, lambda_seq):
+    def fault_simulation_data_generator(self, pi_q_seq, main_queue_ave_len_seq, lambda_seq,
+                                        step_time,
+                                        sim_time,
+                                        lambda_init,
+                                        lambda_fault,
+                                        fault_time,
+                                        lambda_reset,
+                                        reset_time
+                                        ):
         """To compute the simulation data corresponding to the fixed fault scenario"""
-        lambda_reset = self.lambda_reset
-        lambda_init = self.lambda_init
-        fault_time = self.fault_time
-        reset_time = self.reset_time
-        lambda_fault = self.lambda_fault
-        step_time = self.step_time
         state_num = self.state_num_prod
         q_min_list = self.q_min_list
         o_min_list = self.o_min_list
         q_max_list = self.q_max_list
         o_max_list = self.o_max_list
-        main_queue_size = self.main_queue_size
-        retry_queue_size = self.retry_queue_size
+        main_queue_size = self.main_queue_sizes
+        retry_queue_size = self.retry_queue_sizes
         server_no = self.server_no
-        mu0_p = self.mu0_p
-        timeout = self.timeout
+        mu0_p = self.mu0_ps
+        timeout = self.timeouts
         # constructing the config set
         config_set = []
         config_set.append(lambda_init)
@@ -979,7 +976,7 @@ class MultiServerCTMC(CTMC):
 
 
         # SIMULATION
-        for t in range(0, self.sim_time, self.step_time):
+        for t in range(0, sim_time, step_time):
             start = time.time()
             if t <= fault_time:
                 lambda_seq.append(lambda_init[0])
