@@ -346,17 +346,17 @@ class TestExperimentsLarge(unittest.TestCase):
         print("Building CTMC")
         ctmc: SingleServerCTMC = p.build()
         print("Computing stationary distribution")
-        # pi = ctmc.get_stationary_distribution()
+        pi = ctmc.get_stationary_distribution()
         # print(pi)
-        # print("Average queue size = ", ctmc.main_queue_size_average(pi))
-        # print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
+        print("Average queue size = ", ctmc.main_queue_size_average(pi))
+        print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
         # root_server = p.get_root_server()
         # requests = p.get_requests(root_server.name)
         # print(requests)
         # for i, r in enumerate(requests):
         #   print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
         
-        qsizes = Parameter(("server", "52", "qsize"), range(200, 300, 90))
+        qsizes = Parameter(("server", "52", "qsize"), range(200, 500, 50))
         print("Running latency experiments")
         # t = LatencyExperiment(p)
         # .sweep(ParameterList([qsizes]))
@@ -366,14 +366,19 @@ class TestExperimentsLarge(unittest.TestCase):
         tmix = MixingTimeExperiment(p)
         tmix.sweep(ParameterList([qsizes]))
 
-        print("Now breaking the server: Approximating recovery times")
+        print("Now breaking the server: Mixing time should be small because the queues immediately fill up")
 
         server = Server("52", api, qsize=300, orbit_size=10, thread_pool=20)
         p = Program("Service52-broken")
         p.add_server(server)
         p.add_source(src)
         p.connect('client', '52')
-        print("Approximating recovery times")
+
+        ctmc: SingleServerCTMC = p.build()
+        pi = ctmc.get_stationary_distribution()
+        print("Average queue size = ", ctmc.main_queue_size_average(pi))
+
+        print("Mixing times")
         tmix = MixingTimeExperiment(p)
         tmix.sweep(ParameterList([qsizes]))
 
