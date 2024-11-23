@@ -212,7 +212,7 @@ class SingleServerCTMC(CTMC):
                         total_ind, self._index_composer(n_main_queue, n_retry_queue - 1),
                         (n_retry_queue * self.mu_drop_base))
                 Q.set(total_ind, self._index_composer(n_main_queue - 1, n_retry_queue),
-                      min(self.main_queue_size, self.thread_pool) * self.mu0_p
+                      min(n_main_queue, self.thread_pool) * self.mu0_p
                       )
             if not transition_matrix:
                 Q.set(total_ind, total_ind, -Q.sum(total_ind))
