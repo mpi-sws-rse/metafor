@@ -110,13 +110,8 @@ class SingleServerCTMC(CTMC):
         return pi
 
     @staticmethod
-    def _tail_prob_computer(qsize: float, service_rate: float, timeout: float):
+    def _tail_prob_computer(qsize: float, service_rate: float, timeout: float, thread_pool: float):
         """Compute the timeout probabilities for the case that service time is distributed exponentially."""
-        mu = service_rate  # to remain close to the math symbol
-        mu_x_timeout = mu * timeout
-        exp_mu_timeout = math.exp(-mu_x_timeout)
-        if exp_mu_timeout == 0:
-            return [0] * qsize
 
         tail_seq = [0]  # The timeout prob is zero when there is no job in the queue!
         current_sum = 0
@@ -124,6 +119,11 @@ class SingleServerCTMC(CTMC):
         for job_num in range(
                 1, qsize
         ):  # compute the timeout prob for all different queue sizes.
+            mu = min(job_num, thread_pool) * service_rate  # to remain close to the math symbol
+            mu_x_timeout = mu * timeout
+            exp_mu_timeout = math.exp(-mu_x_timeout)
+            if exp_mu_timeout == 0:
+                return [0] * qsize
             last = last * mu_x_timeout / job_num
             current_sum = current_sum + last
             tail_seq.append(current_sum * exp_mu_timeout)
@@ -161,7 +161,7 @@ class SingleServerCTMC(CTMC):
 
     def generator_mat_exact(self, transition_matrix: bool = False, representation=CTMCRepresentation.EXPLICIT):
         Q = Matrix(self.state_num, representation=representation)
-        tail_seq = self._tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout)
+        tail_seq = self._tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout, self.thread_pool)
 
         for total_ind in range(self.state_num):
             n_retry_queue, n_main_queue = self._index_decomposer(total_ind)
@@ -537,3 +537,11 @@ class SingleServerCTMC(CTMC):
                 state = self._index_composer(q, o)
                 val += pi[state]
         return val
+
+    def check_detailed_balance(self, Q, pi):
+        n = Q.shape[0]
+        for i in range(n):
+            for j in range(i + 1, n):  # check pairs i, j
+                if not np.isclose(pi[i] * Q[i, j], pi[j] * Q[j, i]):
+                    return False
+        return True

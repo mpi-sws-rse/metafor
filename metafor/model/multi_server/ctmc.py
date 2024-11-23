@@ -156,7 +156,7 @@ class MultiServerCTMC():
         assert 0 <= total_ind < state_num_prod
         return total_ind
 
-    def _tail_prob_computer(self, total_ind, mu0_ps, timeouts, main_queue_sizes, retry_queue_sizes):
+    def _tail_prob_computer(self, total_ind, mu0_ps, timeouts, thread_pools, main_queue_sizes, retry_queue_sizes):
         """This function computes the timeout probabilities for the case
         that service time is distributed exponentially."""
 
@@ -167,11 +167,12 @@ class MultiServerCTMC():
             var = 0
             sub_tree = self.sub_tree_list[node_id]
             for downstream_node_id in sub_tree:
-                ave += q_list[downstream_node_id] / mu0_ps[downstream_node_id]
+                mu = min(q_list[downstream_node_id], num_threads[downstream_node_id]) * mu0_ps[downstream_node_id]
+                ave += q_list[downstream_node_id] / mu
                 var += (
                     q_list[downstream_node_id]
                     * 1
-                    / (self.mu0_ps[downstream_node_id] ** 2)
+                    / (mu ** 2)
                 )
             sigma = math.sqrt(var)
             if timeouts[node_id] - ave > sigma:
