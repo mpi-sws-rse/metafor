@@ -347,6 +347,10 @@ class TestExperimentsLarge(unittest.TestCase):
         ctmc: SingleServerCTMC = p.build()
         print("Computing stationary distribution")
         pi = ctmc.get_stationary_distribution()
+        """if ctmc.check_detailed_balance(ctmc.Q, pi):
+            print("The CTMC is reversible.")
+        else:
+            print("The CTMC is not reversible.")"""
         # print(pi)
         print("Average queue size = ", ctmc.main_queue_size_average(pi))
         print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))

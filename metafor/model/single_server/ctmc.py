@@ -132,13 +132,14 @@ class SingleServerCTMC(CTMC):
     def get_eigenvalues(self):
         eigenvalues = np.linalg.eigvals(self.Q)
         print(eigenvalues)
-        sorted_eigenvalues = np.sort(eigenvalues.real)[::-1]
+        #sorted_eigenvalues = np.sort(eigenvalues.real)[::-1]
+        sorted_eigenvalues = sorted(eigenvalues, key=lambda x: np.real(x), reverse=True)
         return sorted_eigenvalues
 
     def get_mixing_time(self):     
         eigenvalues = self.get_eigenvalues()  # RM: we only need the first eigenvalue
         print("Sorted eigenvalues (real parts):", eigenvalues)
-        t_mixing = 1 / abs(eigenvalues[1]) * math.log2(100)
+        t_mixing = 1 / abs(np.real(eigenvalues[1])) * math.log2(100)
         return t_mixing
 
     def _index_decomposer(self, total_ind):
