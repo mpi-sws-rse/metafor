@@ -132,6 +132,9 @@ class Work:
         self.processing_rate = processing_rate
         self.downstream = downstream
 
+    def __str__(self):
+        return "%f" % self.processing_rate
+
 
 # a server with queues to handle requests
 # `thread_pool` is the number of threads processing requests
@@ -153,7 +156,8 @@ class Server:
         self.thread_pool = thread_pool
 
     def __str__(self):
-        api_strings = ",".join(self.apis.keys())
+        apis = [apiname + '@' + work.__str__() for (apiname, work) in self.apis.items()]
+        api_strings = ",".join(apis)
         return "%s: serves %s [q %d orbit %d threads %d]" % (
             self.name,
             api_strings,

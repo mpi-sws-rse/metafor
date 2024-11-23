@@ -132,7 +132,8 @@ class SingleServerCTMC(CTMC):
     def get_eigenvalues(self):
         eigenvalues = np.linalg.eigvals(self.Q)
         print(eigenvalues)
-        sorted_eigenvalues = np.sort(eigenvalues.real)[::-1]
+        # sorted_eigenvalues = np.sort(abs(eigenvalues.real))[::-1]
+        sorted_eigenvalues = sorted(eigenvalues, key=abs)
         return sorted_eigenvalues
 
     def get_mixing_time(self):     
