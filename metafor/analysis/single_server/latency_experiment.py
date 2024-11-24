@@ -268,7 +268,10 @@ class HittingTimeExperiment(Experiment):
 
     def analyze(self, param_setting, p: Program):
         ctmc: SingleServerCTMC = p.build()
-        S1 = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
+        if ctmc.thread_pool > 1:
+            S1 = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
+        else:
+            S1 = ctmc.set_construction([[0, int(.1 * ctmc.main_queue_size)]], [[0, ctmc.retry_queue_size]])
         S2 = ctmc.set_construction([[int(.9 * ctmc.main_queue_size), ctmc.main_queue_size]],
                                    [[0, ctmc.retry_queue_size]])
         hitting_time = ctmc.get_hitting_time_average(ctmc.Q, S2, S1)
