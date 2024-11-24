@@ -336,7 +336,7 @@ class TestExperimentsLarge(unittest.TestCase):
 
     def test_52(self):
         api = { "insert": Work(1/.016, [],) }
-        server = Server("52", api, qsize=300, orbit_size=20, thread_pool=100)
+        server = Server("52", api, qsize=300, orbit_size=14, thread_pool=100)
         src = Source('client', 'insert', 6200, timeout=3, retries=4)
         p = Program("Service52")
         p.add_server(server)
@@ -347,15 +347,16 @@ class TestExperimentsLarge(unittest.TestCase):
         ctmc: SingleServerCTMC = p.build()
         print("Computing stationary distribution")
         pi = ctmc.get_stationary_distribution()
-        """if ctmc.check_detailed_balance(ctmc.Q, pi):
+        """if ctmc.check_detailed_balance(pi):
             print("The CTMC is reversible.")
         else:
             print("The CTMC is not reversible.")"""
         # print(pi)
         print("Average queue size = ", ctmc.main_queue_size_average(pi))
-        print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
+        # print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
         print("Mixing time = ", ctmc.get_mixing_time())
-
+        print("Time to drain queue = ", ctmc.time_to_drain())
+        """
         root_server = p.get_root_server()
         requests = p.get_requests(root_server.name)
         print(requests)
@@ -364,16 +365,16 @@ class TestExperimentsLarge(unittest.TestCase):
             print("Average throughput for ", r, " = ", ctmc.throughput_average(pi, i))
             print("Average fault rate for ", r, " = ", ctmc.failure_rate_average(pi, i))
         
-        qsizes = Parameter(("server", "52", "qsize"), range(350, 1000, 100))
+        qsizes = Parameter(("server", "52", "qsize"), range(350, 750, 100))
 
-        # print("Running latency experiments")
-        # t = LatencyExperiment(p)
-        # .sweep(ParameterList([qsizes]))
-        # print("Commented out")
+        print("Running latency experiments")
+        t = LatencyExperiment(p)
+        t.sweep(ParameterList([qsizes]))
+        print("Commented out")
 
         print("Approximating recovery times")
-        #tmix = MixingTimeExperiment(p)
-        #tmix.sweep(ParameterList([qsizes]))
+        tmix = MixingTimeExperiment(p)
+        tmix.sweep(ParameterList([qsizes]))
 
 
         # api = { "insert": Work(1/.016, [],) }
@@ -411,6 +412,7 @@ class TestExperimentsLarge(unittest.TestCase):
         # print("Mixing times")
         # tmix = MixingTimeExperiment(p)
         # mix.sweep(ParameterList([qsizes]))
+        """
 
 
 if __name__ == "__main__":

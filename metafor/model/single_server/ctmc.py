@@ -83,6 +83,12 @@ class SingleServerCTMC(CTMC):
             assert abs(sum(row)) < 0.0001
         # np.set_printoptions(threshold=None)
 
+    def is_irreducible(self) -> bool:
+        transition_matrix = np.logical_or(np.eye(self.state_num), self.Q.astype(bool))
+        t_reach = np.linalg.matrix_power(transition_matrix, self.state_num - 1)
+        return np.all(t_reach)
+    
+
     def get_init_state(self) -> npt.NDArray[np.float64]:
         pi = np.zeros(self.state_num,)
         pi[0] = 1.0  # Initially the queue is empty
@@ -539,8 +545,28 @@ class SingleServerCTMC(CTMC):
                 val += pi[state]
         return val
 
-    def check_detailed_balance(self, Q, pi):
-        n = Q.shape[0]
+    def reach(self, start, target_set) -> float:
+        Q = np.copy(self.Q)
+        # vector whose target component is 0 and every other component is one
+        b = np.ones(self.state_num)
+        # make the target set absorbing
+        for target in target_set:
+            Q[target, :] = np.zeros(self.state_num)
+            Q[target, target] = 1
+            b[target] = 0
+        
+        u = np.linalg.solve(Q, -b)
+        print("Reach time = ", u)
+        return u[start]
+    
+    def time_to_drain(self) -> float:
+        queue_full_state = self.state_num - 1
+        queue_empty_state = 0
+        return self.reach(queue_full_state, [queue_empty_state])
+
+    # check if the CTMC is reversible: pi is the precomputed stationary distribution
+    def check_detailed_balance(self, pi):
+        n = self.Q.shape[0]
         for i in range(n):
             for j in range(i + 1, n):  # check pairs i, j
                 if not np.isclose(pi[i] * Q[i, j], pi[j] * Q[j, i]):

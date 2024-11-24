@@ -280,6 +280,7 @@ class Program:
             callees = self.get_callees(s)
             for c in callees:
                 g.add_edge(sname, c.name)
+        print("Acyclic? ", g.is_acyclic())
         print(g.__str__())
 
     # build takes a program configuration and constructs a CTMC out of it

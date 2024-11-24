@@ -47,6 +47,54 @@ class Graph(object):
 
         return node1 in self._graph and node2 in self._graph[node1]
 
+    def is_acyclic(self) -> bool:
+        if self._directed:
+            return self._is_acyclic_directed()
+        else:
+            return self._is_acyclic_undirected()
+    
+    def _is_acyclic_directed(self) -> bool:
+        visited = set()
+        recursion_stack = set()
+
+        def dfs(node):
+            if node in recursion_stack:  # Cycle detected
+                return False
+            if node in visited:
+                return True  # Skip already verified nodes
+            visited.add(node)
+            recursion_stack.add(node)
+        
+            for neighbor in self.get_outgoing(node):
+                if not dfs(neighbor):
+                    return False
+            recursion_stack.remove(node)
+            return True
+
+        # Check all nodes (in case of disconnected graph)
+        return all(dfs(node) for node in self._graph if node not in visited)
+
+
+    def _is_acyclic_undirected(self):
+        visited = set()
+    
+        def dfs(node, parent):
+            visited.add(node)
+            for neighbor in self.get(node):
+                if neighbor not in visited:
+                    if not dfs(neighbor, node):
+                        return False
+                elif neighbor != parent:  # Cycle detected
+                    return False
+            return True
+    
+        # Check all connected components
+        for node in self._graph:
+            if node not in visited:
+                if not dfs(node, None):
+                    return False
+        return True
+
     def find_path(self, node1, node2, path=[]):
         """ Find any path between node1 and node2 (may not be shortest) """
 
