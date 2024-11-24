@@ -7,6 +7,7 @@ import math
 import copy
 import scipy
 import time
+import itertools
 
 from model.ctmc import CTMC, CTMCRepresentation, Matrix
 
@@ -546,3 +547,42 @@ class SingleServerCTMC(CTMC):
                 if not np.isclose(pi[i] * Q[i, j], pi[j] * Q[j, i]):
                     return False
         return True
+
+    def set_construction(self, q_range_list, o_range_list):
+        server_no = 1 # self.server_no
+        set = []
+        q_range = []
+        o_range = []
+        for node_id in range(server_no):
+            q_range.append(list(range(q_range_list[node_id][0], q_range_list[node_id][1])))
+        for node_id in range(server_no):
+            o_range.append(list(range(o_range_list[node_id][0], o_range_list[node_id][1])))
+        q_prod_list = list(itertools.product(*q_range))
+        o_prod_list = list(itertools.product(*o_range))
+        for q in q_prod_list:
+            for o in o_prod_list:
+                state = self._index_composer(q[0], o[0])  #
+                set.append(state)
+        return set
+
+    def get_hitting_time_average(self, Q, S1, S2) -> float:
+        non_target_states = list(set(list(range(0, self.state_num))).difference(set(S2)))
+        non_target_state_num = len(non_target_states)
+        A = np.zeros((non_target_state_num, non_target_state_num))
+        b = -np.ones(non_target_state_num)
+
+        # Fill the matrix A
+        for idx, i in enumerate(non_target_states):
+            A[idx, :] = Q[i, non_target_states]  #
+
+        u = np.linalg.solve(A, b)
+        print("Maximum error in solving the linear equation is", np.max(np.matmul(A, u) - b))
+        hitting_time_min = -10
+        for state in S1:
+            idx = non_target_states.index(state)
+            if hitting_time_min < 0:
+                hitting_time_min = u[idx]
+            else:
+                if u[idx] < hitting_time_min:
+                    hitting_time_min = u[state]
+        return hitting_time_min
