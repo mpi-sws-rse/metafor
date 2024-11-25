@@ -10,8 +10,8 @@ from model.multi_server.ctmc import MultiServerCTMC
 from model.single_server.ctmc import SingleServerCTMC
 
 class Constants:
-    CLOSED = 1
-    OPEN = 2
+    WAIT_UNTIL_DONE = 1
+    FIRE_AND_FORGET = 2
 
 
 # a source of requests: an exponential distribution with rate `arrival_rate`

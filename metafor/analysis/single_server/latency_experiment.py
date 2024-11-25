@@ -235,6 +235,59 @@ class MixingTimeExperiment(Experiment):
         print(pd)
 
 
+class HittingTimeExperiment(Experiment):
+    def __init__(self, p: Program):
+        self.p = p
+        self.main_color = "#A9A9A9"
+        self.fade_color = "#D3D3D3"
+
+    def plot(
+            self,
+            figure_name: str,
+            x_axis: str,
+            y_axis: str,
+            x_vals,
+            hitting_times,
+    ):
+        plt.rc("font", size=14)
+        plt.rcParams["figure.figsize"] = [5, 5]
+        plt.rcParams["figure.autolayout"] = True
+
+        plt.figure()  # row 0, col 0
+        plt.plot(x_vals, hitting_times, color=self.main_color)
+
+        plt.xlabel(x_axis, fontsize=14)
+        plt.ylabel(y_axis, fontsize=14)
+        plt.grid("on")
+        plt.xlim(min(x_vals), max(x_vals))
+        plt.show()
+        plt.close()
+
+    def build(self, param) -> Program:
+        return self.update(self.p, param)
+
+    def analyze(self, param_setting, p: Program):
+        ctmc: SingleServerCTMC = p.build()
+
+        # average = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
+        average = ctmc.set_construction([[0, 100]], [[0, ctmc.retry_queue_size]])
+
+        full = ctmc.set_construction([[int(0.9 * ctmc.main_queue_size), ctmc.main_queue_size]],
+                                   [[0, ctmc.retry_queue_size]])
+        hitting_time = ctmc.get_hitting_time_average(ctmc.Q, full, average)
+        return [param_setting, hitting_time]
+
+    def show(self, results):
+        # print(results)
+        PARAMETER = "parameter"
+        HITTING_TIME = "Hitting time"
+        columns = [PARAMETER, HITTING_TIME]
+
+        pd = pandas.DataFrame(results, columns=columns)
+
+        print(pd)
+
+
 class TestExperiments(unittest.TestCase):
     def program(self) -> Program:
         apis = {"rd": Work(10, []), "wr": Work(10, [])}
@@ -352,11 +405,13 @@ class TestExperimentsLarge(unittest.TestCase):
         else:
             print("The CTMC is not reversible.")"""
         # print(pi)
+
+        qsizes = Parameter(("server", "52", "qsize"), range(350, 550, 100))
+
+        """
         print("Average queue size = ", ctmc.main_queue_size_average(pi))
-        # print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
         print("Mixing time = ", ctmc.get_mixing_time())
         print("Time to drain queue = ", ctmc.time_to_drain())
-        """
         root_server = p.get_root_server()
         requests = p.get_requests(root_server.name)
         print(requests)
@@ -365,12 +420,31 @@ class TestExperimentsLarge(unittest.TestCase):
             print("Average throughput for ", r, " = ", ctmc.throughput_average(pi, i))
             print("Average fault rate for ", r, " = ", ctmc.failure_rate_average(pi, i))
         
-        qsizes = Parameter(("server", "52", "qsize"), range(350, 750, 100))
 
-        print("Running latency experiments")
-        t = LatencyExperiment(p)
-        t.sweep(ParameterList([qsizes]))
-        print("Commented out")
+        print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
+        # root_server = p.get_root_server()
+        # requests = p.get_requests(root_server.name)
+        # print(requests)
+        # for i, r in enumerate(requests):
+        #   print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
+        """
+        S1 = ctmc.set_construction([[0, int(.3*ctmc.main_queue_size)]], [[0, ctmc.retry_queue_size]])
+        S2 = ctmc.set_construction([[int(.9*ctmc.main_queue_size), ctmc.main_queue_size]], [[0, ctmc.retry_queue_size]])
+        ht_su = ctmc.get_hitting_time_average(ctmc.Q, S1, S2)
+        ht_us = ctmc.get_hitting_time_average(ctmc.Q, S2, S1)
+        print("Expected hitting time to go from high to low mode is", ht_us)
+        print("Expected hitting time to go from low to high mode is", ht_su)
+
+        print("Computing exact recovery times")
+        ht = HittingTimeExperiment(p)
+        ht.sweep(ParameterList([qsizes]))
+
+
+        qsizes = Parameter(("server", "52", "qsize"), range(200, 500, 50))
+        # print("Running latency experiments")
+        # t = LatencyExperiment(p)
+        # t.sweep(ParameterList([qsizes]))
+        # print("Commented out")
 
         print("Approximating recovery times")
         tmix = MixingTimeExperiment(p)
@@ -389,7 +463,7 @@ class TestExperimentsLarge(unittest.TestCase):
         # tmix = MixingTimeExperiment(p)
         # tmix.sweep(ParameterList([retries]))
 
-        print("Now breaking the server: Mixing time should be small because the queues immediately fill up")
+        print("Now breaking the server: Hitting time should be very large because the queues immediately fill up and never empty")
 
         server = Server("52", api, qsize=300, orbit_size=10, thread_pool=20)
         p = Program("Service52-broken")
@@ -400,19 +474,27 @@ class TestExperimentsLarge(unittest.TestCase):
         ctmc: SingleServerCTMC = p.build()
         pi = ctmc.get_stationary_distribution()
         print("Average queue size = ", ctmc.main_queue_size_average(pi))
-        root_server = p.get_root_server()
-        requests = p.get_requests(root_server.name)
-        print(requests)
-        for i, r in enumerate(requests):
-            print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
-            print("Average throughput for ", r, " = ", ctmc.throughput_average(pi, i))
-            print("Average fault rate for ", r, " = ", ctmc.failure_rate_average(pi, i))
+        S1 = ctmc.set_construction([[0, int(.3*ctmc.main_queue_size)]], [[0, ctmc.retry_queue_size]])
+        S2 = ctmc.set_construction([[int(.9*ctmc.main_queue_size), ctmc.main_queue_size]], [[0, ctmc.retry_queue_size]])
+        ht_su = ctmc.get_hitting_time_average(ctmc.Q, S1, S2)
+        ht_us = ctmc.get_hitting_time_average(ctmc.Q, S2, S1)
+        print("Expected hitting time to go from high to low mode is", ht_us)
+        print("Expected hitting time to go from low to high mode is", ht_su)
+
+        # root_server = p.get_root_server()
+        # requests = p.get_requests(root_server.name)
+        # print(requests)
+        # for i, r in enumerate(requests):
+        #     print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
+        #     print("Average throughput for ", r, " = ", ctmc.throughput_average(pi, i))
+        #     print("Average fault rate for ", r, " = ", ctmc.failure_rate_average(pi, i))
         print("Mixing time = ", ctmc.get_mixing_time())
+        #ht = HittingTimeExperiment(p)
+        #ht.sweep(ParameterList([qsizes]))
 
         # print("Mixing times")
         # tmix = MixingTimeExperiment(p)
         # mix.sweep(ParameterList([qsizes]))
-        """
 
 
 if __name__ == "__main__":

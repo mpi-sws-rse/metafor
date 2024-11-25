@@ -285,10 +285,10 @@ class TestDSL(unittest.TestCase):
                 10,
                 [
                     DependentCall(
-                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
+                        "server2", "server1", "rd", Constants.WAIT_UNTIL_DONE, 10, 3
                     ),
                     DependentCall(
-                        "server3", "server2", "rd", Constants.CLOSED, 5, 1
+                        "server3", "server2", "rd", Constants.WAIT_UNTIL_DONE, 5, 1
                     )
                 ],
             )
@@ -316,10 +316,10 @@ class TestDSL(unittest.TestCase):
                 10,
                 [
                     DependentCall(
-                        "server2", "server1", "rd", Constants.CLOSED, 10, 3
+                        "server2", "server1", "rd", Constants.WAIT_UNTIL_DONE, 10, 3
                     ),
                     DependentCall(
-                        "server3", "server1", "rd", Constants.CLOSED, 5, 1
+                        "server3", "server1", "rd", Constants.WAIT_UNTIL_DONE, 5, 1
                     )
                 ],
             )
