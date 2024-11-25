@@ -269,12 +269,12 @@ class HittingTimeExperiment(Experiment):
     def analyze(self, param_setting, p: Program):
         ctmc: SingleServerCTMC = p.build()
 
-        # average = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
-        average = ctmc.set_construction([[0, 100]], [[0, ctmc.retry_queue_size]])
+        average = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
+        # average = ctmc.set_construction([[0, 100]], [[0, ctmc.retry_queue_size]])
 
         full = ctmc.set_construction([[int(0.9 * ctmc.main_queue_size), ctmc.main_queue_size]],
                                    [[0, ctmc.retry_queue_size]])
-        hitting_time = ctmc.get_hitting_time_average(ctmc.Q, full, average)
+        hitting_time = ctmc.get_hitting_time_average(full, average)
         return [param_setting, hitting_time]
 
     def show(self, results):
@@ -387,115 +387,91 @@ class TestExperimentsLarge(unittest.TestCase):
         t.sweep(ParameterList([qsizes]))
 
 
-    def test_52(self):
+
+class Test52(unittest.TestCase):
+    def setUp(self):
+        self.qsizes = Parameter(("server", "52", "qsize"), range(350, 550, 100))
+        self.processing_rates = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(1/0.010, 1/0.05, 10))
+    
+    def program(self):
         api = { "insert": Work(1/.016, [],) }
-        server = Server("52", api, qsize=300, orbit_size=14, thread_pool=100)
+        server = Server("52", api, qsize=300, orbit_size=10, thread_pool=100)
         src = Source('client', 'insert', 6200, timeout=3, retries=4)
         p = Program("Service52")
         p.add_server(server)
         p.add_source(src)
         p.connect('client', '52')
+        return p
 
+    def program_reduced_threads(self): 
+        api = { "insert": Work(1/.016, [],) }
+        server = Server("52", api, qsize=300, orbit_size=10, thread_pool=20)
+        src = Source('client', 'insert', 6200, timeout=3, retries=4)
+        p = Program("Service52")
+        p.add_server(server)
+        p.add_source(src)
+        p.connect('client', '52')
+        return p  
+    
+    def basic_stats(self, p):
         print("Building CTMC")
         ctmc: SingleServerCTMC = p.build()
         print("Computing stationary distribution")
         pi = ctmc.get_stationary_distribution()
-        """if ctmc.check_detailed_balance(pi):
-            print("The CTMC is reversible.")
-        else:
-            print("The CTMC is not reversible.")"""
-        # print(pi)
-
-        qsizes = Parameter(("server", "52", "qsize"), range(350, 550, 100))
-
-        """
         print("Average queue size = ", ctmc.main_queue_size_average(pi))
         print("Mixing time = ", ctmc.get_mixing_time())
+        # S1 = ctmc.set_construction([[0, int(.3*ctmc.main_queue_size)]], [[0, ctmc.retry_queue_size]])
+        # S2 = ctmc.set_construction([[int(.9*ctmc.main_queue_size), ctmc.main_queue_size]], [[0, ctmc.retry_queue_size]])
+        S1 = ctmc.set_construction([[0, 100]], [[0, ctmc.retry_queue_size]])
+        S2 = ctmc.set_construction([[ctmc.main_queue_size-100, ctmc.main_queue_size]], [[0, ctmc.retry_queue_size]])
+        ht_su = ctmc.get_hitting_time_average(S1, S2)
+        ht_us = ctmc.get_hitting_time_average(S2, S1)
+        print("Expected hitting time to go from high to low mode is", ht_us)
+        print("Expected hitting time to go from low to high mode is", ht_su)
+
         print("Time to drain queue = ", ctmc.time_to_drain())
-        root_server = p.get_root_server()
-        requests = p.get_requests(root_server.name)
-        print(requests)
-        for i, r in enumerate(requests):
-            print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
-            print("Average throughput for ", r, " = ", ctmc.throughput_average(pi, i))
-            print("Average fault rate for ", r, " = ", ctmc.failure_rate_average(pi, i))
-        
 
-        print("Average retry queue size = ", ctmc.retry_queue_size_average(pi))
-        # root_server = p.get_root_server()
-        # requests = p.get_requests(root_server.name)
-        # print(requests)
-        # for i, r in enumerate(requests):
-        #   print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
-        """
-        S1 = ctmc.set_construction([[0, int(.3*ctmc.main_queue_size)]], [[0, ctmc.retry_queue_size]])
-        S2 = ctmc.set_construction([[int(.9*ctmc.main_queue_size), ctmc.main_queue_size]], [[0, ctmc.retry_queue_size]])
-        ht_su = ctmc.get_hitting_time_average(ctmc.Q, S1, S2)
-        ht_us = ctmc.get_hitting_time_average(ctmc.Q, S2, S1)
-        print("Expected hitting time to go from high to low mode is", ht_us)
-        print("Expected hitting time to go from low to high mode is", ht_su)
 
+    def test_program_basic(self):
+        p = self.program()
+        self.basic_stats(p)
+
+    def test_program_reduced_basic(self):
+        p = self.program_reduced_threads()
+        self.basic_stats(p)
+
+    def test_hitting_times(self):
         print("Computing exact recovery times")
+        p = self.program()
         ht = HittingTimeExperiment(p)
-        ht.sweep(ParameterList([qsizes]))
+        ht.sweep(ParameterList([self.qsizes]))
+
+        p = self.program()
+        ht = HittingTimeExperiment(p)
+        ht.sweep(ParameterList([self.processing_rates]))
+
+    def test_hitting_times_reduced_threads(self):
+        print("Computing exact recovery times")
+        p = self.program_reduced_threads()
+        ht = HittingTimeExperiment(p)
+        ht.sweep(ParameterList([self.qsizes]))
+
+        p = self.program_reduced_threads()
+        ht = HittingTimeExperiment(p)
+        ht.sweep(ParameterList([self.processing_rates]))
 
 
-        qsizes = Parameter(("server", "52", "qsize"), range(200, 500, 50))
-        # print("Running latency experiments")
-        # t = LatencyExperiment(p)
-        # t.sweep(ParameterList([qsizes]))
-        # print("Commented out")
+    def test_mixing_times(self):
+        print("Computing mixing times")
+        p = self.program()
+        ht = MixingTimeExperiment(p)
+        ht.sweep(ParameterList([self.qsizes]))
 
-        print("Approximating recovery times")
-        tmix = MixingTimeExperiment(p)
-        tmix.sweep(ParameterList([qsizes]))
-
-
-        # api = { "insert": Work(1/.016, [],) }
-        # server = Server("52", api, qsize=300, orbit_size=10, thread_pool=100)
-        # src = Source('client', 'insert', 6200, timeout=3, retries=4)
-        # p = Program("Service52")
-        # p.add_server(server)
-        # p.add_source(src)
-        # p.connect('client', '52')
-        # retries = Parameter(("source", "client", "retries"), range(4, 8, 1))
-        # print("Approximating recovery times")
-        # tmix = MixingTimeExperiment(p)
-        # tmix.sweep(ParameterList([retries]))
-
-        print("Now breaking the server: Hitting time should be very large because the queues immediately fill up and never empty")
-
-        server = Server("52", api, qsize=300, orbit_size=10, thread_pool=20)
-        p = Program("Service52-broken")
-        p.add_server(server)
-        p.add_source(src)
-        p.connect('client', '52')
-
-        ctmc: SingleServerCTMC = p.build()
-        pi = ctmc.get_stationary_distribution()
-        print("Average queue size = ", ctmc.main_queue_size_average(pi))
-        S1 = ctmc.set_construction([[0, int(.3*ctmc.main_queue_size)]], [[0, ctmc.retry_queue_size]])
-        S2 = ctmc.set_construction([[int(.9*ctmc.main_queue_size), ctmc.main_queue_size]], [[0, ctmc.retry_queue_size]])
-        ht_su = ctmc.get_hitting_time_average(ctmc.Q, S1, S2)
-        ht_us = ctmc.get_hitting_time_average(ctmc.Q, S2, S1)
-        print("Expected hitting time to go from high to low mode is", ht_us)
-        print("Expected hitting time to go from low to high mode is", ht_su)
-
-        # root_server = p.get_root_server()
-        # requests = p.get_requests(root_server.name)
-        # print(requests)
-        # for i, r in enumerate(requests):
-        #     print("Average latency for ", r, " = ", ctmc.latency_average(pi, i))
-        #     print("Average throughput for ", r, " = ", ctmc.throughput_average(pi, i))
-        #     print("Average fault rate for ", r, " = ", ctmc.failure_rate_average(pi, i))
-        print("Mixing time = ", ctmc.get_mixing_time())
-        #ht = HittingTimeExperiment(p)
-        #ht.sweep(ParameterList([qsizes]))
-
-        # print("Mixing times")
-        # tmix = MixingTimeExperiment(p)
-        # mix.sweep(ParameterList([qsizes]))
-
+    def test_mixing_times_reduced_threads(self):
+        print("Computing mixing times")
+        p = self.program_reduced_threads()
+        ht = MixingTimeExperiment(p)
+        ht.sweep(ParameterList([self.qsizes]))
 
 if __name__ == "__main__":
     unittest.main()

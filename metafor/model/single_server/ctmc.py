@@ -89,6 +89,14 @@ class SingleServerCTMC(CTMC):
         t_reach = np.linalg.matrix_power(transition_matrix, self.state_num - 1)
         return np.all(t_reach)
     
+    # check if the CTMC is reversible: pi is the precomputed stationary distribution
+    def check_detailed_balance(self, pi):
+        n = self.Q.shape[0]
+        for i in range(n):
+            for j in range(i + 1, n):  # check pairs i, j
+                if not np.isclose(pi[i] * Q[i, j], pi[j] * Q[j, i]):
+                    return False
+        return True
 
     def get_init_state(self) -> npt.NDArray[np.float64]:
         pi = np.zeros(self.state_num,)
@@ -549,30 +557,21 @@ class SingleServerCTMC(CTMC):
     def reach(self, start, target_set) -> float:
         Q = np.copy(self.Q)
         # vector whose target component is 0 and every other component is one
-        b = np.ones(self.state_num)
+        b = -np.ones(self.state_num)
         # make the target set absorbing
         for target in target_set:
             Q[target, :] = np.zeros(self.state_num)
             Q[target, target] = 1
             b[target] = 0
         
-        u = np.linalg.solve(Q, -b)
-        print("Reach time = ", u)
+        u = np.linalg.solve(Q, b)
+        print("Reach times = ", u)
         return u[start]
     
     def time_to_drain(self) -> float:
         queue_full_state = self.state_num - 1
         queue_empty_state = 0
         return self.reach(queue_full_state, [queue_empty_state])
-
-    # check if the CTMC is reversible: pi is the precomputed stationary distribution
-    def check_detailed_balance(self, pi):
-        n = self.Q.shape[0]
-        for i in range(n):
-            for j in range(i + 1, n):  # check pairs i, j
-                if not np.isclose(pi[i] * Q[i, j], pi[j] * Q[j, i]):
-                    return False
-        return True
 
     def set_construction(self, q_range_list, o_range_list):
         server_no = 1 # self.server_no
@@ -591,7 +590,7 @@ class SingleServerCTMC(CTMC):
                 set.append(state)
         return set
 
-    def get_hitting_time_average(self, Q, S1, S2) -> float:
+    def get_hitting_time_average(self, S1, S2) -> float:
         non_target_states = list(set(list(range(0, self.state_num))).difference(set(S2)))
         non_target_state_num = len(non_target_states)
         A = np.zeros((non_target_state_num, non_target_state_num))
@@ -599,7 +598,7 @@ class SingleServerCTMC(CTMC):
 
         # Fill the matrix A
         for idx, i in enumerate(non_target_states):
-            A[idx, :] = Q[i, non_target_states]  #
+            A[idx, :] = self.Q[i, non_target_states]  #
 
         u = np.linalg.solve(A, b)
         print("Maximum error in solving the linear equation is", np.max(np.matmul(A, u) - b))
