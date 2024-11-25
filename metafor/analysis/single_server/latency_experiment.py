@@ -483,5 +483,11 @@ class Test52(unittest.TestCase):
         ht = MixingTimeExperiment(p)
         ht.sweep(ParameterList([self.processing_rates]))
 
+    def test_large_queues(self):
+        p = self.program()
+        large_queues = Parameter(("server", "52", "qsize"), range(18000, 20000, 5000))
+        ht = HittingTimeExperiment(p)
+        ht.sweep(ParameterList([large_queues]))
+
 if __name__ == "__main__":
     unittest.main()
