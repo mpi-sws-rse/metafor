@@ -272,7 +272,6 @@ class HittingTimeExperiment(Experiment):
         # average = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
         # average = ctmc.set_construction([[0, 100]], [[0, ctmc.retry_queue_size]])
 
-        full = ctmc.set_construction([[int(0.9 * ctmc.main_queue_size), ctmc.main_queue_size]],
         if ctmc.thread_pool > 1:
             average = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
         else:
@@ -392,11 +391,10 @@ class TestExperimentsLarge(unittest.TestCase):
         t.sweep(ParameterList([qsizes]))
 
 
-
 class Test52(unittest.TestCase):
     def setUp(self):
         self.qsizes = Parameter(("server", "52", "qsize"), range(350, 550, 100))
-        self.processing_rates = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(1/0.010, 1/0.05, 10))
+        self.processing_rates = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(1/0.010, 1/0.020, 4))
     
     def program(self):
         api = { "insert": Work(1/.016, [],) }
@@ -471,12 +469,19 @@ class Test52(unittest.TestCase):
         p = self.program()
         ht = MixingTimeExperiment(p)
         ht.sweep(ParameterList([self.qsizes]))
+        p = self.program_reduced_threads()
+        ht = MixingTimeExperiment(p)
+        ht.sweep(ParameterList([self.processing_rates]))
 
     def test_mixing_times_reduced_threads(self):
         print("Computing mixing times")
         p = self.program_reduced_threads()
         ht = MixingTimeExperiment(p)
         ht.sweep(ParameterList([self.qsizes]))
+
+        p = self.program_reduced_threads()
+        ht = MixingTimeExperiment(p)
+        ht.sweep(ParameterList([self.processing_rates]))
 
 if __name__ == "__main__":
     unittest.main()
