@@ -4,13 +4,14 @@ from typing import Optional, Dict, Callable, Any
 
 import numpy as np
 import numpy.typing as npt
-from scipy.sparse import coo_matrix
+from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
 
 
 class CTMCRepresentation:
     EXPLICIT = 0
     COO = 1
     CSC = 2
+    CSR = 3
     LINOP = 3
 
 class Matrix:
@@ -24,7 +25,7 @@ class Matrix:
                 except np._core._exceptions._ArrayMemoryError:
                     raise "State space (%d states) too large for an explicit representation. Try a sparse " \
                           "representation." % (self.dim)
-            case CTMCRepresentation.COO:
+            case CTMCRepresentation.COO | CTMCRepresentation.CSC | CTMCRepresentation.CSR:
                 # since our matrices have a few entries in each row, we can optimize this representation as
                 # an array of (column, data)
                 # this will also improve row sum
@@ -38,7 +39,7 @@ class Matrix:
         match self.representation:
             case CTMCRepresentation.EXPLICIT:
                 self.Q[i][j] = value
-            case CTMCRepresentation.COO:
+            case CTMCRepresentation.COO | CTMCRepresentation.CSC | CTMCRepresentation.CSR :
                 self.rows.append(i)
                 self.columns.append(j)
                 self.data.append(value)
@@ -51,6 +52,10 @@ class Matrix:
                 return self.Q
             case CTMCRepresentation.COO:
                 return coo_matrix((self.data, (self.rows, self.columns)), shape=(self.dim, self.dim))
+            case CTMCRepresentation.CSC:
+                return csc_matrix((self.data, (self.rows, self.columns)), shape=(self.dim, self.dim))
+            case CTMCRepresentation.CSR:
+                return csr_matrix((self.data, (self.rows, self.columns)), shape=(self.dim, self.dim))
             case _:
                 raise NotImplementedError
 

@@ -10,8 +10,8 @@ from model.multi_server.ctmc import MultiServerCTMC
 from model.single_server.ctmc import SingleServerCTMC
 
 class Constants:
-    CLOSED = 1
-    OPEN = 2
+    WAIT_UNTIL_DONE = 1
+    FIRE_AND_FORGET = 2
 
 
 # a source of requests: an exponential distribution with rate `arrival_rate`
@@ -132,6 +132,9 @@ class Work:
         self.processing_rate = processing_rate
         self.downstream = downstream
 
+    def __str__(self):
+        return "%f" % self.processing_rate
+
 
 # a server with queues to handle requests
 # `thread_pool` is the number of threads processing requests
@@ -153,7 +156,8 @@ class Server:
         self.thread_pool = thread_pool
 
     def __str__(self):
-        api_strings = ",".join(self.apis.keys())
+        apis = [apiname + '@' + work.__str__() for (apiname, work) in self.apis.items()]
+        api_strings = ",".join(apis)
         return "%s: serves %s [q %d orbit %d threads %d]" % (
             self.name,
             api_strings,
@@ -276,6 +280,7 @@ class Program:
             callees = self.get_callees(s)
             for c in callees:
                 g.add_edge(sname, c.name)
+        print("Acyclic? ", g.is_acyclic())
         print(g.__str__())
 
     # build takes a program configuration and constructs a CTMC out of it
