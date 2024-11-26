@@ -768,8 +768,8 @@ class MultiServerCTMC():
             # Computing the generator matrix
             print("computing the generator matrix")
             start = time.time()
-            row_ind, col_ind, data = self.sparse_info_calculator_CTMC(lambda_config, mu0_p, main_queue_size,
-                                                                      retry_queue_size, timeout, -1, [0, 0], [0, 0])
+            row_ind, col_ind, data = self.sparse_info_calculator_CTMC(lambda_config, mu0_p, timeout, main_queue_size,
+                                                                      retry_queue_size, -1, [0, 0], [0, 0])
             print("time taken to compute the generator matrix", time.time() - start)
             row_ind_set.append(row_ind)
             col_ind_set.append(col_ind)

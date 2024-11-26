@@ -115,7 +115,7 @@ class SingleServerCTMC(CTMC):
         """Compute the timeout probabilities for the case that service time is distributed exponentially."""
 
         tail_seq = [0]  # The timeout prob is zero when there is no job in the queue!
-        current_sum = 0
+        """current_sum = 0
         last = 1
         for job_num in range(
                 1, qsize
@@ -127,7 +127,18 @@ class SingleServerCTMC(CTMC):
                 return [0] * qsize
             last = last * mu_x_timeout / job_num
             current_sum = current_sum + last
-            tail_seq.append(current_sum * exp_mu_timeout)
+            tail_seq.append(current_sum * exp_mu_timeout)"""
+        # exact method is unstable for large values...we overapproximate using chebyshev ineq!
+        for job_num in range(1, qsize):  # compute the timeout prob for all different queue sizes.
+            service_rate_effective = min(job_num, thread_pool) * service_rate
+            ave = job_num / service_rate_effective
+            var = job_num / (service_rate_effective**2)
+            sigma = math.sqrt(var)
+            if timeout - ave > sigma:
+                k_inv = sigma / (timeout - ave)
+                tail_seq.append(k_inv ** 2)
+            else:
+                tail_seq.append(1)
         return tail_seq
 
     def get_eigenvalues(self):
