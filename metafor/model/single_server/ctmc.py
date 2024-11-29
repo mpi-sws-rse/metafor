@@ -620,5 +620,5 @@ class SingleServerCTMC(CTMC):
                 hitting_time_min = u[idx]
             else:
                 if u[idx] < hitting_time_min:
-                    hitting_time_min = u[state]
+                    hitting_time_min = u[idx]
         return hitting_time_min

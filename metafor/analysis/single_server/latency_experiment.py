@@ -397,8 +397,9 @@ class Test52(unittest.TestCase):
         self.processing_rates = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(1/0.010, 1/0.020, 4))
     
     def program(self):
-        api = { "insert": Work(1/.016, [],) }
-        server = Server("52", api, qsize=300, orbit_size=10, thread_pool=100)
+        # api = { "insert": Work(1/.016, [],) }
+        api = { "insert": Work(62.1, [],) }
+        server = Server("52", api, qsize=300, orbit_size=3, thread_pool=100)
         src = Source('client', 'insert', 6200, timeout=3, retries=4)
         p = Program("Service52")
         p.add_server(server)
@@ -485,9 +486,20 @@ class Test52(unittest.TestCase):
 
     def test_large_queues(self):
         p = self.program()
-        large_queues = Parameter(("server", "52", "qsize"), range(18000, 20000, 5000))
+        large_queues = Parameter(("server", "52", "qsize"), range(19000, 21000, 1000))
         ht = HittingTimeExperiment(p)
         ht.sweep(ParameterList([large_queues]))
+
+    def test_proc_times(self):
+        api = { "insert": Work(62.1, [],) }
+        server = Server("52", api, qsize=19000, orbit_size=3, thread_pool=100)
+        src = Source('client', 'insert', 6200, timeout=3, retries=4)
+        p = Program("Service52")
+        p.add_server(server)
+        p.add_source(src)
+        p.connect('client', '52')
+        ht = HittingTimeExperiment(p)
+        ht.sweep(ParameterList([self.processing_rates]))
 
 if __name__ == "__main__":
     unittest.main()
