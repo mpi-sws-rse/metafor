@@ -7,8 +7,10 @@ from dsl.dsl import Source, Server, Work, Program
 from numpy import linspace
 import pandas
 from matplotlib import pyplot as plt
+import matplotlib.colors as mcolors
 
 from model.single_server.ctmc import SingleServerCTMC
+import numpy as np
 
 
 class LatencyExperiment(Experiment):
@@ -272,11 +274,13 @@ class HittingTimeExperiment(Experiment):
         # average = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
         # average = ctmc.set_construction([[0, 100]], [[0, ctmc.retry_queue_size]])
 
-        if ctmc.thread_pool > 1:
+        """if ctmc.thread_pool > 1:
             average = ctmc.set_construction([[0, int(1 * ctmc.thread_pool)]], [[0, ctmc.retry_queue_size]])
         else:
-            average = ctmc.set_construction([[0, int(.1 * ctmc.main_queue_size)]], [[0, ctmc.retry_queue_size]])
-        full = ctmc.set_construction([[int(.9 * ctmc.main_queue_size), ctmc.main_queue_size]],
+            average = ctmc.set_construction([[0, int(.1 * ctmc.main_queue_size)]], [[0, ctmc.retry_queue_size]])"""
+        average = ctmc.set_construction([[int(0), int(.8*ctmc.main_queue_size)]],
+                                     [[0, ctmc.retry_queue_size]])
+        full = ctmc.set_construction([[int(.98 * ctmc.main_queue_size), ctmc.main_queue_size]],
                                    [[0, ctmc.retry_queue_size]])
         hitting_time = ctmc.get_hitting_time_average(full, average)
         return [param_setting, hitting_time]
@@ -397,8 +401,8 @@ class Test52(unittest.TestCase):
         self.processing_rates = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(1/0.010, 1/0.020, 4))
     
     def program(self):
-        api = { "insert": Work(1/.016, [],) }
-        server = Server("52", api, qsize=300, orbit_size=10, thread_pool=100)
+        api = { "insert": Work(62.5, [],) }
+        server = Server("52", api, qsize=20000, orbit_size=1000, thread_pool=100)
         src = Source('client', 'insert', 6200, timeout=3, retries=4)
         p = Program("Service52")
         p.add_server(server)
@@ -408,7 +412,7 @@ class Test52(unittest.TestCase):
 
     def program_reduced_threads(self): 
         api = { "insert": Work(1/.016, [],) }
-        server = Server("52", api, qsize=300, orbit_size=10, thread_pool=20)
+        server = Server("52", api, qsize=300, orbit_size=5, thread_pool=20)
         src = Source('client', 'insert', 6200, timeout=3, retries=4)
         p = Program("Service52")
         p.add_server(server)
@@ -485,9 +489,160 @@ class Test52(unittest.TestCase):
 
     def test_large_queues(self):
         p = self.program()
-        large_queues = Parameter(("server", "52", "qsize"), range(18000, 20000, 5000))
+        large_queues = Parameter(("server", "52", "qsize"), range(20000, 21000, 5000))
         ht = HittingTimeExperiment(p)
         ht.sweep(ParameterList([large_queues]))
+
+    def test_plot(self):
+        p = self.program()
+        _, server_name = p.connections[0]
+        server: Server = p.servers[server_name]
+        arrival_rate, service_rate, timeout, retries, _ = p.get_params(server)
+        arrival_rate = arrival_rate[0]
+        service_rate = service_rate[0]
+        timeout = timeout[0]
+        retries = retries[0]
+        qsize = server.qsize
+        osize = server.orbit_size
+        thread_pool = server.thread_pool
+        mu_retry_base = retries / ((retries + 1) * timeout)
+        mu_drop_base = 1 / ((retries + 1) * timeout)
+        tail_prob = self._tail_prob_computer(qsize, service_rate, timeout, thread_pool)
+
+        # plot parameters
+        x_to_y_range = int(qsize/osize) # ensure that qsize is a multiple of osize
+        i_max = qsize/x_to_y_range # used to make the plot x&y coordinates of arrow sizes reasonable
+        j_max = osize
+        num_points_x = 20
+        num_points_y = 20
+
+        # Downsample the i and j ranges for better visibility
+        i_values = np.linspace(0, i_max, num_points_x, endpoint=False)  #
+        j_values = np.linspace(0, j_max, num_points_y, endpoint=False)  #
+
+        # Create meshgrid for i and j values
+        I, J = np.meshgrid(i_values, j_values)
+
+        # Create arrays for the horizontal (U) and vertical (V) components
+        U = np.zeros(I.shape)  # Horizontal component
+        V = np.zeros(I.shape)  # Vertical component
+
+        # Compute magnitudes and angles for each (i, j)
+        for idx_i, i in enumerate(i_values):
+            for idx_j, j in enumerate(j_values):
+                U[idx_j, idx_i] = self.q_rate_computer(int(i*20), int(j), arrival_rate, service_rate, mu_retry_base,
+                                                       thread_pool)
+                V[idx_j, idx_i] = self.o_rate_computer(int(i*20), int(j), arrival_rate, mu_retry_base, mu_drop_base,
+                                                       tail_prob)
+                """U[idx_j, idx_i], V[idx_j, idx_i] = self.dominant_trans_finder(int(i), int(j), arrival_rate, service_rate, mu_retry_base, mu_drop_base,
+                                      thread_pool, tail_prob)"""
+
+        # Compute magnitude (for color) and angle (for arrow direction)
+        magnitude = np.sqrt(U ** 2 + V ** 2)  # Magnitude of the vector
+        angle = np.arctan2(V, U)  # Angle of the vector (atan2 handles f_x=0 correctly)
+
+        # Find the maximum absolute values
+        max_mag = np.max(magnitude)
+
+        # Normalize the horizontal (U) and vertical (V) components by the maximum values
+        magnitude_normalized = (magnitude / max_mag)
+
+        # Define a fixed maximum arrow length for visibility
+        fixed_max_length = 50
+
+
+        # Flatten the arrays for plotting
+        I_flat = I.flatten()
+        J_flat = J.flatten()
+        U_flat = np.cos(angle).flatten() * fixed_max_length # Normalize the direction to length fixed_max_length
+        V_flat = np.sin(angle).flatten() * fixed_max_length # Normalize the direction to length fixed_max_length
+        # magnitude_flat = magnitude_normalized.flatten()
+        magnitude_flat = magnitude.flatten()
+
+        # Plotting
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        # Create a colormap for the arrow colors based on the magnitude
+        cmap = plt.cm.viridis
+        norm = plt.Normalize(vmin=np.min(magnitude_flat), vmax=np.max(magnitude_flat))
+        colors = cmap(norm(magnitude_flat))
+
+        # Plot the arrows using the fixed length and color by magnitude
+        quiver = ax.quiver(I_flat, J_flat, U_flat, V_flat, color=colors,
+                           angles='xy', scale_units='xy', scale=1, width=0.003)
+
+        # Add a colorbar based on the magnitude
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array(magnitude_flat)  # Link the data to the ScalarMappable
+        cbar = plt.colorbar(sm, ax=ax)  # Attach the colorbar to the current axis
+
+        # Get current tick positions on the x-axis
+        xticks = ax.get_xticks()
+
+        # Re-scale the tick labels to the correct numbers
+        scaled_xticks = xticks * x_to_y_range
+        scaled_xticks.astype(int)
+
+        # Set the new scaled tick labels
+        ax.set_xticklabels(scaled_xticks)
+
+        # Set labels for the axes
+        ax.set_xlabel('Queue length')
+        ax.set_ylabel('Orbit length')
+
+        # Display the plot
+        plt.show()
+
+        plt.savefig("2D")
+
+    def q_rate_computer(self, q, o, arrival_rate, service_rate, mu_retry_base, thread_pool):
+        # compute the algebraic sum of rates along the x axis
+        return arrival_rate - service_rate * min(q,thread_pool) + mu_retry_base * o
+
+    def o_rate_computer(self, q, o, arrival_rate, mu_retry_base, mu_drop_base, tail_prob):
+        # compute the algebraic sum of rates along the y axis
+        return arrival_rate * tail_prob[q] - mu_retry_base * (1-tail_prob[q]) * o - mu_drop_base * o
+
+    def dominant_trans_finder(self, q, o, arrival_rate, service_rate, mu_retry_base, mu_drop_base, thread_pool,
+                              tail_prob):
+        # find the dominant transition
+        if arrival_rate*(1-tail_prob[q])+ mu_retry_base*tail_prob[q]*o > max(service_rate * min(q,thread_pool), mu_retry_base*tail_prob[q]*o):
+            u = 1
+            v = 0
+        elif service_rate * min(q,thread_pool) > max(arrival_rate, mu_retry_base*o):
+            u = -1
+            v = 0
+        elif arrival_rate*tail_prob[q]+ mu_retry_base*tail_prob[q]*o > max(service_rate * min(q,thread_pool), mu_retry_base*(1-tail_prob[q])*o, arrival_rate*(1-tail_prob[q])+ mu_retry_base*tail_prob[q]*o):
+            u = 1
+            v = 1
+        elif mu_retry_base*(1-tail_prob[q])*o > max(arrival_rate, service_rate * min(q,thread_pool), mu_retry_base*tail_prob[q]*o):
+            u = 1
+            v = -1
+        else:
+            print("WHATTTT")
+        return [u, v]
+
+    def _tail_prob_computer(self, qsize: float, service_rate: float, timeout: float, thread_pool: float):
+        """Compute the timeout probabilities for the case that service time is distributed exponentially."""
+
+        tail_seq = [0]  # The timeout prob is zero when there is no job in the queue!
+        # exact method is unstable for large values...we overapproximate using chebyshev ineq!
+        for job_num in range(1, qsize):  # compute the timeout prob for all different queue sizes.
+            service_rate_effective = min(job_num, thread_pool) * service_rate
+            ave = job_num / service_rate_effective
+            var = job_num / (service_rate_effective**2)
+            sigma = math.sqrt(var)
+            if timeout - ave > sigma:
+                k_inv = sigma / (timeout - ave)
+                tail_seq.append(k_inv ** 2)
+            else:
+                tail_seq.append(1)
+        return tail_seq
+
+
+
+
+
 
 if __name__ == "__main__":
     unittest.main()
