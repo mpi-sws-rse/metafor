@@ -574,7 +574,7 @@ class Test52(unittest.TestCase):
         magnitude_normalized = (magnitude / max_mag)
 
         # Define a fixed maximum arrow length for visibility
-        fixed_max_length = 50
+        fixed_max_length = .05 * i_max
 
 
         # Flatten the arrays for plotting
