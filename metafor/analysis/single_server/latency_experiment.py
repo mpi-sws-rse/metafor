@@ -403,8 +403,18 @@ class Test52(unittest.TestCase):
     def program(self):
         # api = { "insert": Work(1/.016, [],) }
         api = { "insert": Work(62.5, [],) }
-        server = Server("52", api, qsize=20000, orbit_size=1000, thread_pool=100)
+        server = Server("52", api, qsize=20000, orbit_size=3, thread_pool=100)
         src = Source('client', 'insert', 6200, timeout=3, retries=4)
+        p = Program("Service52")
+        p.add_server(server)
+        p.add_source(src)
+        p.connect('client', '52')
+        return p
+
+    def scaled_program(self):
+        api = {"insert": Work(.625, [], )}
+        server = Server("52", api, qsize=200, orbit_size=100, thread_pool=100)
+        src = Source('client', 'insert', 62, timeout=0.3, retries=4)
         p = Program("Service52")
         p.add_server(server)
         p.add_source(src)
@@ -506,7 +516,7 @@ class Test52(unittest.TestCase):
         ht.sweep(ParameterList([self.processing_rates]))
 
     def test_plot(self):
-        p = self.program()
+        p = self.scaled_program()
         self.visualize(p)
 
     def test_plot2(self):
@@ -521,6 +531,8 @@ class Test52(unittest.TestCase):
 
 
     def visualize(self, p):
+        #p = self.program()
+        # p = self.scaled_program()
         _, server_name = p.connections[0]
         server: Server = p.servers[server_name]
         arrival_rate, service_rate, timeout, retries, _ = p.get_params(server)
@@ -556,9 +568,9 @@ class Test52(unittest.TestCase):
         # Compute magnitudes and angles for each (i, j)
         for idx_i, i in enumerate(i_values):
             for idx_j, j in enumerate(j_values):
-                U[idx_j, idx_i] = self.q_rate_computer(int(i*20), int(j), arrival_rate, service_rate, mu_retry_base,
+                U[idx_j, idx_i] = self.q_rate_computer(int(i*x_to_y_range), int(j), arrival_rate, service_rate, mu_retry_base,
                                                        thread_pool)
-                V[idx_j, idx_i] = self.o_rate_computer(int(i*20), int(j), arrival_rate, mu_retry_base, mu_drop_base,
+                V[idx_j, idx_i] = self.o_rate_computer(int(i*x_to_y_range), int(j), arrival_rate, mu_retry_base, mu_drop_base,
                                                        tail_prob)
                 """U[idx_j, idx_i], V[idx_j, idx_i] = self.dominant_trans_finder(int(i), int(j), arrival_rate, service_rate, mu_retry_base, mu_drop_base,
                                       thread_pool, tail_prob)"""
