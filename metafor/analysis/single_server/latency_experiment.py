@@ -507,6 +507,20 @@ class Test52(unittest.TestCase):
 
     def test_plot(self):
         p = self.program()
+        self.visualize(p)
+
+    def test_plot2(self):
+        api = { "insert": Work(10, [],) }
+        server = Server("server", api, qsize=200, orbit_size=10, thread_pool=1)
+        src = Source('client', 'insert', 9.5, timeout=9, retries=3)
+        p = Program("Service")
+        p.add_server(server)
+        p.add_source(src)
+        p.connect('client', 'server')
+        self.visualize(p)
+
+
+    def visualize(self, p):
         _, server_name = p.connections[0]
         server: Server = p.servers[server_name]
         arrival_rate, service_rate, timeout, retries, _ = p.get_params(server)
