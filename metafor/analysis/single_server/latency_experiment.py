@@ -11,7 +11,7 @@ import matplotlib.colors as mcolors
 
 from model.single_server.ctmc import SingleServerCTMC
 import numpy as np
-
+from scipy.optimize import differential_evolution
 
 class LatencyExperiment(Experiment):
     def __init__(self, p: Program):
@@ -402,7 +402,7 @@ class Test52(unittest.TestCase):
     
     def program(self):
         api = { "insert": Work(62.5, [],) }
-        server = Server("52", api, qsize=20000, orbit_size=3, thread_pool=100)
+        server = Server("52", api, qsize=20000, orbit_size=1000, thread_pool=100)
         src = Source('client', 'insert', 6200, timeout=3, retries=4)
         p = Program("Service52")
         p.add_server(server)
@@ -504,8 +504,8 @@ class Test52(unittest.TestCase):
         ht.sweep(ParameterList([large_queues]))
 
     def test_plot(self):
-        #p = self.program()
-        p = self.scaled_program()
+        p = self.program()
+        # p = self.scaled_program()
         _, server_name = p.connections[0]
         server: Server = p.servers[server_name]
         arrival_rate, service_rate, timeout, retries, _ = p.get_params(server)
@@ -587,6 +587,15 @@ class Test52(unittest.TestCase):
         sm.set_array(magnitude_flat)  # Link the data to the ScalarMappable
         cbar = plt.colorbar(sm, ax=ax)  # Attach the colorbar to the current axis
 
+        # Create a circle at the (almost) equilibrium point
+        res, obj_val = self.equilibrium_computer(qsize, osize, arrival_rate, service_rate, mu_retry_base, mu_drop_base,
+                                        thread_pool,
+                                        tail_prob)
+        if abs(obj_val) < .01:
+            print("found an almost equilibrium point")
+            circle = plt.Circle((res.x[0]/x_to_y_range, res.x[1]), .01 * i_max, color='red', fill=True)
+            ax.add_artist(circle)
+
         # Get current tick positions on the x-axis
         xticks = ax.get_xticks()
 
@@ -605,6 +614,26 @@ class Test52(unittest.TestCase):
         plt.show()
 
         plt.savefig("2D")
+
+    def equilibrium_computer(self, qsize, osize, arrival_rate, service_rate, mu_retry_base, mu_drop_base, thread_pool, tail_prob):
+        bounds = [(0, qsize), (0, osize)]
+        x0 = [17000, 0]
+        constraints = []
+
+        def objective(x):
+            y1 = arrival_rate - service_rate * min(x[0],thread_pool) + mu_retry_base * x[1]
+            y2 = arrival_rate * tail_prob[int(x[0])] - mu_retry_base * (1-tail_prob[int(x[0])]) * x[1] - mu_drop_base * x[1]
+            return y1 ** 2 + y2 ** 2
+
+        def round_solution(x, convergence):
+            return np.round(x).astype(int)
+
+        #result = minimize(objective, x0, method='trust-constr', bounds=bounds, constraints=constraints,  options={'gtol': 1e-19})
+        result =  differential_evolution(objective, bounds=bounds, strategy='best1bin')
+        print("found solution is", result.x)
+        print("obj value is", objective(result.x))
+        print(result.message)
+        return result, objective(result.x)
 
     def q_rate_computer(self, q, o, arrival_rate, service_rate, mu_retry_base, thread_pool):
         # compute the algebraic sum of rates along the x axis
