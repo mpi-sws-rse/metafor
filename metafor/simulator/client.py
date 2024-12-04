@@ -4,7 +4,7 @@ import random
 from abc import ABC, abstractmethod
 from typing import Type
 
-from simulator.job import Job
+from discrete_event_system.Job import Job
 
 
 class Client(ABC):
@@ -43,12 +43,11 @@ class OpenLoopClient(Client):
 
 # Open loop load generation client, with timeout. Creates an unbounded concurrency
 class OpenLoopClientWithTimeout(OpenLoopClient):
-    def __init__(
-        self, rho: float, job_type: Type[Job], timeout: float, max_retries: int
-    ):
+    def __init__(self, rho: float, job_type: Type[Job], timeout: float, max_retries: int):
         super().__init__(rho, job_type)
         self.timeout = timeout
         self.max_retries: int = max_retries
+
 
     def generate(self, t: float, payload):
         job = self.job_type(t, self.max_retries, self.max_retries)
@@ -62,8 +61,6 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
     def done(self, t: float, event: Job):
         if t - event.created_t > self.timeout and event.retries_left > 0:
             # Offer another job as a replacement for the timed-out one
-            return self.server.offer(
-                self.job_type(t, self.max_retries, event.retries_left - 1), t
-            )
+            return self.server.offer(self.job_type(t, self.max_retries, event.retries_left - 1), t)
         else:
             return None

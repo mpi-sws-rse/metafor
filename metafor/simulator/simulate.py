@@ -10,11 +10,11 @@ from typing import List
 import numpy as np
 import pandas
 
-from simulator.server import Server
-from simulator.statistics import StatData
-from simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
-from simulator.job import exp_job, bimod_job
+from discrete_event_system.Server import Server
+from discrete_event_system.Statistics import StatData
+from discrete_event_system.Client import Client, OpenLoopClient, OpenLoopClientWithTimeout
 from utils.plot import plot_results
+from discrete_event_system.Job import exp_job, bimod_job
 
 done: bool = False
 
@@ -41,12 +41,12 @@ def sim_loop(max_t: float, client: Client):
 # Run a simulation `run_nums` times, outputting the results to `x_fn`, where x in [1, num_runs].
 # One simulation is run for each client in `clients`.
 # `max_t` is the maximum time to run the simulation (in ms).
-def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, *args):
+def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_t: float, *args):
     file_names: List[str] = []
 
     for i in range(num_runs):
         print("Running simulation " + str(i + 1) + " time(s)")
-        current_fn = str(i + 1) + "_" + fn
+        current_fn = str(i + 1) + '_' + fn
         file_names.append(current_fn)
         clients = sim_fn(*args)
         with open(current_fn, "w") as f:
@@ -56,26 +56,15 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, *args
                 client.server.start_time = time.time()
                 sim_loop(max_t, client)
 
-    queue_ave_len, queue_var_len, queue_std_len, runtime = mean_variance_std_dev(
-        file_names, max_t, num_runs, step_time
-    )
-    plot_results(
-        step_time,
-        queue_ave_len,
-        queue_var_len,
-        queue_std_len,
-        runtime,
-        "discrete_results.png",
-    )
+    latency_ave, latency_var, latency_std, runtime = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t)
+    plot_results(step_time, latency_ave, latency_std, runtime, 'discrete_results.png')
 
 
 # Print the mean value, the variance, and the standard deviation at each stat point in each second
-def mean_variance_std_dev(
-    file_names: List[str], max_t: float, num_runs: int, step_time: int
-):
+def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int, mean_t: float):
     global done
     num_datapoints = math.ceil(max_t / step_time)
-    qlen_dateset = np.zeros((num_runs, num_datapoints))
+    latency_dateset = np.zeros((num_runs, num_datapoints))
     runtime_dateset = np.zeros((num_runs, num_datapoints))
     run_ind = 0
     for file_name in file_names:
@@ -85,66 +74,56 @@ def mean_variance_std_dev(
             for i, line in enumerate(f.readlines()):
                 if i == 0:
                     continue  # drop the header
-                split_line: List[str] = line.split(",")
+                split_line: List[str] = line.split(',')
                 if float(split_line[0]) > (step_ind + 1) * step_time:
-                    qlen = int(split_line[4])
+                    latency = float(split_line[2]) * 1
                     runtime = float(split_line[7])
-                    qlen_dateset[run_ind, step_ind] = qlen
+                    latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
                     step_ind += 1
                 elif i == row_num - 1 and step_ind < num_datapoints:
-                    qlen = int(split_line[4])
+                    latency = float(split_line[2]) * 1
                     runtime = float(split_line[7])
-                    qlen_dateset[run_ind, step_ind] = qlen
+                    latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
         run_ind += 1
     done = True
-    main_queue_ave_len = [0]
-    main_queue_var_len = [0]
-    main_queue_std_len = [0]
+    latency_ave = [0]
+    latency_var = [0]
+    latency_std = [0]
     runtime = [0]
     for step in range(num_datapoints):
-        main_queue_ave_len.append(np.mean(qlen_dateset[:, step]))
-        main_queue_var_len.append(np.var(qlen_dateset[:, step]))
-        main_queue_std_len.append(np.std(qlen_dateset[:, step]))
+        latency_ave.append(np.mean(latency_dateset[:, step]))
+        latency_var.append(np.var(latency_dateset[:, step]))
+        latency_std.append(np.std(latency_dateset[:, step]))
         runtime.append(np.sum(runtime_dateset[:, step]))
-    return main_queue_ave_len, main_queue_var_len, main_queue_std_len, runtime
+    return latency_ave,  latency_var, latency_std, runtime
 
 
 def write_to_file(fn: str, stats_data: List[StatData], stat_fn, first: bool):
     with open(fn, "a") as f:
         if first:
-            f.write(stats_data[0].header() + "\n")
+            f.write(stats_data[0].header() + '\n')
         result: StatData = stat_fn(stats_data)
-        f.write(result.as_csv() + "\n")
+        f.write(result.as_csv() + '\n')
 
 
-def compute_mean_variance_std_deviation(
-    fn: str, max_t: float, step_time: int, num_runs: int
-):
+def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float):
     current_folder = os.getcwd()
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
-    mean_variance_std_dev(file_names, max_t, step_time, num_runs)
+    mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t)
 
 
 # Simulation with unimodal exponential service time and timeout
-def make_sim_exp(
-    mean_t: float,
-    rho: float,
-    queue_size: int,
-    retry_queue_size: int,
-    timeout_t: float,
-    max_retries: int,
-) -> List[Client]:
+def make_sim_exp(mean_t: float, rho: float, queue_size: int, retry_queue_size: int, timeout_t: float,
+                 max_retries: int) -> List[Client]:
     clients = []
     job_name = "exp"
     job_type = exp_job(mean_t)
 
     for name, client in [
-        (
-            "%s_open_timeout_%d" % (job_name, int(timeout_t)),
-            OpenLoopClientWithTimeout(rho, job_type, timeout_t, max_retries),
-        )
+        ("%s_open_timeout_%d" % (job_name, int(timeout_t)),
+         OpenLoopClientWithTimeout(rho, job_type, timeout_t, max_retries))
     ]:
         server = Server(1, name, client, rho, queue_size, retry_queue_size)
         client.server = server
@@ -153,26 +132,15 @@ def make_sim_exp(
 
 
 # Simulation with bimodal service time, without and with timeout
-def make_sim_bimod(
-    mean_t: float,
-    mean_t_2: float,
-    bimod_p: float,
-    rho: float,
-    queue_size: int,
-    retry_queue_size: int,
-    timeout_t: float,
-    max_retries: int,
-) -> List[Client]:
+def make_sim_bimod(mean_t: float, mean_t_2: float, bimod_p: float, rho: float, queue_size: int, retry_queue_size: int,
+                   timeout_t: float, max_retries: int) -> List[Client]:
     clients = []
     job_name = "bimod"
     job_type = bimod_job(mean_t, mean_t_2, bimod_p)
 
     for name, client in [
         ("%s" % job_name, OpenLoopClient(rho, job_type)),
-        (
-            "%s_timeout_%d" % (job_name, int(timeout_t)),
-            OpenLoopClientWithTimeout(rho, job_type, timeout_t, max_retries),
-        ),
+        ("%s_timeout_%d" % (job_name, int(timeout_t)), OpenLoopClientWithTimeout(rho, job_type, timeout_t, max_retries))
     ]:
         server = Server(1, name, client, rho, queue_size, retry_queue_size)
         client.server = server
@@ -180,36 +148,13 @@ def make_sim_bimod(
     return clients
 
 
-def run_discrete_experiment(
-    max_t: float,
-    runs: int,
-    mean_t: float,
-    rho: float,
-    queue_size: int,
-    retry_queue_size: int,
-    timeout_t: float,
-    max_retries: int,
-    total_time: float,
-    step_time: int,
-):
+def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, queue_size: int, retry_queue_size: int,
+                            timeout_t: float, max_retries: int, total_time: float, step_time: int):
     results_file_name = "exp_results.csv"
     start_time = time.time()
-    process = multiprocessing.Process(
-        target=run_sims,
-        args=(
-            max_t,
-            results_file_name,
-            runs,
-            step_time,
-            make_sim_exp,
-            mean_t,
-            rho,
-            queue_size,
-            retry_queue_size,
-            timeout_t,
-            max_retries,
-        ),
-    )
+    process = multiprocessing.Process(target=run_sims, args=(max_t, results_file_name, runs, step_time, make_sim_exp,
+                                                             mean_t, mean_t, rho, queue_size, retry_queue_size, timeout_t,
+                                                             max_retries))
     process.start()
     process.join(total_time)
     if process.is_alive():
@@ -217,9 +162,7 @@ def run_discrete_experiment(
         process.kill()
         # check if the mean, variance, and standard deviation have been computed; if not, compute them
         if not done:
-            compute_mean_variance_std_deviation(
-                results_file_name, max_t, runs, step_time
-            )
+            compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t)
     end_time = time.time()
     runtime = end_time - start_time
     print("Running time: " + str(runtime) + " s")

@@ -5,8 +5,8 @@ import time
 from collections import deque
 from typing import List, TextIO
 
-from simulator.client import Client
-from simulator.job import Job
+from discrete_event_system.Client import Client
+from discrete_event_system.Job import Job
 
 
 class FCFSQueue:
@@ -29,15 +29,8 @@ class FCFSQueue:
 
 # Server that consumes a queue of tasks of a fixed size (`queue_size`), with a fixed concurrency (MPL)
 class Server:
-    def __init__(
-        self,
-        mpl: int,
-        sim_name: str,
-        client: Client,
-        rho: float,
-        queue_size: int,
-        retry_queue_size: int,
-    ):
+    def __init__(self, mpl: int, sim_name: str, client: Client, rho: float, queue_size: int,
+                 retry_queue_size: int):
         self.start_time = 0  # to be set by each simulation
         self.busy: int = 0
         self.queue: FCFSQueue = FCFSQueue()
@@ -53,26 +46,15 @@ class Server:
         self.dropped: int = 0  # cumulative number
 
     def job_done(self, t: float, n: int) -> List:
-        assert self.busy > 0
+        assert (self.busy > 0)
         completed = self.jobs[n]
         if completed.max_retries > completed.retries_left:  # a retried job is completed
             self.retries -= 1
 
         end_time = time.time()
         runtime = end_time - self.start_time
-        self.file.write(
-            "%f,%f,%f,%s,%d,%d,%d,%f\n"
-            % (
-                t,
-                self.rho,
-                t - completed.created_t,
-                self.sim_name,
-                self.queue.len(),
-                self.retries,
-                self.dropped,
-                runtime,
-            )
-        )
+        self.file.write("%f,%f,%f,%s,%d,%d,%d,%f\n" % (t, self.rho, t - completed.created_t, self.sim_name,
+                                                       self.queue.len(), self.retries, self.dropped, runtime))
 
         events = []
         if self.queue.len() > 0:
@@ -94,10 +76,9 @@ class Server:
             if self.retries < self.retry_queue_size:
                 self.retries += 1
             else:
-                self.dropped += (
-                    1  # there is not enough space in the virtual retries queue
-                )
-                return None
+                self.retries += 1
+                #self.dropped += 1  # there is not enough space in the virtual retries queue
+                #return None
 
         if self.busy < self.mpl:
             # The server isn't entirely busy, so we can start on the job immediately
