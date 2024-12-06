@@ -5,8 +5,8 @@ import time
 from collections import deque
 from typing import List, TextIO
 
-from discrete_event_system.Client import Client
-from discrete_event_system.Job import Job
+from metafor.simulator.client import Client
+from metafor.simulator.job import Job
 
 
 class FCFSQueue:

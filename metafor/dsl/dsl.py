@@ -1,13 +1,15 @@
 import functools
 from typing import List, Set, Tuple, Optional, Dict
-from metafor.utils.graph import Graph
+
 import numpy as np
 import numpy.typing as npt
 from numpy import float64
 
-from model.ctmc import CTMC, CTMCRepresentation
-from model.multi_server.ctmc import MultiServerCTMC
-from model.single_server.ctmc import SingleServerCTMC
+from metafor.utils.graph import Graph
+from metafor.model.ctmc import CTMC, CTMCRepresentation
+from metafor.model.multi_server.ctmc import MultiServerCTMC
+from metafor.model.single_server.ctmc import SingleServerCTMC
+
 
 class Constants:
     WAIT_UNTIL_DONE = 1

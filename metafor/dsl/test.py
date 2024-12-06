@@ -11,6 +11,7 @@ from dsl import (
     Program,
     DependentCall,
     Constants,
+    Visualizer,
 )
 from model.single_server.ctmc import SingleServerCTMC
 
@@ -84,7 +85,9 @@ class TestDSL(unittest.TestCase):
         p.add_server(s)
         p.add_source(rd_src)
         p.connect("reader", "server")
-        timed_call(lambda: simple_analysis(p))
+        v = Visualizer(p)
+        v.visualize()
+        # timed_call(lambda: simple_analysis(p))
 
     def test_single_server_fast(self):
         """A single server and a single source processing API call `rd`: the source sends requests at rate 2,

@@ -644,16 +644,16 @@ class Test52(unittest.TestCase):
 
     def equilibrium_computer(self, qsize, osize, arrival_rate, service_rate, mu_retry_base, mu_drop_base, thread_pool, tail_prob):
         bounds = [(0, qsize), (0, osize)]
-        x0 = [17000, 0]
-        constraints = []
+        # x0 = [17000, 0]
+        # constraints = []
 
         def objective(x):
             y1 = arrival_rate - service_rate * min(x[0],thread_pool) + mu_retry_base * x[1]
             y2 = arrival_rate * tail_prob[int(x[0])] - mu_retry_base * (1-tail_prob[int(x[0])]) * x[1] - mu_drop_base * x[1]
             return y1 ** 2 + y2 ** 2
 
-        def round_solution(x, convergence):
-            return np.round(x).astype(int)
+        # def round_solution(x, convergence):
+        #     return np.round(x).astype(int)
 
         #result = minimize(objective, x0, method='trust-constr', bounds=bounds, constraints=constraints,  options={'gtol': 1e-19})
         result =  differential_evolution(objective, bounds=bounds, strategy='best1bin')

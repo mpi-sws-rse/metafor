@@ -10,11 +10,11 @@ from typing import List
 import numpy as np
 import pandas
 
-from discrete_event_system.Server import Server
-from discrete_event_system.Statistics import StatData
-from discrete_event_system.Client import Client, OpenLoopClient, OpenLoopClientWithTimeout
+from metafor.simulator.server import Server
+from metafor.simulator.statistics import StatData
+from metafor.simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
 from utils.plot import plot_results
-from discrete_event_system.Job import exp_job, bimod_job
+from metafor.simulator.job import exp_job, bimod_job
 
 done: bool = False
 
