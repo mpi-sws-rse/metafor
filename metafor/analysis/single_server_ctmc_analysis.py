@@ -398,6 +398,7 @@ def latency_plot_generator(
     timeouts: List[int],
     retries: List[int],
     thread_pool: int,
+    representation,
     alpha: float,
     file_name: str,
     job_type: int,
@@ -435,6 +436,7 @@ def latency_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
+                representation,
                 alpha,
             )
             qlen = val
@@ -458,6 +460,7 @@ def latency_plot_generator(
                 [val] * len(mu0_ps),
                 retries,
                 thread_pool,
+                representation,
                 alpha,
             )
             x_axis_label = "Timeout"
@@ -472,6 +475,7 @@ def latency_plot_generator(
                 timeouts,
                 [val] * len(mu0_ps),
                 thread_pool,
+                representation,
                 alpha,
             )
             x_axis_label = "Maximum number of retries"
@@ -484,6 +488,7 @@ def latency_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
+                representation,
                 alpha,
             )
             x_axis_label = "Arrival rate"
@@ -498,6 +503,7 @@ def latency_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
+                representation,
                 alpha,
             )
             x_axis_label = "Processing rate"
@@ -559,7 +565,7 @@ def latency_plot_generator(
             ctmc.prob_dist_accumulator(pi_ss, math.ceil(qlen * 0.9), qlen, 0, olen)
         )
         mean_latency = ctmc.latency_average(pi_ss, job_type)
-        std_latency = ctmc.main_queue_size_std(pi_ss, mean_latency)
+        std_latency = ctmc.latency_std(pi_ss, mean_latency, job_type)
         mean_latency_seq.append(mean_latency)
         std_latency_seq.append(std_latency)
         lower_bound_latency_seq.append(mean_latency - std_latency)
@@ -578,7 +584,7 @@ def latency_plot_generator(
         mean_rt_seq_su,
         mean_rt_seq_us,
         x_axis_label,
-        "bar_" + variable1 + "_varied_" + job_info + file_name,
+        "bar_" + variable1 + "_varied",
         "blue",
         "gray",
         "red",
@@ -590,7 +596,7 @@ def latency_plot_generator(
         upper_bound_latency_seq,
         x_axis_label,
         "Latency",
-        "latency_" + variable1 + "_varied_" + job_info + file_name,
+        "latency_" + variable1 + "_varied",
         main_color,
         fade_color,
     )
@@ -740,3 +746,72 @@ def latency_analysis(
         job_type,
     )
     print("Finished latency analysis for job " + str(job_type) + "\n")
+
+
+"""latency_plot_generator(
+    variable1 = "qlen",
+    low = 80,
+    high = 150,
+    step = 10,
+    qlen0 = 100,
+    retry_queue_size = 20,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_qlen",
+    job_type = 0)"""
+
+latency_plot_generator(
+    variable1 = "to",
+    low = 5,
+    high = 15,
+    step = 1,
+    qlen0 = 100,
+    retry_queue_size = 20,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_to",
+    job_type = 0)
+
+latency_plot_generator(
+    variable1 = "mu",
+    low = 8,
+    high = 12,
+    step = 1,
+    qlen0 = 100,
+    retry_queue_size = 20,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_mu",
+    job_type = 0)
+
+latency_plot_generator(
+    variable1 = "lambda",
+    low = 8,
+    high = 12,
+    step = 1,
+    qlen0 = 100,
+    retry_queue_size = 20,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_lambda",
+    job_type = 0)
