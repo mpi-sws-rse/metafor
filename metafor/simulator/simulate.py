@@ -10,17 +10,17 @@ from typing import List
 import numpy as np
 import pandas
 
-from metafor.simulator.server import Server
-from metafor.simulator.statistics import StatData
-from metafor.simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
+from discrete_event_system.Server import Server
+from discrete_event_system.Statistics import StatData
+from discrete_event_system.Client import Client, OpenLoopClient, OpenLoopClientWithTimeout
 from utils.plot import plot_results
-from metafor.simulator.job import exp_job, bimod_job
+from discrete_event_system.Job import exp_job, bimod_job
 
 done: bool = False
 
 
 # Run a single simulation.
-def sim_loop(max_t: float, client: Client):
+def sim_loop(max_t: float, client: Client, rho_fault, rho_reset, fault_start, fault_duration):
     t = 0.0
     q = [(t, client.generate, None)]
     # This is the core simulation loop. Until we've reached the maximum simulation time, pull the next event off
@@ -41,20 +41,21 @@ def sim_loop(max_t: float, client: Client):
 # Run a simulation `run_nums` times, outputting the results to `x_fn`, where x in [1, num_runs].
 # One simulation is run for each client in `clients`.
 # `max_t` is the maximum time to run the simulation (in ms).
-def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_t: float, *args):
+def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_t: float, rho,
+             queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, fault_duration):
     file_names: List[str] = []
 
     for i in range(num_runs):
         print("Running simulation " + str(i + 1) + " time(s)")
         current_fn = str(i + 1) + '_' + fn
         file_names.append(current_fn)
-        clients = sim_fn(*args)
+        clients = sim_fn(mean_t, rho, queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, fault_duration)
         with open(current_fn, "w") as f:
             f.write("t,rho,service_time,name,qlen,retries,dropped,runtime\n")
             for client in clients:
                 client.server.file = f
                 client.server.start_time = time.time()
-                sim_loop(max_t, client)
+                sim_loop(max_t, client, rho_fault, rho_reset, fault_start, fault_duration)
 
     latency_ave, latency_var, latency_std, runtime = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t)
     plot_results(step_time, latency_ave, latency_std, runtime, 'discrete_results.png')
@@ -76,13 +77,15 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                     continue  # drop the header
                 split_line: List[str] = line.split(',')
                 if float(split_line[0]) > (step_ind + 1) * step_time:
-                    latency = float(split_line[2]) * 1
+                    #latency = float(split_line[2]) * 1
+                    latency = float(split_line[4]) * 1
                     runtime = float(split_line[7])
                     latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
                     step_ind += 1
                 elif i == row_num - 1 and step_ind < num_datapoints:
-                    latency = float(split_line[2]) * 1
+                    # latency = float(split_line[2]) * 1
+                    latency = float(split_line[4]) * 1
                     runtime = float(split_line[7])
                     latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
@@ -116,14 +119,16 @@ def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, n
 
 # Simulation with unimodal exponential service time and timeout
 def make_sim_exp(mean_t: float, rho: float, queue_size: int, retry_queue_size: int, timeout_t: float,
-                 max_retries: int) -> List[Client]:
+                 max_retries: int, rho_fault: float, rho_reset: float, fault_start: float,
+                 fault_duration: float) -> List[Client]:
     clients = []
     job_name = "exp"
     job_type = exp_job(mean_t)
 
     for name, client in [
         ("%s_open_timeout_%d" % (job_name, int(timeout_t)),
-         OpenLoopClientWithTimeout(rho, job_type, timeout_t, max_retries))
+         OpenLoopClientWithTimeout(rho, job_type, timeout_t, max_retries, rho_fault, rho_reset, fault_start,
+                                   fault_duration))
     ]:
         server = Server(1, name, client, rho, queue_size, retry_queue_size)
         client.server = server
@@ -140,7 +145,9 @@ def make_sim_bimod(mean_t: float, mean_t_2: float, bimod_p: float, rho: float, q
 
     for name, client in [
         ("%s" % job_name, OpenLoopClient(rho, job_type)),
-        ("%s_timeout_%d" % (job_name, int(timeout_t)), OpenLoopClientWithTimeout(rho, job_type, timeout_t, max_retries))
+        ("%s_timeout_%d" % (job_name, int(timeout_t)), OpenLoopClientWithTimeout(rho, rho_fault, rho_reset, job_type,
+                                                                                 timeout, max_retries, fault_start,
+                                                                                 fault_duration))
     ]:
         server = Server(1, name, client, rho, queue_size, retry_queue_size)
         client.server = server
@@ -149,12 +156,15 @@ def make_sim_bimod(mean_t: float, mean_t_2: float, bimod_p: float, rho: float, q
 
 
 def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, queue_size: int, retry_queue_size: int,
-                            timeout_t: float, max_retries: int, total_time: float, step_time: int):
+                            timeout_t: float, max_retries: int, total_time: float, step_time: int,
+                            rho_fault: float, rho_reset: float, fault_start: float, fault_duration: float):
     results_file_name = "exp_results.csv"
     start_time = time.time()
     process = multiprocessing.Process(target=run_sims, args=(max_t, results_file_name, runs, step_time, make_sim_exp,
-                                                             mean_t, mean_t, rho, queue_size, retry_queue_size, timeout_t,
-                                                             max_retries))
+                                                             mean_t, rho, queue_size, retry_queue_size,
+                                                             timeout_t,
+                                                             max_retries, rho_fault, rho_reset, fault_start,
+                                                             fault_duration))
     process.start()
     process.join(total_time)
     if process.is_alive():

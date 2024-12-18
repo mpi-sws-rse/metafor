@@ -25,7 +25,8 @@ class Client(ABC):
 
 # Open loop load generation client. Creates an unbounded concurrency
 class OpenLoopClient(Client):
-    def __init__(self, rho: float, job_type: Type[Job]):
+    def __init__(self, rho: float, job_type: Type[Job], timeout: float, max_retries: int,
+                 rho_fault: float, rho_reset: float, fault_start, fault_duration):
         super().__init__(rho, job_type)
 
     def generate(self, t: float, payload):
@@ -43,15 +44,28 @@ class OpenLoopClient(Client):
 
 # Open loop load generation client, with timeout. Creates an unbounded concurrency
 class OpenLoopClientWithTimeout(OpenLoopClient):
-    def __init__(self, rho: float, job_type: Type[Job], timeout: float, max_retries: int):
-        super().__init__(rho, job_type)
+    def __init__(self, rho: float, job_type: Type[Job], timeout: float,
+                 max_retries: int, rho_fault: float, rho_reset: float,
+                 fault_start: float, fault_duration: float):
+        super().__init__(rho, job_type, timeout, max_retries, rho_fault, rho_reset, fault_start, fault_duration)
         self.timeout = timeout
         self.max_retries: int = max_retries
+        self.rho_fault : float = rho_fault
+        self.rho_reset : float = rho_reset
+        self.rate_tps_fault : float = rho_fault / job_type.mean()
+        self.rate_tps_reset : float = rho_reset / job_type.mean()
+        self.fault_start : float = fault_start
+        self.fault_duration : float = fault_duration
 
 
     def generate(self, t: float, payload):
         job = self.job_type(t, self.max_retries, self.max_retries)
-        next_t = t + random.expovariate(self.rate_tps)
+        if t < self.fault_start:
+            next_t = t + random.expovariate(self.rate_tps)
+        elif t >= self.fault_start and t < self.fault_start + self.fault_duration:
+            next_t = t + random.expovariate(self.rate_tps_fault)
+        elif t >= self.fault_start + self.fault_duration:
+            next_t = t + random.expovariate(self.rate_tps_reset)
         offered = self.server.offer(job, t)
         if offered is None:
             return [(next_t, self.generate, None)]
