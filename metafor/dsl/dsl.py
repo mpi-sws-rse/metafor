@@ -10,6 +10,10 @@ from metafor.model.ctmc import CTMC, CTMCRepresentation
 from metafor.model.multi_server.ctmc import MultiServerCTMC
 from metafor.model.single_server.ctmc import SingleServerCTMC
 
+from metafor.simulator import Server as DESServer
+from metafor.simulator import OpenLoopClientWithTimeout as DESOpenLoopClientWithTimeout
+from metafor.simulator import ExponentialDistribution
+from metafor.simulator import Simulator
 
 class Constants:
     WAIT_UNTIL_DONE = 1
@@ -222,6 +226,9 @@ class Program:
         assert len(root) == 1
         return list(root)[0]
 
+    def get_number_of_servers(self) -> int:
+        return len(self.servers)
+    
     def get_server(self, sname) -> Optional[Server]:
         return self.servers.get(sname, None)
 
@@ -359,3 +366,62 @@ class Program:
         for sname, s in self.sources.items():
             print("\t", end=" ")
             s.print()
+
+class Transpiler:
+    def __init__(self, p: Program):
+        self.p = p
+        self.des_server = None
+        self.des_clients = []
+
+    # The next two functions are used to externally set triggers by changing parameters  
+    # It's bad global variable programming .... but we did not want to spend too much
+    # time designing the simulation interface  
+    def get_server(self) -> DESServer:
+        assert self.des_server is not None
+        return self.des_server
+    
+    def get_client(self) -> DESOpenLoopClientWithTimeout:
+        return self.des_clients
+    
+    # transpile a program into a simulation model
+    def transpile(self):
+        # currently works only for a single server
+        server = self.p.get_root_server()
+        rates = { }
+        for apiname, apiwork in server.apis.items():
+            rates[apiname] = ExponentialDistribution(apiwork.processing_rate)
+            # XXX TODO: Process dependent calls for multi server settings
+
+        self.des_server = DESServer(server.name, 
+                                          service_time_distribution=rates, 
+                                          queue_size=server.qsize, 
+                                          thread_pool=server.thread_pool, 
+                                          retry_queue_size=server.orbit_size)
+        clients = self.p.get_sources(server)
+        self.des_clients = []
+        for client in clients:
+            des_client = DESOpenLoopClientWithTimeout(client.name, 
+                                                              client.api_name, 
+                                                              ExponentialDistribution(client.arrival_rate), 
+                                                              client.timeout, client.retries)
+            des_client.server = self.des_server
+            self.des_clients.append(des_client)
+
+    def simulate(self, sim_id: int, sim_time=30):
+        assert self.des_server is not None, "Server is None: did you forget to transpile?"
+        simulator = Simulator(self.des_server, self.des_clients, "exp.csv")
+        simulator.sim(sim_time)
+        simulator.analyze()
+
+
+def run_simulation(p: Program, number_of_runs: int, time: float):
+    tp = Transpiler(p)
+    tp.transpile()
+    for i in range(number_of_runs):
+        tp.reset()
+        tp.simulate(i, sim_time=time)
+
+        # set trigger
+
+
+        

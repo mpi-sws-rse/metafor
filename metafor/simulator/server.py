@@ -1,13 +1,71 @@
 # Adapted from: https://github.com/mbrooker/simulator_example/blob/main/omission/omission.py
 
-# First-Come-First-Served Queue
+import math
+import numpy as np
+import pandas
 import time
 from collections import deque
 from typing import List, TextIO
 
 from metafor.simulator.client import Client
-from metafor.simulator.job import Job
+from metafor.simulator.job import Distribution, Job, JobStatus
 
+
+import logging
+logger = logging.getLogger(__name__)
+
+# manage the output from the simulation
+class Context:
+    def __init__(self, id: int):
+        self.id = id
+        self.result = []
+    
+    def write(self, l: List):
+        self.result.append(l)
+        
+    def close(self):
+        pass
+
+    def queue_lengths(self):
+        data = []
+        for r in self.result:
+            data.append((r['timestamp'], r['queue_length']))
+        df = pandas.DataFrame(data)
+        print(df)
+
+    def latency(self):
+        data = []
+        for r in self.result:
+            data.append((r['timestamp'], r['latency']))
+        df = pandas.DataFrame(data)
+        print(df)
+
+    def analyze(self):
+        print("Queue lengths")
+        self.queue_lengths()
+
+        print("Latencies")
+        self.latency()
+
+    """
+    # Print the mean value, the variance, and the standard deviation at each stat point in each second
+    def mean_variance_std_dev(self, max_t: float, num_runs: int, step_time: int, mean_t: float):
+        # XXX: DO NOT USE: IN PROGRESS
+        num_datapoints = math.ceil(max_t / step_time)
+        latency_dateset = np.zeros((num_datapoints))
+        runtime_dateset = np.zeros((num_datapoints))
+        df = pandas.DataFrame(self.result)
+        latency_ave = [0]
+        latency_var = [0]
+        latency_std = [0]
+        runtime = [0]
+        for step in range(num_datapoints):
+            latency_ave.append(np.mean(latency_dateset[:, step]))
+            latency_var.append(np.var(latency_dateset[:, step]))
+            latency_std.append(np.std(latency_dateset[:, step]))
+            runtime.append(np.sum(runtime_dateset[:, step]))
+        return latency_ave,  latency_var, latency_std, runtime
+    """
 
 class FCFSQueue:
     def __init__(self):
@@ -29,70 +87,117 @@ class FCFSQueue:
 
 # Server that consumes a queue of tasks of a fixed size (`queue_size`), with a fixed concurrency (MPL)
 class Server:
-    def __init__(self, mpl: int, sim_name: str, client: Client, rho: float, queue_size: int,
+    def __init__(self, name: str, queue_size: int, thread_pool: int,
+                 service_time_distribution: dict[str, Distribution],
                  retry_queue_size: int):
         self.start_time = 0  # to be set by each simulation
         self.busy: int = 0
+
         self.queue: FCFSQueue = FCFSQueue()
-        self.sim_name: str = sim_name
-        self.mpl: int = mpl
-        self.jobs: List[Job | None] = [None for _ in range(mpl)]
-        self.client: Client = client
-        self.rho: float = rho
         self.queue_size: int = queue_size
+
+        self.service_time_distribution = service_time_distribution
+        
+        self.sim_name: str = name
+
+        self.thread_pool: int = thread_pool
         self.retry_queue_size: int = retry_queue_size
-        self.file: TextIO | None = None
+
+        self.jobs: List[Job | None] = [None for _ in range(thread_pool)]
+        # self.client: Client = client
+        # self.rho: float = rho
+        # self.file: TextIO | None = None
+        self.context = None
+
+        # statistics
         self.retries: int = 0
         self.dropped: int = 0  # cumulative number
+
+    def set_context(self, c: Context):
+        self.context = c
+
+    def print(self):
+        print("DES Server: ", self.sim_name, "[q = ", self.queue_size, " threads=", self.thread_pool, "]")
+        print("Rates: ", self.service_time_distribution)
+
 
     def job_done(self, t: float, n: int) -> List:
         assert (self.busy > 0)
         completed = self.jobs[n]
+        assert completed is not None
+        completed.status = JobStatus.COMPLETED
+        completed.completed_t = t
+
         if completed.max_retries > completed.retries_left:  # a retried job is completed
             self.retries -= 1
+        logger.info("Completing %s at %f" % (completed.name, t))
 
         end_time = time.time()
         runtime = end_time - self.start_time
-        self.file.write("%f,%f,%f,%s,%d,%d,%d,%f\n" % (t, self.rho, t - completed.created_t, self.sim_name,
-                                                       self.queue.len(), self.retries, self.dropped, runtime))
+        assert self.context is not None, "Context not set: cannot output results"
+        self.context.write(
+            {'timestamp': t,
+             'latency' : t - completed.created_t,
+             'queue_length' : self.queue.len(),
+             'retries' : self.retries,
+             'dropped' : self.dropped,
+             'runtime' : runtime,
+             })
+             #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
+        # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
+        #                                              self.queue.len(), self.retries, self.dropped, runtime))
 
         events = []
         if self.queue.len() > 0:
             next_job = self.queue.pop()
+            next_job.status = JobStatus.PROCESSING
+            logger.info("Dequeueing %s created %f at %f" % (next_job.name, next_job.created_t, t))
+
             self.jobs[n] = next_job
-            events = [(t + next_job.size, self.job_done, n)]
+            service_time = self.service_time_distribution[next_job.name].sample()
+            next_job.size = service_time
+            events = [(t + service_time, self.job_done, n)]
         else:
             self.busy -= 1
             self.jobs[n] = None
 
-        done_event = self.client.done(t, completed)
-        if done_event is not None:
-            events.append(done_event)
+        # done_event = self.client.done(t, completed)
+        # if done_event is not None:
+        #     events.append(done_event)
 
         return events
 
-    def offer(self, job: Job, t: float) -> (float, List, int):
-        if job.max_retries > job.retries_left:
-            if self.retries < self.retry_queue_size:
-                self.retries += 1
-            else:
-                self.retries += 1
-                #self.dropped += 1  # there is not enough space in the virtual retries queue
-                #return None
+    def offer(self, job: Job, t: float):
+        if job.max_retries > job.retries_left: # this is a retried job
+            self.retries += 1
+            # if self.retries < self.retry_queue_size:
+            #    self.retries += 1
+            #else:
+            #    self.retries += 1
+            #    #self.dropped += 1  # there is not enough space in the virtual retries queue
+            #    #return None
 
-        if self.busy < self.mpl:
+        if self.busy < self.thread_pool:
             # The server isn't entirely busy, so we can start on the job immediately
             self.busy += 1
-            for i in range(self.mpl):
+            for i in range(self.thread_pool):
                 if self.jobs[i] is None:
+                    logger.info("Processing %s at %f" % (job.name, t))
                     self.jobs[i] = job
-                    return t + job.size, self.job_done, i
-            # Should never get here because jobs slots should always be available if busy < mpl
+                    job.status = JobStatus.PROCESSING
+                    service_time = self.service_time_distribution[job.name].sample()
+                    job.size = service_time
+                    logger.info("Processing %s at %f" % (job.name, t))
+                    return t + service_time, self.job_done, i
+            # Should never get here because jobs slots should always be available if busy < thread_pool
             assert False
         else:
             # The server is busy, so try to enqueue the job, if there is enough space in the queue
             if self.queue.len() < self.queue_size:
+                job.status = JobStatus.ENQUEUED
+                logger.info("Enqueueing %s at %f" % (job.name, t))
                 self.queue.append(job)
             else:
+                job.status = JobStatus.DROPPED
                 self.dropped += 1
             return None

@@ -1,4 +1,4 @@
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -622,4 +622,47 @@ class SingleServerCTMC(CTMC):
             else:
                 if u[idx] < hitting_time_min:
                     hitting_time_min = u[idx]
+        assert (hitting_time_min != -10), "Hitting time was not updated: is the source set S1 empty?"
         return hitting_time_min
+
+
+    def get_hitting_time_average_and_variance(self, S1, S2) -> Tuple[float, float]:
+        non_target_states = list(set(list(range(0, self.state_num))).difference(set(S2)))
+        non_target_state_num = len(non_target_states)
+        A = np.zeros((non_target_state_num, non_target_state_num))
+        b = -np.ones(non_target_state_num)
+
+        # Fill the matrix A
+        for idx, i in enumerate(non_target_states):
+            A[idx, :] = self.Q[i, non_target_states]  #
+
+        u = np.linalg.solve(A, b)
+        print("Maximum error in solving the linear equation is", np.max(np.matmul(A, u) - b))
+
+        # Now set up linear equation system for variance
+        # a numerically nice way to do it is to use the following equations:
+        # var(s) = 0 for all target states
+        # otherwise,
+        # var(s) = \sum_t P(s,t) [ var(t) + (1 + mu_t - mu_s)^2]
+        # But check with Mahmoud why this code works:
+
+        v = np.linalg.solve(A, - 2 * u)
+        v = v - u * u
+
+        hitting_time_min = -10
+        for state in S1:
+            idx = non_target_states.index(state)
+            if hitting_time_min < 0:
+                hitting_time_min = u[idx]
+            else:
+                if u[idx] < hitting_time_min:
+                    hitting_time_min = u[idx]
+        assert (hitting_time_min != -10), "Hitting time not updated: is the set of source states empty?"
+
+        hitting_time_var = 0
+        for state in S1:
+            idx = non_target_states.index(state)
+            if v[idx] > hitting_time_var:
+                hitting_time_var = u[idx]
+
+        return hitting_time_min, math.sqrt(hitting_time_var)

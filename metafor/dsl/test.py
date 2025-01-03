@@ -4,6 +4,7 @@ import numpy
 import sys
 
 from dsl import (
+    Transpiler,
     Work,
     Server,
     Source,
@@ -11,7 +12,6 @@ from dsl import (
     Program,
     DependentCall,
     Constants,
-    Visualizer,
 )
 from model.single_server.ctmc import SingleServerCTMC
 
@@ -85,8 +85,6 @@ class TestDSL(unittest.TestCase):
         p.add_server(s)
         p.add_source(rd_src)
         p.connect("reader", "server")
-        v = Visualizer(p)
-        v.visualize()
         # timed_call(lambda: simple_analysis(p))
 
     def test_single_server_fast(self):
@@ -341,6 +339,20 @@ class TestDSL(unittest.TestCase):
         p.get_callgraph()
         timed_call(lambda: simple_analysis(p))
 
+class TestTranspiler(unittest.TestCase):
+    def test_simple(self):
+        apis = {
+            "rd" : Work(10, [])
+        }
+        s = Server("server", apis, 101, 1)
+        src = Source("client", "rd", 9.5, 10, 0)
+        p = Program("MM1")
+        p.add_server(s)
+        p.add_source(src)
+        p.connect("client", "server")
+        tp = Transpiler(p)
+        tp.transpile()
+        tp.simulate(sim_id=0, sim_time=100)
 
 class TestBasic(unittest.TestCase):
     def test_sources(self):

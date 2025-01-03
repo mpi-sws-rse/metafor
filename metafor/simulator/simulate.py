@@ -10,14 +10,65 @@ from typing import List
 import numpy as np
 import pandas
 
-from metafor.simulator.server import Server
+from metafor.simulator.server import Context, Server
 from metafor.simulator.statistics import StatData
 from metafor.simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
 from utils.plot import plot_results
 from metafor.simulator.job import exp_job, bimod_job
 
-done: bool = False
+import logging
+logger = logging.getLogger(__name__)
 
+
+
+
+class Simulator:
+    def __init__(self, server: Server, clients: List[Client], sim_id: int):
+        logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+
+        self.server = server
+
+        self.context = Context(sim_id)
+        self.server.set_context(self.context)
+        self.clients = clients
+
+        self.reset()
+
+        self.server.print()
+        for c in self.clients:
+            c.print()
+        logger.setLevel(logging.INFO)
+    
+    def __del__(self):
+        self.context.close()
+
+    # to start a simulator from the beginning, reset the state
+    def reset(self):
+        self.t = 0.0
+        # start the simulator by adding each client
+        self.q = [(self.t, client.generate, None) for client in self.clients]
+
+    def close(self):
+        self.fp.close()
+
+    def sim(self, max_t: float = 60.0):
+        # This is the core simulation loop. Until we've reached the maximum simulation time, pull the next event off
+        #  from a heap of events, fire whichever callback is associated with that event, and add any events it generates
+        #  back to the heap.
+        while len(self.q) > 0 and self.t < max_t:
+            # Get the next event. Because `q` is a heap, we can just pop this off the front of the heap.
+            (t, call, payload) = heapq.heappop(self.q)
+            self.t = t
+            # Execute the callback associated with this event
+            new_events = call(t, payload)
+            # If the callback returned any follow-up events, add them to the event queue `q` and make sure it is still a
+            # valid heap
+            if new_events is not None:
+                self.q.extend(new_events)
+                heapq.heapify(self.q)   
+
+    def analyze(self):
+        self.context.analyze()
 
 # Run a single simulation.
 def sim_loop(max_t: float, client: Client):
@@ -62,7 +113,6 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
 
 # Print the mean value, the variance, and the standard deviation at each stat point in each second
 def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int, mean_t: float):
-    global done
     num_datapoints = math.ceil(max_t / step_time)
     latency_dateset = np.zeros((num_runs, num_datapoints))
     runtime_dateset = np.zeros((num_runs, num_datapoints))
@@ -87,7 +137,6 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                     latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
         run_ind += 1
-    done = True
     latency_ave = [0]
     latency_var = [0]
     latency_std = [0]
@@ -161,8 +210,8 @@ def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, 
         print("Max simulation time reached, stopped the simulation")
         process.kill()
         # check if the mean, variance, and standard deviation have been computed; if not, compute them
-        if not done:
-            compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t)
+        # if not done:
+        compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t)
     end_time = time.time()
     runtime = end_time - start_time
     print("Running time: " + str(runtime) + " s")

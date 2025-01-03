@@ -40,18 +40,81 @@ class Visualizer:
             'thread_pool' : thread_pool,
         }
 
+
+    def _effective_mu(self, node_id, mu0_p, closed, q, o):
+        if closed == True: # if the system is closed
+            if self.sub_tree_list[node_id] == [node_id]:
+                rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+            else:
+                for node in self.sub_tree_list[node_id]: #
+                    if node == node_id:
+                        rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+                    else:
+                        # +1 is considered to avoid being stuck for all-empty initialization
+                        rate = min(rate, mu0_p[node] * min(q[node]+1, self.num_threads[node]))
+        else: # if the system is open
+            rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+        return rate
+    
+    def _compute_params_general(self, p: Program, s: Server, qsize, osize):
+        arrival_rate = self._compute_effective_arrival_rate(p, s)
+        service_rate = self._compute_effective_service_rate(p, s)
+        thread_pool = s.thread_pool
+        assert False, "TBD"
+        return{
+            'arrival_rate': arrival_rate,
+            'service_rate': service_rate,
+            'mu_retry_base': mu_retry_base,
+            'mu_drop_base': mu_drop_base,
+            'tail_prob': tail_prob,
+            'thread_pool': thread_pool,
+        }
+
     def visualize(self, param: Optional[ParameterList] = None, qrange=None, orange=None, show_equilibrium=True):
-        server = self.p.get_root_server()
-        qsize = qrange if qrange is not None else server.qsize
-        osize = orange if orange is not None else server.orbit_size
+        num_servers = self.p.get_number_of_servers()
+
+        # we assume there are up to two servers for the moment :-)
+        if num_servers == 1:
+            server = self.p.get_root_server()
+            qsize = qrange if qrange is not None else server.qsize
+            osize = orange if orange is not None else server.orbit_size
         
-        if param is None:
-            self.viz_2d(self.p, qsize, osize, show_equilibrium=show_equilibrium)
+            if param is None:
+                self.viz_2d(self.p, qsize, osize, show_equilibrium=show_equilibrium)
+            else:
+                for pval in param:
+                    modified_program = self.experiment.update(self.p, pval)
+                    modified_program.print()
+                    self.viz_2d(modified_program, qsize, osize, show_equilibrium)
         else:
-            for pval in param:
-                modified_program = self.experiment.update(self.p, pval)
-                modified_program.print()
-                self.viz_2d(modified_program, qsize, osize, show_equilibrium)
+            self.viz_general(self.p, qsize, osize, show_equilibrium=show_equilibrium)
+
+
+    def viz_general(self, p, qsize, osize, show_equilibrium=True):
+        p.print()
+        servers = p.get_servers()
+        for server in servers:
+            # visualize each server, assuming queue bounds for the other servers
+            params = self._compute_params_general(p, qsize, osize)
+
+            if qsize > osize:
+                x_to_y_range = int(qsize/osize)
+            else:
+                assert False, "For visualization, set queue size > orbit size (revisit this assumption)"
+        
+            # Downsample the i and j ranges for better visibility
+            i_values = np.linspace(0, qsize/x_to_y_range, self.num_points_x, endpoint=False)  #
+            j_values = np.linspace(0, osize, self.num_points_y, endpoint=False)  #
+        
+            # Create meshgrid for i and j values
+            I, J = np.meshgrid(i_values, j_values)
+        
+            # Create arrays for the horizontal (U) and vertical (V) components
+            U = np.zeros(I.shape)  # Horizontal component
+            V = np.zeros(I.shape)  # Vertical component
+            print("HERE")
+            pass
+            
 
 
     def viz_2d(self, p, qsize, osize, show_equilibrium=True):
@@ -67,7 +130,7 @@ class Visualizer:
         if qsize > osize:
             x_to_y_range = int(qsize/osize) # ensure that qsize is a multiple of osize
         else:
-            assert False, "For visualization, set queue size > orbit size"
+            assert False, "For visualization, set queue size > orbit size (revisit this assumption)"
 
         i_max = qsize/x_to_y_range # used to make the plot x&y coordinates of arrow sizes reasonable
         j_max = osize
@@ -105,7 +168,7 @@ class Visualizer:
         # magnitude_normalized = (magnitude / max_mag)
 
         # Define a fixed maximum arrow length for visibility
-        fixed_max_length = .05 * i_max
+        fixed_max_length =  i_max / max(self.num_points_x, self.num_points_y)
 
 
         # Flatten the arrays for plotting
