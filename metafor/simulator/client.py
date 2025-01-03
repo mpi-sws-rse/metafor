@@ -63,7 +63,12 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         super().__init__(name, apiname, distribution)
         self.timeout = timeout
         self.max_retries: int = max_retries
-
+        self.rho_fault : float = rho_fault
+        self.rho_reset : float = rho_reset
+        self.rate_tps_fault : float = rho_fault / job_type.mean()
+        self.rate_tps_reset : float = rho_reset / job_type.mean()
+        self.fault_start : float = fault_start
+        self.fault_duration : float = fault_duration
 
 
     def generate(self, t: float, payload=None):
@@ -71,7 +76,6 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         logger.info("Job %f %s" % (t, self.apiname))
         next_t = t + self.distribution.sample()
         assert self.server is not None, "Server is not set for client " + self.name
-
         offered = self.server.offer(job, t)
         if offered is None:
             return [(next_t, self.generate, None)]

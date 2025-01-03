@@ -128,7 +128,7 @@ def plot_results_latency(
     plt.ylabel(y_axis, fontsize=14)
     plt.grid("on")
     plt.xlim(min(input_seq), max(input_seq))
-
+    plt.subplots_adjust(left=0.15, right=.95, top=.95, bottom=0.15)
     plt.savefig(figure_name)
     plt.close()
 
@@ -147,7 +147,7 @@ def plot_bar_data(
     color3: str,
 ):
     plt.rc("font", size=14)
-    plt.rcParams["figure.figsize"] = [10, 10]
+    plt.rcParams["figure.figsize"] = [5, 5]
     plt.rcParams["figure.autolayout"] = True
     fig, ax = plt.subplots()
     bar_width = 0.2 * step_size
@@ -190,8 +190,8 @@ def plot_bar_data(
     plt.tight_layout()
     plt.xlabel(x_axis, fontsize=14)
     plt.grid("on")
-    plt.ylim(0, 2.5)
-    fig.subplots_adjust(left=0.15, right=0.95, top=0.9, bottom=0.15)
+    plt.ylim(0, 3)
+    fig.subplots_adjust(left=0.15, right=.95, top=.95, bottom=0.15)
     plt.savefig(figure_name)
     plt.close()
 

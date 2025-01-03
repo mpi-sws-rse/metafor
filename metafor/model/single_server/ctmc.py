@@ -426,6 +426,9 @@ class SingleServerCTMC(CTMC):
             return var
         return var[0]
 
+    def latency_std(self, pi, mean: float, req_type: int = 0) -> float:
+        return math.sqrt(self.latency_variance(pi, mean, req_type))
+
     def latency_percentile(self, pi, req_type: int = 0, percentile: float = 50.0):
         # BUGGY
         assert percentile <= 100.0

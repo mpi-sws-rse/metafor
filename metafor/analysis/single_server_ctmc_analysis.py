@@ -11,7 +11,8 @@ from utils.plot import (
     plot_results_latency,
     plot_results_reset,
 )
-
+from matplotlib import pyplot as plt
+from dsl.dsl import Source, Server, Work, Program
 
 def fault_scenario_plot_generator(
     variable1: str,
@@ -398,6 +399,7 @@ def latency_plot_generator(
     timeouts: List[int],
     retries: List[int],
     thread_pool: int,
+    representation,
     alpha: float,
     file_name: str,
     job_type: int,
@@ -435,6 +437,7 @@ def latency_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
+                representation,
                 alpha,
             )
             qlen = val
@@ -458,6 +461,7 @@ def latency_plot_generator(
                 [val] * len(mu0_ps),
                 retries,
                 thread_pool,
+                representation,
                 alpha,
             )
             x_axis_label = "Timeout"
@@ -472,6 +476,7 @@ def latency_plot_generator(
                 timeouts,
                 [val] * len(mu0_ps),
                 thread_pool,
+                representation,
                 alpha,
             )
             x_axis_label = "Maximum number of retries"
@@ -484,11 +489,29 @@ def latency_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
+                representation,
                 alpha,
             )
             x_axis_label = "Arrival rate"
             main_color = "#301934"  # 'tab:blue'
             fade_color = "#D8BFD8"  # "#ADD8E6"
+
+        elif variable1 == "lambda-mm1":
+            ctmc = SingleServerCTMC(
+                qlen0,
+                retry_queue_size,
+                [val] * len(mu0_ps),
+                mu0_ps,
+                timeouts,
+                retries,
+                thread_pool,
+                representation,
+                alpha,
+            )
+            x_axis_label = "Arrival rate"
+            main_color = "pink"  # 'tab:blue'
+            fade_color = "#FFB6C1"  # "#ADD8E6"
+
         elif variable1 == "mu":
             ctmc = SingleServerCTMC(
                 qlen0,
@@ -498,11 +521,29 @@ def latency_plot_generator(
                 timeouts,
                 retries,
                 thread_pool,
+                representation,
                 alpha,
             )
             x_axis_label = "Processing rate"
             main_color = "#FF1493"  # 'tab:green'
             fade_color = "#FFB6C1"  # "#90EE90"
+
+        elif variable1 == "mu-mm1":
+            ctmc = SingleServerCTMC(
+                qlen0,
+                retry_queue_size,
+                lambdaas,
+                [val] * len(lambdaas),
+                timeouts,
+                retries,
+                thread_pool,
+                representation,
+                alpha,
+            )
+            x_axis_label = "Processing rate"
+            main_color = "purple"  # 'tab:green'
+            fade_color = "#E6E6FA"  # "#90EE90"
+
         Q = ctmc.generator_mat_exact()
         eigenvalues = np.linalg.eigvals(Q)
         sorted_eigenvalues = np.sort(eigenvalues.real)[::-1]
@@ -559,7 +600,7 @@ def latency_plot_generator(
             ctmc.prob_dist_accumulator(pi_ss, math.ceil(qlen * 0.9), qlen, 0, olen)
         )
         mean_latency = ctmc.latency_average(pi_ss, job_type)
-        std_latency = ctmc.main_queue_size_std(pi_ss, mean_latency)
+        std_latency = ctmc.latency_std(pi_ss, mean_latency, job_type)
         mean_latency_seq.append(mean_latency)
         std_latency_seq.append(std_latency)
         lower_bound_latency_seq.append(mean_latency - std_latency)
@@ -578,7 +619,7 @@ def latency_plot_generator(
         mean_rt_seq_su,
         mean_rt_seq_us,
         x_axis_label,
-        "bar_" + variable1 + "_varied_" + job_info + file_name,
+        "bar_" + variable1 + "_varied",
         "blue",
         "gray",
         "red",
@@ -590,7 +631,7 @@ def latency_plot_generator(
         upper_bound_latency_seq,
         x_axis_label,
         "Latency",
-        "latency_" + variable1 + "_varied_" + job_info + file_name,
+        "latency_" + variable1 + "_varied",
         main_color,
         fade_color,
     )
@@ -740,3 +781,154 @@ def latency_analysis(
         job_type,
     )
     print("Finished latency analysis for job " + str(job_type) + "\n")
+
+def scaled_program_parametric(qlen):
+    api = {"insert": Work(.625, [], )}
+    server = Server("52", api, qsize=qlen, orbit_size=30, thread_pool=100)
+    src = Source('client', 'insert', 50, timeout=3, retries=4)
+    p = Program("Service52")
+    p.add_server(server)
+    p.add_source(src)
+    p.connect('client', '52')
+    return p
+
+
+def scaled_program_parametric(qlen):
+    api = {"insert": Work(.625, [], )}
+    server = Server("52", api, qsize=qlen, orbit_size=30, thread_pool=100)
+    src = Source('client', 'insert', 50, timeout=3, retries=4)
+    p = Program("Service52")
+    p.add_server(server)
+    p.add_source(src)
+    p.connect('client', '52')
+    return p
+
+def plot_mixing_time_draft():
+    qlen_seq = []
+    mixing_time_seq = []
+    for qlen in range(50, 401, 50):
+        qlen_seq.append(qlen)
+        p = scaled_program_parametric(qlen)
+        ctmc: SingleServerCTMC = p.build()
+        mixing_time_seq.append(ctmc.get_mixing_time())
+    main_color = "red"
+    plt.rc("font", size=14)
+    plt.rcParams["figure.figsize"] = [5, 5]
+    plt.rcParams["figure.autolayout"] = True
+
+    plt.figure()
+    plt.plot(qlen_seq, mixing_time_seq, color=main_color)
+
+    plt.xlabel("Queue length", fontsize=14)
+    plt.ylabel("Mixing time", fontsize=14)
+    plt.grid("on")
+    plt.xlim(min(qlen_seq), max(qlen_seq))
+    plt.show()
+    plt.savefig("mixing_time_vs_qlen")
+    plt.close()
+
+
+"""plot_mixing_time_draft()
+
+latency_plot_generator(
+    variable1 = "qlen",
+    low = 80,
+    high = 150,
+    step = 10,
+    qlen0 = 100,
+    retry_queue_size = 20,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_qlen",
+    job_type = 0)
+
+latency_plot_generator(
+    variable1 = "to",
+    low = 5,
+    high = 15,
+    step = 1,
+    qlen0 = 100,
+    retry_queue_size = 20,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_to",
+    job_type = 0)
+
+latency_plot_generator(
+    variable1 = "mu",
+    low = 8,
+    high = 12,
+    step = 1,
+    qlen0 = 100,
+    retry_queue_size = 20,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_mu",
+    job_type = 0)
+
+latency_plot_generator(
+    variable1 = "lambda",
+    low = 8,
+    high = 12,
+    step = 1,
+    qlen0 = 100,
+    retry_queue_size = 20,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_lambda",
+    job_type = 0)"""
+
+# M/M/1 plots
+latency_plot_generator(
+    variable1 = "lambda-mm1",
+    low = 8,
+    high = 12,
+    step = 1,
+    qlen0 = 100,
+    retry_queue_size = 1,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_lambda",
+    job_type = 0)
+
+latency_plot_generator(
+    variable1 = "mu-mm1",
+    low = 8,
+    high = 12,
+    step = 1,
+    qlen0 = 100,
+    retry_queue_size = 1,
+    lambdaas = [9.5],
+    mu0_ps = [10],
+    timeouts = [9],
+    retries = [3],
+    thread_pool = 1,
+    representation=CTMCRepresentation.EXPLICIT,
+    alpha = .25,
+    file_name = "latency_mu",
+    job_type = 0)
