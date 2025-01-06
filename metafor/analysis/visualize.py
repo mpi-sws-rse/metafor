@@ -567,32 +567,6 @@ class Visualizer:
 
     def _tail_prob_computer_general(self, p: Program, server: Server, qsizes: Dict[str, int], osizes: Dict[str, int])  -> list[float]:
         """Compute the timeout probabilities for the case that service time is distributed exponentially."""
-
-        #tail_seq = [0]  # The timeout prob is zero when there is no job in the queue!
-        """current_sum = 0
-        last = 1
-        for job_num in range(
-                1, qsize
-        ):  # compute the timeout prob for all different queue sizes.
-            mu = min(job_num, thread_pool) * service_rate  # to remain close to the math symbol
-            mu_x_timeout = mu * timeout
-            exp_mu_timeout = math.exp(-mu_x_timeout)
-            if exp_mu_timeout == 0:
-                return [0] * qsize
-            last = last * mu_x_timeout / job_num
-            current_sum = current_sum + last
-            tail_seq.append(current_sum * exp_mu_timeout)"""
-        # exact method is unstable for large values...we overapproximate using chebyshev ineq!
-        """for job_num in range(1, qsize):  # compute the timeout prob for all different queue sizes.
-            service_rate_effective = min(job_num, thread_pool) * service_rate
-            ave = job_num / service_rate_effective
-            var = job_num / (service_rate_effective**2)
-            sigma = math.sqrt(var)
-            if timeout - ave > sigma:
-                k_inv = sigma / (timeout - ave)
-                tail_seq.append(k_inv ** 2)
-            else:
-                tail_seq.append(1)"""
         all_servers = self._get_topological_list(p)
         downstream = list(dropwhile(lambda s: s.name != server.name, all_servers))[1:]
         arrival_rate = self._compute_effective_arrival_rate(p, server, all_servers, qsizes)
@@ -600,7 +574,6 @@ class Visualizer:
         thread_pool = server.thread_pool
         tail_prob = []
         for job_num in range(0, qsizes[server.name]):  # compute the timeout prob for all different queue sizes.
-            # effective_mu = self.effective_mu(node_id, 1, q_list, o_list) # to generalize, code must be modified...
             ave = 0
             var = 0
             ind = 0
