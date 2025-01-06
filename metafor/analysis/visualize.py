@@ -1,7 +1,8 @@
 
-from typing import Optional
+from itertools import dropwhile, takewhile
+from typing import Dict, Optional
 from metafor.analysis.experiment import Experiment, Parameter, ParameterList
-from metafor.dsl.dsl import Program
+from metafor.dsl.dsl import Constants, DependentCall, Program, Server, Source, Work
 import math
 from matplotlib import pyplot as plt
 import numpy as np
@@ -40,27 +41,102 @@ class Visualizer:
             'thread_pool' : thread_pool,
         }
 
+    # Multi server
+    def _get_service_rate(self, server: Server) -> Work:
+        # we assume exactly one API call
+        assert(len(server.apis) == 1), "Server %s has more than one API call" % server.name
+        apiname = list(server.apis)[0]
+        apiwork: Work = server.get_work(apiname)
+        return apiwork.processing_rate
+    
+    # Multi server
+    def _get_exogeneous_arrival_rate(self, p: Program, server: Server) -> float:
+        # return the arrival rate if there are additional sources pushing API calls into this server
+        sources = p.get_sources(server)
+        return sum([s.arrival_rate for s in sources])
 
-    def _effective_mu(self, node_id, mu0_p, closed, q, o):
-        if closed == True: # if the system is closed
-            if self.sub_tree_list[node_id] == [node_id]:
-                rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
-            else:
-                for node in self.sub_tree_list[node_id]: #
-                    if node == node_id:
-                        rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
-                    else:
-                        # +1 is considered to avoid being stuck for all-empty initialization
-                        rate = min(rate, mu0_p[node] * min(q[node]+1, self.num_threads[node]))
-        else: # if the system is open
-            rate = mu0_p[node_id] * min(q[node_id], self.num_threads[node_id])
+    # Multi server
+    def _compute_effective_service_rate(self, _p: Program, server: Server, downstream: list[Server], qsizes: Dict[str, int]):
+        # calculate the effective processing rate of a server making waiting dependent calls
+        # assuming the queue sizes `qsizes` mapping server names to queue lengths
+        # `server` is the server for which the rate is computed.
+        # `downstream` is the list of transitively called servers
+        #
+        # We assume there is exactly one API call being handled
+        # essentially, the effective service rate is the minimum over all service rates of the server and its 
+        # downstream dependencies
+
+        rate = self._get_service_rate(server) * min(1, qsizes.get(server.name, 0), server.thread_pool)
+        # now we iterate over the downstream servers and find the minimal processing rate: that is the effective rate
+        # for our server
+        for s in downstream:
+            srate = self._get_service_rate(s) * min(1, qsizes.get(s.name, 0), s.thread_pool)
+            # we make sure the min is at least one, to avoid being stuck if the queue size is 0
+            rate = min(rate, srate)
         return rate
     
-    def _compute_params_general(self, p: Program, s: Server, qsize, osize):
-        arrival_rate = self._compute_effective_arrival_rate(p, s)
-        service_rate = self._compute_effective_service_rate(p, s)
-        thread_pool = s.thread_pool
-        assert False, "TBD"
+    # Multi server
+    def _compute_effective_arrival_rate(self, p: Program, server: Server, all_servers: list[Server], qsizes: Dict[str, int]):
+        # calculate the effective arrival rate at a server
+        # `upstream` is the list of all upstream servers
+        print("In compute_effective_arrival_rate: ")
+        print("Server: ", server)
+        print("All servers: ", list(map(lambda s: s.name, all_servers)))
+
+        rate = self._get_exogeneous_arrival_rate(p, server)
+        upstream = list(takewhile(lambda s: s.name != server.name, all_servers))
+        print("Upstream: ", list(map(lambda s: s.name, upstream)))
+
+        # compute the rate of jobs added by the upstream/ancestor nodes
+        added_lambda = 0
+        for node in upstream:
+            effective_arr_rate_node = added_lambda + self._get_exogeneous_arrival_rate(p, node)
+            node_downstream = list(dropwhile(lambda s: s.name != node.name, upstream))[1:] # take downstream nodes, and drop `node` from the list
+            effective_proc_rate_node = self._compute_effective_service_rate(p, node, node_downstream, qsizes)
+            added_lambda = min(effective_arr_rate_node, effective_proc_rate_node)
+
+        rate += added_lambda
+        return rate
+
+    # Multi server
+    def _compute_params_general(self, p: Program, server: Server, qsizes: Dict[str, int], osizes: Dict[str, int]):
+        all_servers = self._get_topological_list(p)
+        
+        downstream = list(dropwhile(lambda s: s.name != server.name, all_servers))[1:]
+        arrival_rate = self._compute_effective_arrival_rate(p, server, all_servers, qsizes)
+        service_rate = self._compute_effective_service_rate(p, server, downstream, qsizes)
+        thread_pool = server.thread_pool
+        
+        def _compute_retries_and_timeout(p: Program, all_servers: list[Server], s: Server):
+            if s.name == p.get_root_server().name:
+                # for the root, the retry/timeouts are driven by the exogenous source
+                sources = p.get_sources(s)
+                assert len(sources) == 1
+                return sources[0].retries, sources[0].timeout
+            else:
+                # for the other servers, the retry/timeouts are given by the dependent calls from the upstream server
+                # find the caller
+                caller = p.get_root_server()
+                for server in all_servers[1:]:
+                    if server.name == s.name:
+                        break
+                    else:
+                        caller = server
+                assert(len(caller.apis) == 1), "Server %s has more than one API call" % server.name
+                print("Caller: ", caller)
+                apiname = list(server.apis)[0]
+                downstream = caller.get_work(apiname).downstream
+                assert(len(downstream) == 1)
+                return (downstream[0].retry, downstream[0].timeout)
+                
+                
+        (retries, timeout) = _compute_retries_and_timeout(p, all_servers, server)
+
+        mu_retry_base = retries / ((retries + 1) * timeout)
+        mu_drop_base = 1 / ((retries + 1) * timeout)
+        tail_prob = [0.5] * server.qsize # XXX TODO
+        # TODO: calculate tail prob self._tail_prob_computer(total_ind, mu0_p, timeout, thread_pool, qsize, osize)[node_id]
+
         return{
             'arrival_rate': arrival_rate,
             'service_rate': service_rate,
@@ -87,21 +163,96 @@ class Visualizer:
                     modified_program.print()
                     self.viz_2d(modified_program, qsize, osize, show_equilibrium)
         else:
-            self.viz_general(self.p, qsize, osize, show_equilibrium=show_equilibrium)
+            assert False, "Visualize called with a multi-server program. Please call `visualize_general` instead"
 
 
-    def viz_general(self, p, qsize, osize, show_equilibrium=True):
+    def visualize_general(self, param: Optional[ParameterList], 
+                          qrange: Dict[str, int],
+                          orange: Dict[str, int],                  
+                          show_equilibrium=False):
+        if param is None:
+            self.viz_general(self.p, qrange, orange, show_equilibrium=show_equilibrium)
+        else:
+            for pval in param:
+                modified_program = self.experiment.update(self.p, pval)
+                modified_program.print()
+                self.viz_general(modified_program, qrange, orange, show_equilibrium)
+
+
+    def _check_program(self, p: Program):
+        root = p.get_root_server()
+        # 1. check that all source -> server connections are to the root server
+        cxns = p.connections
+        for c in cxns:
+            assert c[1] == root.name, "All connections should be to root"
+        # 2. check that the servers are arranged in a line 
+        
+        s = root
+        callees = p.get_callees(s)
+        while len(callees) == 1:
+            s = list(callees)[0]
+            # 3. check that dependent calls wait until the downstream calls are done 
+            # (i.e., call_type is WAIT_UNTIL_DONE for all dependent calls)
+            for work in s.apis.values():
+                assert len(work.downstream) <= 1, "More than one downstream work"
+                if len(work.downstream) == 1:
+                    assert work.downstream[0].call_type == Constants.WAIT_UNTIL_DONE, "server is not waiting for a dependent call"
+            callees = p.get_callees(s)
+        assert len(callees) == 0, "Server %s calls multiple other servers: program is not linear" % s.name
+        
+
+
+    def _get_topological_list(self, p: Program) -> list[Server]:
+        # get a topological list of servers
+        root = p.get_root_server()
+
+        servers = [root]
+        callees = p.get_callees(root)
+        while len(callees) == 1:
+            s = list(callees)[0]
+            servers.append(s)
+            callees = p.get_callees(s)
+        # at this point servers is topologically sorted, with root at the beginning
+        return servers
+    
+    def viz_general(self, p: Program, qsizes: Dict[str, int], osizes: Dict[str, int], show_equilibrium=True):
         p.print()
-        servers = p.get_servers()
+        # We currently assume that the servers are arranged linearly, and only the first server has exogeneous arrivals
+        self._check_program(p)
+
+        servers = self._get_topological_list(p)
+        print('Servers:', servers)
+        # check that qrange and orange both have an entry for each server
+        # and if not, add values for each server
+        for server in servers:
+            q = qsizes.get(server.name, None)
+            if q is None:
+                qsizes[server.name] = server.qsize - 1
+            o = osizes.get(server.name, None)
+            if o is None:
+                osizes[server.name] = server.orbit_size - 1
+
         for server in servers:
             # visualize each server, assuming queue bounds for the other servers
-            params = self._compute_params_general(p, qsize, osize)
+            params = self._compute_params_general(p, server, qsizes, osizes)
 
+            qsize = qsizes[server.name]
+            osize = osizes[server.name]
             if qsize > osize:
-                x_to_y_range = int(qsize/osize)
+                x_to_y_range = int(qsize / osize)
             else:
+                x_to_y_range = 1
                 assert False, "For visualization, set queue size > orbit size (revisit this assumption)"
         
+
+            params = self._compute_params_general(p, server, qsizes, osizes)
+            arrival_rate = params['arrival_rate']
+            service_rate = params['service_rate']
+            mu_retry_base = params['mu_retry_base']
+            mu_drop_base = params['mu_drop_base']
+            tail_prob = params['tail_prob']
+            thread_pool = params['thread_pool']
+            
             # Downsample the i and j ranges for better visibility
             i_values = np.linspace(0, qsize/x_to_y_range, self.num_points_x, endpoint=False)  #
             j_values = np.linspace(0, osize, self.num_points_y, endpoint=False)  #
@@ -112,9 +263,90 @@ class Visualizer:
             # Create arrays for the horizontal (U) and vertical (V) components
             U = np.zeros(I.shape)  # Horizontal component
             V = np.zeros(I.shape)  # Vertical component
-            print("HERE")
-            pass
             
+            # Compute magnitudes and angles for each (i, j)
+            for idx_i, i in enumerate(i_values):
+                for idx_j, j in enumerate(j_values):
+                    U[idx_j, idx_i] = self.q_rate_computer(
+                        int(i * x_to_y_range), 
+                        int(j), 
+                        arrival_rate, 
+                        service_rate, 
+                        mu_retry_base,
+                        thread_pool)
+                    V[idx_j, idx_i] = self.o_rate_computer(
+                        int(i * x_to_y_range), 
+                        int(j), 
+                        arrival_rate, 
+                        mu_retry_base, 
+                        mu_drop_base,
+                        tail_prob)
+            # Compute magnitude (for color) and angle (for arrow direction)
+            magnitude = np.sqrt(U ** 2 + V ** 2)  # Magnitude of the vector
+            angle = np.arctan2(V, U)  # Angle of the vector (atan2 handles f_x=0 correctly)
+
+            # Find the maximum absolute values
+            max_mag = np.max(magnitude)
+
+            # Normalize the horizontal (U) and vertical (V) components by the maximum values
+            # magnitude_normalized = (magnitude / max_mag)
+
+            # Define a fixed maximum arrow length for visibility
+            fixed_max_length =  qsize / (x_to_y_range * max(self.num_points_x, self.num_points_y))
+
+
+            # Flatten the arrays for plotting
+            I_flat = I.flatten()
+            J_flat = J.flatten()
+            U_flat = np.cos(angle).flatten() * fixed_max_length # Normalize the direction to length fixed_max_length
+            V_flat = np.sin(angle).flatten() * fixed_max_length # Normalize the direction to length fixed_max_length
+            # magnitude_flat = magnitude_normalized.flatten()
+            magnitude_flat = magnitude.flatten()
+
+            # Plotting
+            fig, ax = plt.subplots(figsize=(10, 5))
+
+            # Create a colormap for the arrow colors based on the magnitude
+            cmap = plt.cm.viridis
+            norm = plt.Normalize(vmin=np.min(magnitude_flat), vmax=np.max(magnitude_flat))
+            colors = cmap(norm(magnitude_flat))
+
+            # Plot the arrows using the fixed length and color by magnitude
+            _ = ax.quiver(I_flat, J_flat, U_flat, V_flat, color=colors,
+                           angles='xy', scale_units='xy', scale=1, width=0.003)
+
+            # Add a colorbar based on the magnitude
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array(magnitude_flat)  # Link the data to the ScalarMappable
+            cbar = plt.colorbar(sm, ax=ax)  # Attach the colorbar to the current axis
+
+            if show_equilibrium:
+                # Create a circle at the (almost) equilibrium point
+                res, obj_val = self.equilibrium_computer(qsize, osize, arrival_rate, service_rate, mu_retry_base, mu_drop_base,
+                                            thread_pool,
+                                            tail_prob)
+                if abs(obj_val) < .01:
+                    print("found an almost equilibrium point")
+                    circle = plt.Circle((res.x[0]/x_to_y_range, res.x[1]), .01 * i_max, color='red', fill=True)
+                    ax.add_artist(circle)
+
+            # Get current tick positions on the x-axis
+            xticks = ax.get_xticks()
+
+            # Re-scale the tick labels to the correct numbers
+            scaled_xticks = xticks * x_to_y_range
+            scaled_xticks.astype(int)
+
+            # Set the new scaled tick labels
+            ax.set_xticklabels(scaled_xticks)
+
+            # Set labels for the axes
+            ax.set_xlabel('Queue length')
+            ax.set_ylabel('Orbit length')
+
+            # Display the plot
+            plt.show()
+            # plt.savefig("2D")
 
 
     def viz_2d(self, p, qsize, osize, show_equilibrium=True):
@@ -273,7 +505,7 @@ class Visualizer:
         """
 
 
-    def _tail_prob_computer(self, qsize: float, service_rate: float, timeout: float, thread_pool: float):
+    def _tail_prob_computer(self, qsize: float, service_rate: float, timeout: float, thread_pool: float) -> list[float]:
         """Compute the timeout probabilities for the case that service time is distributed exponentially."""
 
         tail_seq = [0]  # The timeout prob is zero when there is no job in the queue!
@@ -319,6 +551,25 @@ class TestViz(unittest.TestCase):
         p.connect('client-i', '52')
         p.connect('client-d', '52')
         return p
+    
+    def multi_server_program(self):
+        api1 = { "insert": Work(10, [ DependentCall(
+            "tail", "head", "insert", Constants.WAIT_UNTIL_DONE, 3, 4
+        )],) }
+        server1 = Server("head", api1, qsize=200, orbit_size=20, thread_pool=10)
+        
+        api2 = { "insert": Work(10, [])}
+        server2 = Server("tail", api2, 100, 10, thread_pool=1)
+
+        src = Source('client-i', 'insert', 4.75, timeout=9, retries=3)
+
+        p = Program("MultiServerProgram")
+
+        p.add_server(server1)
+        p.add_server(server2)
+        p.add_sources([src])
+        p.connect('client-i', 'head')
+        return p
 
     def test_viz(self):
         from numpy import linspace
@@ -328,6 +579,10 @@ class TestViz(unittest.TestCase):
         v = Visualizer(self.program())
         p = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(9.75, 10.25, 5))
         v.visualize(param=ParameterList([p]))
+
+    def test_viz2(self):
+        v = Visualizer(self.multi_server_program())
+        v.visualize_general(param=None, qrange={}, orange={}, show_equilibrium=False)
 
 
 if __name__ == '__main__':

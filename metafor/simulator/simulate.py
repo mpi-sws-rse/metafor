@@ -15,7 +15,7 @@ from metafor.simulator.statistics import StatData
 from metafor.simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
 
 from utils.plot import plot_results
-from metafor.simulator.Job import exp_job, bimod_job
+from metafor.simulator.job import exp_job, bimod_job
 
 import logging
 logger = logging.getLogger(__name__)

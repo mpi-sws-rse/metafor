@@ -73,9 +73,11 @@ class MixtureSource(Source):
 # Q: is this a special case of a Phase type distribution?
 class StateMachineSource(Source):
     # TBD: HANDLE THESE IN CTMC CREATION
-    def __init__(self, name: str, api_name: str, transition_matrix: npt.NDArray[np.float64],
-                 lambda_map: npt.NDArray[tuple[float64, int, int]], arrival_rate: float, timeout: int):
-        super().__init__(name, api_name, arrival_rate, timeout)
+    def __init__(self, name: str, 
+                 api_name: str, 
+                 transition_matrix: npt.NDArray[np.float64],
+                 lambda_map: npt.NDArray[tuple[float64, int, int]]):
+        super().__init__(name, api_name, 0.0, 0, retries=0) # we set the arrival rate, timeout, and retries to default values
         assert np.all(
             np.vectorize(lambda x: x >= 0.0)(transition_matrix)
         ), "All entries in the transition map should be nonnegative"
@@ -177,6 +179,10 @@ class Server:
 
     def num_states(self) -> int:
         return self.qsize * self.orbit_size
+    
+    # return the work associated with `apiname` 
+    def get_work(self, apiname: str) -> Work:
+        return self.apis[apiname]
 
 
 class Program:
@@ -203,8 +209,8 @@ class Program:
             self.add_source(s)
 
     def connect(self, source_name: str, server_name: str):
-        assert source_name in self.sources
-        assert server_name in self.servers
+        assert source_name in self.sources, "Unknown source: %s" % source_name
+        assert server_name in self.servers, "Unknown server: %s" % server_name
         assert self.sources[source_name].api_name in self.servers[server_name].apis
         self.connections.append((source_name, server_name))
 
