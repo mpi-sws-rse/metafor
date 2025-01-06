@@ -1,8 +1,8 @@
 
 from itertools import dropwhile, takewhile
 from typing import Dict, Optional
-from metafor.analysis.experiment import Experiment, Parameter, ParameterList
-from metafor.dsl.dsl import Constants, DependentCall, Program, Server, Source, Work
+from analysis.experiment import Experiment, Parameter, ParameterList
+from dsl.dsl import Constants, DependentCall, Program, Server, Source, Work
 import math
 from matplotlib import pyplot as plt
 import numpy as np
@@ -15,7 +15,7 @@ class Visualizer:
         self.num_points_y = num_y
         self.experiment = Experiment()
 
-    def _compute_params(self, p: Program, qsize, _osize):
+    def _compute_params(self, p: Program, qsize, osize):
         server = p.get_root_server()
         arrival_rates, service_rates, timeouts, retries, _ = p.get_params(server)
         arrival_rate = sum(arrival_rates)
@@ -32,6 +32,7 @@ class Visualizer:
         mu_retry_base = max_retries / ((max_retries + 1) * timeout)
         mu_drop_base = 1 / ((max_retries + 1) * timeout)
         tail_prob = self._tail_prob_computer(qsize, service_rate, timeout, thread_pool)
+        # tail_prob = self._tail_prob_computer(p, server, qsize, osize)
         return {
             'arrival_rate': arrival_rate,
             'service_rate': service_rate,
@@ -98,6 +99,28 @@ class Visualizer:
         rate += added_lambda
         return rate
 
+    def _compute_retries_and_timeout(self, p: Program, all_servers: list[Server], s: Server):
+        if s.name == p.get_root_server().name:
+            # for the root, the retry/timeouts are driven by the exogenous source
+            sources = p.get_sources(s)
+            assert len(sources) == 1
+            return sources[0].retries, sources[0].timeout
+        else:
+            # for the other servers, the retry/timeouts are given by the dependent calls from the upstream server
+            # find the caller
+            caller = p.get_root_server()
+            for server in all_servers[1:]:
+                if server.name == s.name:
+                    break
+                else:
+                    caller = server
+            assert (len(caller.apis) == 1), "Server %s has more than one API call" % server.name
+            print("Caller: ", caller)
+            apiname = list(server.apis)[0]
+            downstream = caller.get_work(apiname).downstream
+            assert (len(downstream) == 1)
+            return (downstream[0].retry, downstream[0].timeout)
+
     # Multi server
     def _compute_params_general(self, p: Program, server: Server, qsizes: Dict[str, int], osizes: Dict[str, int]):
         all_servers = self._get_topological_list(p)
@@ -107,7 +130,7 @@ class Visualizer:
         service_rate = self._compute_effective_service_rate(p, server, downstream, qsizes)
         thread_pool = server.thread_pool
         
-        def _compute_retries_and_timeout(p: Program, all_servers: list[Server], s: Server):
+        """def _compute_retries_and_timeout(p: Program, all_servers: list[Server], s: Server):
             if s.name == p.get_root_server().name:
                 # for the root, the retry/timeouts are driven by the exogenous source
                 sources = p.get_sources(s)
@@ -127,16 +150,16 @@ class Visualizer:
                 apiname = list(server.apis)[0]
                 downstream = caller.get_work(apiname).downstream
                 assert(len(downstream) == 1)
-                return (downstream[0].retry, downstream[0].timeout)
+                return (downstream[0].retry, downstream[0].timeout)"""
                 
                 
-        (retries, timeout) = _compute_retries_and_timeout(p, all_servers, server)
+        (retries, timeout) = self._compute_retries_and_timeout(p, all_servers, server)
 
         mu_retry_base = retries / ((retries + 1) * timeout)
         mu_drop_base = 1 / ((retries + 1) * timeout)
-        tail_prob = [0.5] * server.qsize # XXX TODO
+        #tail_prob = [0.5] * server.qsize # XXX TODO
         # TODO: calculate tail prob self._tail_prob_computer(total_ind, mu0_p, timeout, thread_pool, qsize, osize)[node_id]
-
+        tail_prob = self._tail_prob_computer_general(p, server, qsizes, osizes)
         return{
             'arrival_rate': arrival_rate,
             'service_rate': service_rate,
@@ -289,7 +312,7 @@ class Visualizer:
         magnitude_flat = magnitude.flatten()
 
         # Plotting
-        fig, ax = plt.subplots(figsize=(10, 5))
+        fig, ax = plt.subplots(figsize=(8, 8))
 
         # Create a colormap for the arrow colors based on the magnitude
         cmap = plt.cm.viridis
@@ -418,7 +441,7 @@ class Visualizer:
         magnitude_flat = magnitude.flatten()
 
         # Plotting
-        fig, ax = plt.subplots(figsize=(10, 5))
+        fig, ax = plt.subplots(figsize=(8, 8))
 
         # Create a colormap for the arrow colors based on the magnitude
         cmap = plt.cm.viridis
@@ -541,8 +564,64 @@ class Visualizer:
                 tail_seq.append(1)
         return tail_seq
 
+
+    def _tail_prob_computer_general(self, p: Program, server: Server, qsizes: Dict[str, int], osizes: Dict[str, int])  -> list[float]:
+        """Compute the timeout probabilities for the case that service time is distributed exponentially."""
+
+        #tail_seq = [0]  # The timeout prob is zero when there is no job in the queue!
+        """current_sum = 0
+        last = 1
+        for job_num in range(
+                1, qsize
+        ):  # compute the timeout prob for all different queue sizes.
+            mu = min(job_num, thread_pool) * service_rate  # to remain close to the math symbol
+            mu_x_timeout = mu * timeout
+            exp_mu_timeout = math.exp(-mu_x_timeout)
+            if exp_mu_timeout == 0:
+                return [0] * qsize
+            last = last * mu_x_timeout / job_num
+            current_sum = current_sum + last
+            tail_seq.append(current_sum * exp_mu_timeout)"""
+        # exact method is unstable for large values...we overapproximate using chebyshev ineq!
+        """for job_num in range(1, qsize):  # compute the timeout prob for all different queue sizes.
+            service_rate_effective = min(job_num, thread_pool) * service_rate
+            ave = job_num / service_rate_effective
+            var = job_num / (service_rate_effective**2)
+            sigma = math.sqrt(var)
+            if timeout - ave > sigma:
+                k_inv = sigma / (timeout - ave)
+                tail_seq.append(k_inv ** 2)
+            else:
+                tail_seq.append(1)"""
+        all_servers = self._get_topological_list(p)
+        downstream = list(dropwhile(lambda s: s.name != server.name, all_servers))[1:]
+        arrival_rate = self._compute_effective_arrival_rate(p, server, all_servers, qsizes)
+        service_rate = self._compute_effective_service_rate(p, server, downstream, qsizes)
+        thread_pool = server.thread_pool
+        tail_prob = []
+        for job_num in range(0, qsizes[server.name]):  # compute the timeout prob for all different queue sizes.
+            # effective_mu = self.effective_mu(node_id, 1, q_list, o_list) # to generalize, code must be modified...
+            ave = 0
+            var = 0
+            ind = 0
+            for node in downstream:
+                downstream_node = downstream[ind:]
+                service_rate_node= self._compute_effective_service_rate(p, node, downstream_node, qsizes)
+                if service_rate_node != 0:
+                    ave += qsizes[node.name] / service_rate_node
+                    var += qsizes[node.name] * 1 / (service_rate_node ** 2)
+                ind += 1  #
+            sigma = math.sqrt(var)
+            (_, timeout) = self._compute_retries_and_timeout(p, all_servers, server)
+            if timeout - ave > sigma:
+                k_inv = sigma / (timeout - ave)
+                tail_prob.append(k_inv ** 2)
+            else:
+                tail_prob.append(1)
+        return tail_prob
+
 import unittest
-from metafor.dsl.dsl import Server, Source, Work, Program
+from dsl.dsl import Server, Source, Work, Program
 class TestViz(unittest.TestCase):
     def program(self):
         api = { "insert": Work(10, [],), "delete": Work(10, []) }
