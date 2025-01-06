@@ -208,6 +208,7 @@ class Visualizer:
 
         servers = [root]
         callees = p.get_callees(root)
+        # we assume that the servers are a linear chain: | callees | == 1
         while len(callees) == 1:
             s = list(callees)[0]
             servers.append(s)
@@ -215,6 +216,123 @@ class Visualizer:
         # at this point servers is topologically sorted, with root at the beginning
         return servers
     
+
+    def viz_general_server(self, p: Program, server: Server, qsizes: Dict[str, int], osizes: Dict[str, int], show_equilibrium=True):
+        # visualize the dynamics of `server` in the program `p`, 
+        # assuming queue bounds for the other servers are given by the map `qsizes` (for queue size) and `osizes` (for orbit size)
+        params = self._compute_params_general(p, server, qsizes, osizes)
+
+        qsize = qsizes[server.name]
+        osize = osizes[server.name]
+        if qsize > osize:
+            x_to_y_range = int(qsize / osize)
+        else:
+            x_to_y_range = 1
+            assert False, "For visualization, set queue size > orbit size (revisit this assumption)"
+    
+        params = self._compute_params_general(p, server, qsizes, osizes)
+        arrival_rate = params['arrival_rate']
+        service_rate = params['service_rate']
+        mu_retry_base = params['mu_retry_base']
+        mu_drop_base = params['mu_drop_base']
+        tail_prob = params['tail_prob']
+        thread_pool = params['thread_pool']
+        
+        # Downsample the i and j ranges for better visibility
+        i_values = np.linspace(0, qsize/x_to_y_range, self.num_points_x, endpoint=False)  #
+        j_values = np.linspace(0, osize, self.num_points_y, endpoint=False)  #
+    
+        # Create meshgrid for i and j values
+        I, J = np.meshgrid(i_values, j_values)
+    
+        # Create arrays for the horizontal (U) and vertical (V) components
+        U = np.zeros(I.shape)  # Horizontal component
+        V = np.zeros(I.shape)  # Vertical component
+        
+        # Compute magnitudes and angles for each (i, j)
+        for idx_i, i in enumerate(i_values):
+            for idx_j, j in enumerate(j_values):
+                U[idx_j, idx_i] = self.q_rate_computer(
+                    int(i * x_to_y_range), 
+                    int(j), 
+                    arrival_rate, 
+                    service_rate, 
+                    mu_retry_base,
+                    thread_pool)
+                V[idx_j, idx_i] = self.o_rate_computer(
+                    int(i * x_to_y_range), 
+                    int(j), 
+                    arrival_rate, 
+                    mu_retry_base, 
+                    mu_drop_base,
+                    tail_prob)
+        # Compute magnitude (for color) and angle (for arrow direction)
+        magnitude = np.sqrt(U ** 2 + V ** 2)  # Magnitude of the vector
+        angle = np.arctan2(V, U)  # Angle of the vector (atan2 handles f_x=0 correctly)
+
+        # Find the maximum absolute values
+        max_mag = np.max(magnitude)
+
+        # Normalize the horizontal (U) and vertical (V) components by the maximum values
+        # magnitude_normalized = (magnitude / max_mag)
+
+        # Define a fixed maximum arrow length for visibility
+        fixed_max_length =  qsize / (x_to_y_range * max(self.num_points_x, self.num_points_y))
+
+
+        # Flatten the arrays for plotting
+        I_flat = I.flatten()
+        J_flat = J.flatten()
+        U_flat = np.cos(angle).flatten() * fixed_max_length # Normalize the direction to length fixed_max_length
+        V_flat = np.sin(angle).flatten() * fixed_max_length # Normalize the direction to length fixed_max_length
+        # magnitude_flat = magnitude_normalized.flatten()
+        magnitude_flat = magnitude.flatten()
+
+        # Plotting
+        fig, ax = plt.subplots(figsize=(10, 5))
+
+        # Create a colormap for the arrow colors based on the magnitude
+        cmap = plt.cm.viridis
+        norm = plt.Normalize(vmin=np.min(magnitude_flat), vmax=np.max(magnitude_flat))
+        colors = cmap(norm(magnitude_flat))
+
+        # Plot the arrows using the fixed length and color by magnitude
+        _ = ax.quiver(I_flat, J_flat, U_flat, V_flat, color=colors,
+                        angles='xy', scale_units='xy', scale=1, width=0.003)
+
+        # Add a colorbar based on the magnitude
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array(magnitude_flat)  # Link the data to the ScalarMappable
+        cbar = plt.colorbar(sm, ax=ax)  # Attach the colorbar to the current axis
+
+        if show_equilibrium:
+            # Create a circle at the (almost) equilibrium point
+            res, obj_val = self.equilibrium_computer(qsize, osize, arrival_rate, service_rate, mu_retry_base, mu_drop_base,
+                                        thread_pool,
+                                        tail_prob)
+            if abs(obj_val) < .01:
+                print("found an almost equilibrium point")
+                circle = plt.Circle((res.x[0]/x_to_y_range, res.x[1]), .01 * qsize/x_to_y_range, color='red', fill=True)
+                ax.add_artist(circle)
+
+        # Get current tick positions on the x-axis
+        xticks = ax.get_xticks()
+
+        # Re-scale the tick labels to the correct numbers
+        scaled_xticks = xticks * x_to_y_range
+        scaled_xticks.astype(int)
+
+        # Set the new scaled tick labels
+        ax.set_xticklabels(scaled_xticks)
+
+        # Set labels for the axes
+        ax.set_xlabel('Queue length')
+        ax.set_ylabel('Orbit length')
+
+        # Display the plot
+        plt.show()
+        # plt.savefig("2D")
+
     def viz_general(self, p: Program, qsizes: Dict[str, int], osizes: Dict[str, int], show_equilibrium=True):
         p.print()
         # We currently assume that the servers are arranged linearly, and only the first server has exogeneous arrivals
@@ -233,120 +351,8 @@ class Visualizer:
                 osizes[server.name] = server.orbit_size - 1
 
         for server in servers:
-            # visualize each server, assuming queue bounds for the other servers
-            params = self._compute_params_general(p, server, qsizes, osizes)
-
-            qsize = qsizes[server.name]
-            osize = osizes[server.name]
-            if qsize > osize:
-                x_to_y_range = int(qsize / osize)
-            else:
-                x_to_y_range = 1
-                assert False, "For visualization, set queue size > orbit size (revisit this assumption)"
-        
-
-            params = self._compute_params_general(p, server, qsizes, osizes)
-            arrival_rate = params['arrival_rate']
-            service_rate = params['service_rate']
-            mu_retry_base = params['mu_retry_base']
-            mu_drop_base = params['mu_drop_base']
-            tail_prob = params['tail_prob']
-            thread_pool = params['thread_pool']
-            
-            # Downsample the i and j ranges for better visibility
-            i_values = np.linspace(0, qsize/x_to_y_range, self.num_points_x, endpoint=False)  #
-            j_values = np.linspace(0, osize, self.num_points_y, endpoint=False)  #
-        
-            # Create meshgrid for i and j values
-            I, J = np.meshgrid(i_values, j_values)
-        
-            # Create arrays for the horizontal (U) and vertical (V) components
-            U = np.zeros(I.shape)  # Horizontal component
-            V = np.zeros(I.shape)  # Vertical component
-            
-            # Compute magnitudes and angles for each (i, j)
-            for idx_i, i in enumerate(i_values):
-                for idx_j, j in enumerate(j_values):
-                    U[idx_j, idx_i] = self.q_rate_computer(
-                        int(i * x_to_y_range), 
-                        int(j), 
-                        arrival_rate, 
-                        service_rate, 
-                        mu_retry_base,
-                        thread_pool)
-                    V[idx_j, idx_i] = self.o_rate_computer(
-                        int(i * x_to_y_range), 
-                        int(j), 
-                        arrival_rate, 
-                        mu_retry_base, 
-                        mu_drop_base,
-                        tail_prob)
-            # Compute magnitude (for color) and angle (for arrow direction)
-            magnitude = np.sqrt(U ** 2 + V ** 2)  # Magnitude of the vector
-            angle = np.arctan2(V, U)  # Angle of the vector (atan2 handles f_x=0 correctly)
-
-            # Find the maximum absolute values
-            max_mag = np.max(magnitude)
-
-            # Normalize the horizontal (U) and vertical (V) components by the maximum values
-            # magnitude_normalized = (magnitude / max_mag)
-
-            # Define a fixed maximum arrow length for visibility
-            fixed_max_length =  qsize / (x_to_y_range * max(self.num_points_x, self.num_points_y))
-
-
-            # Flatten the arrays for plotting
-            I_flat = I.flatten()
-            J_flat = J.flatten()
-            U_flat = np.cos(angle).flatten() * fixed_max_length # Normalize the direction to length fixed_max_length
-            V_flat = np.sin(angle).flatten() * fixed_max_length # Normalize the direction to length fixed_max_length
-            # magnitude_flat = magnitude_normalized.flatten()
-            magnitude_flat = magnitude.flatten()
-
-            # Plotting
-            fig, ax = plt.subplots(figsize=(10, 5))
-
-            # Create a colormap for the arrow colors based on the magnitude
-            cmap = plt.cm.viridis
-            norm = plt.Normalize(vmin=np.min(magnitude_flat), vmax=np.max(magnitude_flat))
-            colors = cmap(norm(magnitude_flat))
-
-            # Plot the arrows using the fixed length and color by magnitude
-            _ = ax.quiver(I_flat, J_flat, U_flat, V_flat, color=colors,
-                           angles='xy', scale_units='xy', scale=1, width=0.003)
-
-            # Add a colorbar based on the magnitude
-            sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-            sm.set_array(magnitude_flat)  # Link the data to the ScalarMappable
-            cbar = plt.colorbar(sm, ax=ax)  # Attach the colorbar to the current axis
-
-            if show_equilibrium:
-                # Create a circle at the (almost) equilibrium point
-                res, obj_val = self.equilibrium_computer(qsize, osize, arrival_rate, service_rate, mu_retry_base, mu_drop_base,
-                                            thread_pool,
-                                            tail_prob)
-                if abs(obj_val) < .01:
-                    print("found an almost equilibrium point")
-                    circle = plt.Circle((res.x[0]/x_to_y_range, res.x[1]), .01 * i_max, color='red', fill=True)
-                    ax.add_artist(circle)
-
-            # Get current tick positions on the x-axis
-            xticks = ax.get_xticks()
-
-            # Re-scale the tick labels to the correct numbers
-            scaled_xticks = xticks * x_to_y_range
-            scaled_xticks.astype(int)
-
-            # Set the new scaled tick labels
-            ax.set_xticklabels(scaled_xticks)
-
-            # Set labels for the axes
-            ax.set_xlabel('Queue length')
-            ax.set_ylabel('Orbit length')
-
-            # Display the plot
-            plt.show()
-            # plt.savefig("2D")
+            self.viz_general_server(p, server, qsizes, osizes, show_equilibrium)
+ 
 
 
     def viz_2d(self, p, qsize, osize, show_equilibrium=True):
@@ -575,7 +581,7 @@ class TestViz(unittest.TestCase):
         from numpy import linspace
         v = Visualizer(self.program())
         v.visualize(param = None, show_equilibrium=False)
-
+        
         v = Visualizer(self.program())
         p = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(9.75, 10.25, 5))
         v.visualize(param=ParameterList([p]))
