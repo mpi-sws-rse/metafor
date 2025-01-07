@@ -1,8 +1,8 @@
 
 from itertools import dropwhile, takewhile
 from typing import Dict, Optional
-from analysis.experiment import Experiment, Parameter, ParameterList
-from dsl.dsl import Constants, DependentCall, Program, Server, Source, Work
+from metafor.analysis.experiment import Experiment, Parameter, ParameterList
+from metafor.dsl.dsl import Constants, DependentCall, Program, Server, Source, Work
 import math
 from matplotlib import pyplot as plt
 import numpy as np
@@ -594,7 +594,7 @@ class Visualizer:
         return tail_prob
 
 import unittest
-from dsl.dsl import Server, Source, Work, Program
+from metafor.dsl.dsl import Server, Source, Work, Program
 class TestViz(unittest.TestCase):
     def program(self):
         api = { "insert": Work(10, [],), "delete": Work(10, []) }
