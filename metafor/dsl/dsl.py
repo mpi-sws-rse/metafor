@@ -186,11 +186,12 @@ class Server:
 
 
 class Program:
-    def __init__(self, name="<anon>"):
+    def __init__(self, name="<anon>", retry_when_full: bool = False):
         self.name = name
         self.sources = {}
         self.servers = {}
         self.connections = []
+        self.retry_when_full = retry_when_full
 
     def add_server(self, server: Server):
         assert not (server.name in self.servers)
@@ -317,7 +318,8 @@ class Program:
                 timeouts,
                 retries,
                 server.thread_pool,
-                representation=representation
+                representation=representation,
+                retry_when_full=self.retry_when_full,
             )
         else:  # multiple servers in serial connection
             root_server: Server = self.get_root_server()

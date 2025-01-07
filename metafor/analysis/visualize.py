@@ -609,6 +609,20 @@ class TestViz(unittest.TestCase):
         p.connect('client-i', '52')
         p.connect('client-d', '52')
         return p
+
+    def program_with_retry_when_full(self):
+        api = { "insert": Work(10, [],), "delete": Work(10, []) }
+        server = Server("52", api, qsize=200, orbit_size=20, thread_pool=1)
+        src1 = Source('client-i', 'insert', 4.75, timeout=9, retries=3)
+        src2 = Source('client-d', 'delete', 4.75, timeout=9, retries=3)
+
+        p = Program("Service52", retry_when_full=True)
+
+        p.add_server(server)
+        p.add_sources([src1, src2])
+        p.connect('client-i', '52')
+        p.connect('client-d', '52')
+        return p
     
     def multi_server_program(self):
         api1 = { "insert": Work(10, [ DependentCall(
@@ -634,6 +648,15 @@ class TestViz(unittest.TestCase):
         v = Visualizer(self.program())
         v.visualize(param = None, show_equilibrium=False)
         
+        v = Visualizer(self.program())
+        p = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(9.75, 10.25, 5))
+        v.visualize(param=ParameterList([p]))
+
+    def test_viz_with_retry_when_full(self):
+        from numpy import linspace
+        v = Visualizer(self.program_with_retry_when_full())
+        v.visualize(param=None, show_equilibrium=False)
+
         v = Visualizer(self.program())
         p = Parameter(("server", "52", "api", "insert", "processing_rate"), linspace(9.75, 10.25, 5))
         v.visualize(param=ParameterList([p]))

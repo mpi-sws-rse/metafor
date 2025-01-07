@@ -25,6 +25,7 @@ class SingleServerCTMC(CTMC):
             retries: List[int],
             thread_pool: int,
             representation=CTMCRepresentation.EXPLICIT,
+            retry_when_full: bool = False,
             alpha: float = 0.25,
     ):
         """alpha is a parameter that allows us to adjust the CTMC with simulation data"""
@@ -77,7 +78,9 @@ class SingleServerCTMC(CTMC):
         self.alpha = alpha
         self.representation = representation
 
-        self.Q = self.generator_mat_exact(transition_matrix=False, representation=representation)
+        self.retry_when_full = retry_when_full
+        self.Q = self.generator_mat_exact(transition_matrix=False, representation=representation,
+                                          retry_when_full=retry_when_full)
 
         # Debug: check that each row sums to 0 (approximately)
         # np.set_printoptions(threshold=sys.maxsize)
@@ -187,7 +190,8 @@ class SingleServerCTMC(CTMC):
         assert 0 <= total_ind < self.state_num
         return total_ind
 
-    def generator_mat_exact(self, transition_matrix: bool = False, representation=CTMCRepresentation.EXPLICIT):
+    def generator_mat_exact(self, transition_matrix: bool = False, representation=CTMCRepresentation.EXPLICIT,
+                            retry_when_full: bool = False):
         Q = Matrix(self.state_num, representation=representation)
         tail_seq = self._tail_prob_computer(self.main_queue_size, self.mu0_p, self.timeout, self.thread_pool)
 
@@ -209,17 +213,35 @@ class SingleServerCTMC(CTMC):
                 Q.set(total_ind, self._index_composer(n_main_queue - 1, n_retry_queue),
                       min(self.main_queue_size, self.thread_pool) * self.mu0_p
                       )
-                if n_retry_queue > 0:
-                    Q.set(
-                        total_ind, self._index_composer(n_main_queue, n_retry_queue - 1),
-                        (n_retry_queue * self.mu_drop_base))
-                if n_retry_queue < self.retry_queue_size - 1:
-                    Q.set(
-                        total_ind, self._index_composer(n_main_queue, n_retry_queue + 1),
-                        self.alpha
-                        * (self.lambdaa + n_retry_queue * self.mu_retry_base)
-                        * tail_main
-                    )
+                if not retry_when_full: # if retrirs aren't allowed when queue is full
+                    if n_retry_queue > 0:
+                        Q.set(
+                            total_ind, self._index_composer(n_main_queue, n_retry_queue - 1),
+                            (n_retry_queue * (self.mu_drop_base+self.mu_retry_base)))
+                else: # if retrirs are allowed when queue is full
+                    if n_retry_queue > 0:
+                        Q.set(
+                            total_ind, self._index_composer(n_main_queue, n_retry_queue - 1),
+                            (n_retry_queue * self.mu_drop_base))
+                    if n_retry_queue < self.retry_queue_size - 1:
+                        Q.set(
+                            total_ind, self._index_composer(n_main_queue, n_retry_queue + 1),
+                            self.alpha
+                            * (self.lambdaa + n_retry_queue * self.mu_retry_base))
+                    """Q.set(total_ind, self._index_composer(n_main_queue - 1, n_retry_queue),
+                          min(self.main_queue_size, self.thread_pool) * self.mu0_p
+                          )
+                    if n_retry_queue > 0:
+                        Q.set(
+                            total_ind, self._index_composer(n_main_queue, n_retry_queue - 1),
+                            (n_retry_queue * self.mu_drop_base))
+                    if n_retry_queue < self.retry_queue_size - 1:
+                        Q.set(
+                            total_ind, self._index_composer(n_main_queue, n_retry_queue + 1),
+                            self.alpha
+                            * (self.lambdaa + n_retry_queue * self.mu_retry_base)
+                            * tail_main
+                        )"""
             else:  # queue is neither full nor empty
                 alpha_tail_prob_sum = self.alpha * self.lambdaa * tail_main
                 if n_retry_queue < self.retry_queue_size - 1:
