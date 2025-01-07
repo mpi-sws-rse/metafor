@@ -783,19 +783,8 @@ def latency_analysis(
     print("Finished latency analysis for job " + str(job_type) + "\n")
 
 def scaled_program_parametric(qlen):
-    api = {"insert": Work(.625, [], )}
-    server = Server("52", api, qsize=qlen, orbit_size=30, thread_pool=100)
-    src = Source('client', 'insert', 50, timeout=3, retries=4)
-    p = Program("Service52")
-    p.add_server(server)
-    p.add_source(src)
-    p.connect('client', '52')
-    return p
-
-
-def scaled_program_parametric(qlen):
-    api = {"insert": Work(.625, [], )}
-    server = Server("52", api, qsize=qlen, orbit_size=30, thread_pool=100)
+    api = {"insert": Work(62.5, [], )}
+    server = Server("52", api, qsize=qlen, orbit_size=60, thread_pool=1)
     src = Source('client', 'insert', 50, timeout=3, retries=4)
     p = Program("Service52")
     p.add_server(server)
@@ -806,7 +795,7 @@ def scaled_program_parametric(qlen):
 def plot_mixing_time_draft():
     qlen_seq = []
     mixing_time_seq = []
-    for qlen in range(50, 401, 50):
+    for qlen in range(100, 251, 25):
         qlen_seq.append(qlen)
         p = scaled_program_parametric(qlen)
         ctmc: SingleServerCTMC = p.build()
@@ -828,9 +817,9 @@ def plot_mixing_time_draft():
     plt.close()
 
 
-"""plot_mixing_time_draft()
+plot_mixing_time_draft()
 
-latency_plot_generator(
+"""latency_plot_generator(
     variable1 = "qlen",
     low = 80,
     high = 150,
