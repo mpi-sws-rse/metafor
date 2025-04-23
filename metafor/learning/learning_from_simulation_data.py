@@ -186,7 +186,7 @@ class autoencoder():
         q_seq_learned_model = [[] for _ in range(traj_num)]
 
         for traj_idx in range(traj_num):
-            x0 = trajectory_list[traj_idx][0]  # initial state or sequence
+            x0 = trajectory_list[traj_idx][0][0]  # initial state or sequence
             q_seq_learned_model[traj_idx].append(x0[0][0].numpy())
 
             for i in range(1, len(true_q_seq[traj_idx])):
