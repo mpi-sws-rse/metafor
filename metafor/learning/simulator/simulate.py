@@ -221,9 +221,9 @@ def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, 
     q_seq, o_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
                                                        rho_fault, fault_start, fault_duration)
     # Save
-    with open("q_seq.pkl", "wb") as f:
+    with open("../results/q_seq.pkl", "wb") as f:
         pickle.dump(q_seq, f)
-    with open("o_seq.pkl", "wb") as f:
+    with open("../results/o_seq.pkl", "wb") as f:
         pickle.dump(o_seq, f)
 
 def index_composer(n_main_queue, n_retry_queue, qsize, osize):
