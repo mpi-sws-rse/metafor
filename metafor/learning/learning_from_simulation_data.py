@@ -122,7 +122,7 @@ def build_effective_transition_matrix(theta, depth):
 
 
 # List of functions and classes used for V2 autoencoder formulation:
-def get_trajectories(traj_num, X, q_seq):
+def get_trajectories(traj_num, X, Y, q_seq):
     """Getting a list of trajectories within the input dataset, hence taking the history length into account"""
     trajectory_list = []
     trajectory_length_list = []
@@ -131,15 +131,16 @@ def get_trajectories(traj_num, X, q_seq):
         num_steps = len(q_seq[traj_idx]) - depth - 1  # Number of future steps to predict
 
         X_traj = X[total_idx: total_idx + num_steps + 1]
+        Y_traj = Y[total_idx: total_idx + num_steps + 1]
         #
         trajectory_length_list.append(num_steps + 1)
         #
-        trajectory_list.append(torch.from_numpy(X_traj).float().unsqueeze(1))
+        trajectory_list.append([torch.from_numpy(X_traj).float().unsqueeze(1), torch.from_numpy(Y_traj).float().unsqueeze(1)])
         total_idx += num_steps + 1
     return trajectory_list, trajectory_length_list
 
 def autoencoder_training(input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list):
-    """Training the """
+    """Training the AE model"""
     # Create an instance of the model
     model = AutoEncoderModel(input_dim, latent_dim, output_dim)
     # Optimizer and loss function
@@ -152,12 +153,12 @@ def autoencoder_training(input_dim, latent_dim, output_dim, num_epochs, trajecto
 
         loss = 0
         for traj_idx in range(traj_num):
-            trajectory = trajectory_list[traj_idx]
-            steps = list(range(1, trajectory_length_list[traj_idx]))
+            trajectory = trajectory_list[traj_idx][0]
+            steps = list(range(0, trajectory_length_list[traj_idx]))
             # Use the first state x_0 as the input
             x0 = trajectory[0]  #
             # Target states
-            target = trajectory[1:]  #
+            target = trajectory_list[traj_idx][1]  #
 
             # Compute the predictions
             output = model(x0, steps)  #
@@ -262,7 +263,7 @@ with open("simulator/o_seq.pkl", "rb") as f:
     o_seq = pickle.load(f)
 
 traj_num = len(q_seq) # Number of trajectories within the dataset
-depth = 1 # History length, also known as depth in system identification
+depth = 10 # History length, also known as depth in system identification
 
 X, Y = prepare_training_data(q_seq, o_seq, depth)
 
@@ -294,7 +295,7 @@ latent_dim = 10  # Latent space dimension
 num_epochs = 250
 
 # Get trajectories within X
-trajectory_list, trajectory_length_list = get_trajectories(traj_num, X, q_seq)
+trajectory_list, trajectory_length_list = get_trajectories(traj_num, X, Y, q_seq)
 
 
 model = autoencoder_training(input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list)
