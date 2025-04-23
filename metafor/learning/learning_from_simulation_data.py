@@ -255,13 +255,13 @@ def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, sav
 
 
 # Loading the trajectories...
-with open("q_seq.pkl", "rb") as f:
+with open("simulator/q_seq.pkl", "rb") as f:
     q_seq = pickle.load(f)
-with open("o_seq.pkl", "rb") as f:
+with open("simulator/o_seq.pkl", "rb") as f:
     o_seq = pickle.load(f)
 
 traj_num = len(q_seq) # Number of trajectories within the dataset
-depth = 10 # History length, also known as depth in system identification
+depth = 1 # History length, also known as depth in system identification
 
 X, Y = prepare_training_data(q_seq, o_seq, depth)
 
