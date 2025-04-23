@@ -78,7 +78,7 @@ def simulate_linear_model(theta, q_seq, o_seq, depth):
 
     return model_preds
 
-def plot_predictions_vs_true(q_seq, model_preds, save_prefix="linear_model_traj"):
+def plot_predictions_vs_true(q_seq, model_preds, save_prefix="results/linear_model_traj"):
     for i, (true_q, pred_q) in enumerate(zip(q_seq, model_preds)):
         plt.figure(figsize=(10, 4))
         plt.plot(true_q, label="True q", marker='o')
@@ -213,7 +213,7 @@ class AutoEncoderModel(nn.Module):
         return torch.stack(predictions, dim=0)
 
 
-def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, save_dir=".", prefix="traj"):
+def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, save_dir="./results/", prefix="traj"):
     """
     Args:
         model: a callable model such that model(x0, [i]) → prediction at time i
@@ -303,7 +303,7 @@ simulate_and_plot_from_initial_state(
     model=model,
     trajectory_list=trajectory_list,
     true_q_seq=q_seq,
-    save_dir=".",
+    save_dir="./results/",
     prefix="q_model_vs_true"
 )
 
