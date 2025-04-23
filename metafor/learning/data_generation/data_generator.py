@@ -17,18 +17,6 @@ def delete_results(extensions: List[str]):
         delete_files(current_folder, extension)
 
 
-
-parser.add_argument('-total_time', type=float, help='maximum simulation time (in s) for all the simulations',
-                        default=1000000)
-    parser.add_argument('-sim_time', type=float, help='maximum simulation time (in ms) for an individual simulation',
-                        default=1000)
-    parser.add_argument('-step_time', type=int, help='step time used for plots', default=.5)
-    parser.add_argument('-runs', type=int, help='how many times should the simulation be run', default=3)
-    parser.add_argument('-main_queue_size', type=int, help='maximum size of the arrivals queue', default=100)
-    parser.add_argument('-retry_queue_size', type=int, help='maximum size of the retries queue', default=20)
-
-
-
 total_time = 1000000 # maximum simulation time (in s) for all the simulations
 main_queue_size = 100 # maximum size of the arrivals queue
 retry_queue_size = 20 # only used when learning in the space of prob distributions is desired.
