@@ -16,6 +16,7 @@ import pickle
 import matplotlib.pyplot as plt
 from numpy.linalg import lstsq
 
+os.makedirs("results", exist_ok=True)
 
 def prepare_training_data(q_seq, o_seq, depth):
     """ Preparing input-output training datasets"""
