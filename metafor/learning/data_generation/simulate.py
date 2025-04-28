@@ -119,8 +119,6 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                         k_overall += 1
                     last_q_val = float(split_line[4]) * 1
                     last_o_val = float(split_line[5]) * 1
-                    if k_traj == 90:
-                        ffff  = 1
                     qlen_dataset[traj_idx][run_ind, k_traj] = last_q_val
                     olen_dataset[traj_idx][run_ind, k_traj] = last_o_val
                     k_traj += 1
@@ -132,16 +130,25 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
     step_ind = np.min(actual_data_num_seq, axis = 0)
     q_seq = [[]*num_traj for l in range(num_traj)]
     o_seq = [[]*num_traj for l in range(num_traj)]
+    pi_seq = [[]*num_traj for l in range(num_traj)]
     for traj_idx in range(num_traj):
         for step in range(step_ind[traj_idx]):
             q_step = 0
             o_step = 0
+            pi_step = np.zeros(ss_size)
             for run_ind in range(num_runs):
                 q_step += qlen_dataset[traj_idx][run_ind, step] / num_runs
                 o_step += olen_dataset[traj_idx][run_ind, step] / num_runs
+                pi_diff = np.zeros(ss_size)
+                state = min(ss_size - 1,
+                            index_composer(qlen_dateset[run_ind, step], olen_dateset[run_ind, step], qsize, osize))
+                pi_diff[int(state)] = 1 / num_runs
+                pi_step += pi_diff
             q_seq[traj_idx].append(q_step)
             o_seq[traj_idx].append(o_step)
-    return q_seq, o_seq
+            pi_seq[traj_idx].append(pi_step)
+
+    return q_seq, o_seq, pi_seq
 
 
 def write_to_file(fn: str, stats_data: List[StatData], stat_fn, first: bool):
@@ -155,6 +162,7 @@ def write_to_file(fn: str, stats_data: List[StatData], stat_fn, first: bool):
 def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration):
     current_folder = os.getcwd()
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
+    # qsize and osize are fixed...
     q_seq, o_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, 100, 20)    # fault_duration, qsize, osize
     return q_seq, o_seq
 
@@ -214,17 +222,19 @@ def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, 
         process.kill()
         # check if the mean, variance, and standard deviation have been computed; if not, compute them
         if not done:
-            q_seq, o_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho, rho_fault, fault_start, fault_duration)
+            q_seq, o_seq, pi_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho, rho_fault, fault_start, fault_duration)
     end_time = time.time()
     runtime = end_time - start_time
     print("Running time: " + str(runtime) + " s")
-    q_seq, o_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
+    q_seq, o_seq, pi_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
                                                        rho_fault, fault_start, fault_duration)
     # Save
     with open("q_seq.pkl", "wb") as f:
         pickle.dump(q_seq, f)
     with open("o_seq.pkl", "wb") as f:
         pickle.dump(o_seq, f)
+    with open("pi_seq.pkl", "wb") as f:
+        pickle.dump(pi_seq, f)
 
 def index_composer(n_main_queue, n_retry_queue, qsize, osize):
     """This function converts two given input indices into one universal index in range [0, state_num].
