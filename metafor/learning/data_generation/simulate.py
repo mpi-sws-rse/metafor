@@ -141,7 +141,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                 o_step += olen_dataset[traj_idx][run_ind, step] / num_runs
                 pi_diff = np.zeros(ss_size)
                 state = min(ss_size - 1,
-                            index_composer(qlen_dateset[run_ind, step], olen_dateset[run_ind, step], qsize, osize))
+                            index_composer(qlen_dataset[traj_idx][run_ind, step], olen_dataset[traj_idx][run_ind, step], qsize, osize))
                 pi_diff[int(state)] = 1 / num_runs
                 pi_step += pi_diff
             q_seq[traj_idx].append(q_step)
