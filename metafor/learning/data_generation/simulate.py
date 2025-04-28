@@ -163,8 +163,8 @@ def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, n
     current_folder = os.getcwd()
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
     # qsize and osize are fixed...
-    q_seq, o_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, 100, 20)    # fault_duration, qsize, osize
-    return q_seq, o_seq
+    q_seq, o_seq, pi_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, 100, 20)    # fault_duration, qsize, osize
+    return q_seq, o_seq, pi_seq
 
 
 # Simulation with unimodal exponential service time and timeout
