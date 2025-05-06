@@ -651,7 +651,7 @@ class SingleServerCTMC(CTMC):
         return hitting_time_min
 
 
-    def get_hitting_time_average_and_variance(self, S1, S2) -> Tuple[float, float]:
+    def get_hitting_time_average_and_deviation(self, S1, S2) -> Tuple[float, float]:
         non_target_states = list(set(list(range(0, self.state_num))).difference(set(S2)))
         non_target_state_num = len(non_target_states)
         A = np.zeros((non_target_state_num, non_target_state_num))
