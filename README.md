@@ -24,16 +24,7 @@ Replace `/path/to/metafor` with the actual path to your local clone of the Metaf
 Below is an example where a single-threaded server handles requests at an average rate of \( \mu = 10 \) requests per second (RPS). A client sends requests at \( \lambda = 9.5 \) RPS, each with a timeout of 3 seconds and a maximum of 4 retries.
 
 ```python
-import math
-import numpy as np
-from numpy import linspace
-import pandas
-from matplotlib import pyplot as plt
-import matplotlib.colors as mcolors
-
 from metafor.dsl.dsl import Server, Work, Source, Program
-from metafor.model.single_server.ctmc import SingleServerCTMC
-from metafor.analysis.experiment import Parameter, ParameterList
 from metafor.analysis.visualize import Visualizer
 
 # Define server processing rate
