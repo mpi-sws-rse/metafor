@@ -33,7 +33,7 @@ MANIFEST
 *.spec
 
 # Polts
-*.png
+#*.png
 
 # Installer logs
 pip-log.txt
