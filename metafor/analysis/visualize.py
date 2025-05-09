@@ -312,7 +312,7 @@ class Visualizer:
         magnitude_flat = magnitude.flatten()
 
         # Plotting
-        fig, ax = plt.subplots(figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=(9, 6))
 
         # Create a colormap for the arrow colors based on the magnitude
         cmap = plt.cm.viridis
@@ -441,7 +441,7 @@ class Visualizer:
         magnitude_flat = magnitude.flatten()
 
         # Plotting
-        fig, ax = plt.subplots(figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=(9, 6))
 
         # Create a colormap for the arrow colors based on the magnitude
         cmap = plt.cm.viridis
@@ -595,28 +595,16 @@ class Visualizer:
 
 import unittest
 from metafor.dsl.dsl import Server, Source, Work, Program
+from numpy import linspace
+
 class TestViz(unittest.TestCase):
-    def program(self):
+    def program(self, retry_when_full=False):
         api = { "insert": Work(10, [],), "delete": Work(10, []) }
         server = Server("52", api, qsize=200, orbit_size=20, thread_pool=1)
         src1 = Source('client-i', 'insert', 4.75, timeout=9, retries=3)
         src2 = Source('client-d', 'delete', 4.75, timeout=9, retries=3)
 
-        p = Program("Service52")
-
-        p.add_server(server)
-        p.add_sources([src1, src2])
-        p.connect('client-i', '52')
-        p.connect('client-d', '52')
-        return p
-
-    def program_with_retry_when_full(self):
-        api = { "insert": Work(10, [],), "delete": Work(10, []) }
-        server = Server("52", api, qsize=200, orbit_size=20, thread_pool=1)
-        src1 = Source('client-i', 'insert', 4.75, timeout=9, retries=3)
-        src2 = Source('client-d', 'delete', 4.75, timeout=9, retries=3)
-
-        p = Program("Service52", retry_when_full=True)
+        p = Program("Service52", retry_when_full=retry_when_full)
 
         p.add_server(server)
         p.add_sources([src1, src2])
@@ -644,7 +632,6 @@ class TestViz(unittest.TestCase):
         return p
 
     def test_viz(self):
-        from numpy import linspace
         v = Visualizer(self.program())
         v.visualize(param = None, show_equilibrium=False)
         
@@ -653,8 +640,7 @@ class TestViz(unittest.TestCase):
         v.visualize(param=ParameterList([p]))
 
     def test_viz_with_retry_when_full(self):
-        from numpy import linspace
-        v = Visualizer(self.program_with_retry_when_full())
+        v = Visualizer(self.program(retry_when_full=True))
         v.visualize(param=None, show_equilibrium=False)
 
         v = Visualizer(self.program())

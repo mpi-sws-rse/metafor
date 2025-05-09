@@ -31,6 +31,13 @@ classifiers = [
   "Programming Language :: Python"
 ]
 
+dependencies = [
+  'numpy', 
+  'matplotlib',
+  'scipy',
+  'pandas'
+]
+
 [project.optional-dependencies]
 cli = [
   "click",
