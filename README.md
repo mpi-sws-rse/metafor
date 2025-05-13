@@ -4,7 +4,7 @@
 
 ## ⚙️ Prerequisites
 
-Ensure you have **Python 3.12 or later** installed on your machine.
+Ensure you have **Python 3.10 or later** installed on your machine.
 
 ## 📦 Installing Metafor
 
@@ -13,7 +13,7 @@ To install the required Python packages and set up your environment, run the fol
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install numpy matplotlib scipy pandas
+pip install .
 export PYTHONPATH=/path/to/metafor:/path/to/metafor/metafor
 ```
 
