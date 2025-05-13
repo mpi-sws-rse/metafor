@@ -131,6 +131,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
     q_seq = [[]*num_traj for l in range(num_traj)]
     o_seq = [[]*num_traj for l in range(num_traj)]
     pi_seq = [[]*num_traj for l in range(num_traj)]
+    q_seq_stochastic = []
     for traj_idx in range(num_traj):
         for step in range(step_ind[traj_idx]):
             q_step = 0
@@ -147,8 +148,13 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
             q_seq[traj_idx].append(q_step)
             o_seq[traj_idx].append(o_step)
             pi_seq[traj_idx].append(pi_step)
+        for run_ind in range(num_runs):
+            q_seq_stochastic.append(qlen_dataset[traj_idx][run_ind, :])
 
-    return q_seq, o_seq, pi_seq
+
+
+
+    return q_seq, o_seq, pi_seq, q_seq_stochastic
 
 
 def write_to_file(fn: str, stats_data: List[StatData], stat_fn, first: bool):
@@ -163,8 +169,8 @@ def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, n
     current_folder = os.getcwd()
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
     # qsize and osize are fixed...
-    q_seq, o_seq, pi_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, 100, 20)    # fault_duration, qsize, osize
-    return q_seq, o_seq, pi_seq
+    q_seq, o_seq, pi_seq, q_seq_stochastic = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, 100, 20)    # fault_duration, qsize, osize
+    return q_seq, o_seq, pi_seq, q_seq_stochastic
 
 
 # Simulation with unimodal exponential service time and timeout
@@ -222,11 +228,11 @@ def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, 
         process.kill()
         # check if the mean, variance, and standard deviation have been computed; if not, compute them
         if not done:
-            q_seq, o_seq, pi_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho, rho_fault, fault_start, fault_duration)
+            q_seq, o_seq, pi_seq, q_seq_stochastic = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho, rho_fault, fault_start, fault_duration)
     end_time = time.time()
     runtime = end_time - start_time
     print("Running time: " + str(runtime) + " s")
-    q_seq, o_seq, pi_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
+    q_seq, o_seq, pi_seq, q_seq_stochastic = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
                                                        rho_fault, fault_start, fault_duration)
     # Save
     with open("q_seq.pkl", "wb") as f:
@@ -235,6 +241,8 @@ def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, 
         pickle.dump(o_seq, f)
     with open("pi_seq.pkl", "wb") as f:
         pickle.dump(pi_seq, f)
+    with open("q_seq_stochastic.pkl", "wb") as f:
+        pickle.dump(q_seq_stochastic, f)
 
 def index_composer(n_main_queue, n_retry_queue, qsize, osize):
     """This function converts two given input indices into one universal index in range [0, state_num].

@@ -89,6 +89,245 @@ class linear_model():
         theta, _, _, _ = lstsq(X, Y, rcond=None)
         return theta  # shape: (input_dim,)
 
+    def train_linear_least_squares_with_structure(pi_seq, qsize, osize):
+        """
+        Fit a linear model using least squares with zeros enforced corresponding to transitions with rate 0.
+        Returns: theta (weights)
+        """
+        n = len(pi_seq[0][0]) # dimension of the transition prob matrix
+        traj_num = len(pi_seq)
+        theta = []
+        P_mat = np.zeros((n, n))
+        for s in range(n):
+            q, o = index_decomposer(s, qsize, osize)
+            X = []
+            Y = []
+            if q == 0:
+                if o == 0:
+                    for traj_idx in range(traj_num):
+                        m = len(pi_seq[traj_idx])
+                        #X = np.zeros((m, 3))
+                        #Y = np.zeros((m, 1))
+                        full_col_list = [index_composer(q, o, qsize, osize), index_composer(q + 1, o, qsize, osize),
+                                         index_composer(q, o + 1, qsize, osize)]
+                        for i in range(m):
+                            X.append(np.array([pi_seq[traj_idx][i][index_composer(q, o, qsize, osize)],
+                                                pi_seq[traj_idx][i][index_composer(q + 1, o, qsize, osize)],
+                                                pi_seq[traj_idx][i][index_composer(q, o + 1, qsize, osize)]]))
+                            Y.append(pi_seq[traj_idx][i + 1][index_composer(q, o, qsize, osize)])
+                        X = np.array(X)
+                        Y = np.array(Y)
+                        dependent_cols = dependent_columns(X)
+                        reduced_col_list = []
+                        for j in range(len(full_col_list)):
+                            if j not in dependent_cols:
+                                reduced_col_list.append(full_col_list[j])
+                        X_mod = np.delete(X, dependent_cols, axis=1)
+                        theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                        theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+                elif o == osize - 1:
+                    X = np.zeros((m, 2))
+                    Y = np.zeros((m, 1))
+                    full_col_list = [index_composer(q, o, qsize, osize), index_composer(q + 1, o, qsize, osize)]
+                    for i in range(m):
+                        X[i, :] = np.array([pi_seq[i][index_composer(q, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q + 1, o, qsize, osize)]])
+                        Y[i, :] = pi_seq[i + 1][index_composer(q, o, qsize, osize)]
+                    dependent_cols = dependent_columns(X)
+                    reduced_col_list = []
+                    for j in range(len(full_col_list)):
+                        if j not in dependent_cols:
+                            reduced_col_list.append(full_col_list[j])
+                    X_mod = np.delete(X, dependent_cols, axis=1)
+                    theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                    theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+                else:
+                    X = np.zeros((m, 3))
+                    Y = np.zeros((m, 1))
+                    full_col_list = [index_composer(q, o, qsize, osize), index_composer(q + 1, o, qsize, osize),
+                                     index_composer(q, o + 1, qsize, osize)]
+                    for i in range(m):
+                        X[i, :] = np.array([pi_seq[i][index_composer(q, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q + 1, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q, o + 1, qsize, osize)]])
+                        Y[i, :] = pi_seq[i + 1][index_composer(q, o, qsize, osize)]
+                    dependent_cols = dependent_columns(X)
+                    reduced_col_list = []
+                    for j in range(len(full_col_list)):
+                        if j not in dependent_cols:
+                            reduced_col_list.append(full_col_list[j])
+                    X_mod = np.delete(X, dependent_cols, axis=1)
+                    theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                    theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+            elif q == qsize - 1:
+                if o == 0:
+                    X = np.zeros((m, 4))
+                    Y = np.zeros((m, 1))
+                    full_col_list = [index_composer(q, o, qsize, osize), index_composer(q - 1, o, qsize, osize),
+                                     index_composer(q - 1, o + 1, qsize, osize), index_composer(q, o + 1, qsize, osize)]
+                    for i in range(m):
+                        X[i, :] = np.array([pi_seq[i][index_composer(q, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o + 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q, o + 1, qsize, osize)]])
+                        Y[i, :] = pi_seq[i + 1][index_composer(q, o, qsize, osize)]
+                    dependent_cols = dependent_columns(X)
+                    reduced_col_list = []
+                    for j in range(len(full_col_list)):
+                        if j not in dependent_cols:
+                            reduced_col_list.append(full_col_list[j])
+                    X_mod = np.delete(X, dependent_cols, axis=1)
+                    theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                    theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+                elif o == osize - 1:
+                    X = np.zeros((m, 3))
+                    Y = np.zeros((m, 1))
+                    full_col_list = [index_composer(q, o, qsize, osize), index_composer(q - 1, o, qsize, osize),
+                                     index_composer(q - 1, o - 1, qsize, osize)]
+                    for i in range(m):
+                        X[i, :] = np.array([pi_seq[i][index_composer(q, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o - 1, qsize, osize)]])
+                        Y[i, :] = pi_seq[i + 1][index_composer(q, o, qsize, osize)]
+                    dependent_cols = dependent_columns(X)
+                    reduced_col_list = []
+                    for j in range(len(full_col_list)):
+                        if j not in dependent_cols:
+                            reduced_col_list.append(full_col_list[j])
+                    X_mod = np.delete(X, dependent_cols, axis=1)
+                    theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                    theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+                else:
+                    X = np.zeros((m, 5))
+                    Y = np.zeros((m, 1))
+                    full_col_list = [index_composer(q, o, qsize, osize), index_composer(q, o + 1, qsize, osize),
+                                     index_composer(q - 1, o + 1, qsize, osize), index_composer(q - 1, o, qsize, osize),
+                                     index_composer(q - 1, o - 1, qsize, osize)]
+                    for i in range(m):
+                        X[i, :] = np.array([pi_seq[i][index_composer(q, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q, o + 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o + 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o - 1, qsize, osize)]])
+                        Y[i, :] = pi_seq[i + 1][index_composer(q, o, qsize, osize)]
+                    dependent_cols = dependent_columns(X)
+                    reduced_col_list = []
+                    for j in range(len(full_col_list)):
+                        if j not in dependent_cols:
+                            reduced_col_list.append(full_col_list[j])
+                    X_mod = np.delete(X, dependent_cols, axis=1)
+                    theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                    theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+            else:
+                if o == 0:
+                    X = np.zeros((m, 5))
+                    Y = np.zeros((m, 1))
+                    full_col_list = [index_composer(q, o, qsize, osize), index_composer(q - 1, o, qsize, osize),
+                                     index_composer(q - 1, o + 1, qsize, osize), index_composer(q, o + 1, qsize, osize),
+                                     index_composer(q + 1, o, qsize, osize)]
+                    for i in range(m):
+                        X[i, :] = np.array([pi_seq[i][index_composer(q, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o + 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q, o + 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q + 1, o, qsize, osize)]])
+                        Y[i, :] = pi_seq[i + 1][index_composer(q, o, qsize, osize)]
+                    dependent_cols = dependent_columns(X)
+                    reduced_col_list = []
+                    for j in range(len(full_col_list)):
+                        if j not in dependent_cols:
+                            reduced_col_list.append(full_col_list[j])
+                    X_mod = np.delete(X, dependent_cols, axis=1)
+                    theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                    theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+                elif o == osize - 1:
+                    X = np.zeros((m, 4))
+                    Y = np.zeros((m, 1))
+                    full_col_list = [index_composer(q, o, qsize, osize), index_composer(q - 1, o, qsize, osize),
+                                     index_composer(q - 1, o - 1, qsize, osize), index_composer(q + 1, o, qsize, osize)]
+                    for i in range(m):
+                        X[i, :] = np.array([pi_seq[i][index_composer(q, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o - 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q + 1, o, qsize, osize)]])
+                        Y[i, :] = pi_seq[i + 1][index_composer(q, o, qsize, osize)]
+                    dependent_cols = dependent_columns(X)
+                    reduced_col_list = []
+                    for j in range(len(full_col_list)):
+                        if j not in dependent_cols:
+                            reduced_col_list.append(full_col_list[j])
+                    X_mod = np.delete(X, dependent_cols, axis=1)
+                    theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                    theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+                else:
+                    X = np.zeros((m, 6))
+                    Y = np.zeros((m, 1))
+                    full_col_list = [index_composer(q, o, qsize, osize), index_composer(q, o + 1, qsize, osize),
+                                     index_composer(q - 1, o + 1, qsize, osize), index_composer(q - 1, o, qsize, osize),
+                                     index_composer(q - 1, o - 1, qsize, osize), index_composer(q + 1, o, qsize, osize)]
+                    for i in range(m):
+                        X[i, :] = np.array([pi_seq[i][index_composer(q, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q, o + 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o + 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o, qsize, osize)],
+                                            pi_seq[i][index_composer(q - 1, o - 1, qsize, osize)],
+                                            pi_seq[i][index_composer(q + 1, o, qsize, osize)]])
+                        Y[i, :] = pi_seq[i + 1][index_composer(q, o, qsize, osize)]
+                    dependent_cols = dependent_columns(X)
+                    reduced_col_list = []
+                    for j in range(len(full_col_list)):
+                        if j not in dependent_cols:
+                            reduced_col_list.append(full_col_list[j])
+                    X_mod = np.delete(X, dependent_cols, axis=1)
+                    theta_i = np.matmul(np.linalg.inv(np.matmul(X_mod.T, X_mod)), np.matmul(X_mod.T, Y))
+                    theta.append(theta_i)
+                    for j in range(len(reduced_col_list)):
+                        s_prin = reduced_col_list[j]
+                        P_mat[s_prin, s] = theta_i[j]
+            err_avg = np.average(np.matmul(X_mod, theta[s]) - Y)
+            if err_avg > 1:
+                print("LS estimations is poor for state", s)
+            err_seq.append(err_avg)
+
+        pi_seq_learned_model = [pi_seq[0]]
+        # Compute absolute differences between consecutive elements
+        diffs = np.abs(np.diff(pi_seq, axis=0))
+
+        # Compute the 2-norm (Euclidean distance) of these differences
+        norms = np.linalg.norm(diffs, axis=1)
+        # Find the index of maximum norm
+        max_index = 410  # np.argmax(norms)
+        for i in range(1, max_index):
+            pi_seq_learned_model.append(np.matmul(pi_seq_learned_model[i - 1], P_mat))
+        pi_seq_learned_model.append(pi_seq[max_index])
+        for i in range(max_index + 1, m + 1):
+            pi_seq_learned_model.append(np.matmul(pi_seq_learned_model[i - 1], P_mat))
+
+
 
     # List of functions used for LS estimation:
     def simulate_linear_model(theta, pi_seq, depth, qsize, osize):
@@ -142,6 +381,136 @@ class linear_model():
 
 
 
+# List of functions and classes used for V2 autoencoder formulation:
+class autoencoder():
+    def get_trajectories(traj_num, X, Y, q_seq):
+        """Getting a list of trajectories within the input dataset, hence taking the history length into account"""
+        trajectory_list = []
+        trajectory_length_list = []
+        total_idx = 0  # idx with respect to the accumulated data made by all trajectories
+        for traj_idx in range(traj_num):
+            num_steps = len(q_seq[traj_idx]) - depth - 1  # Number of future steps to predict
+
+            X_traj = X[total_idx: total_idx + num_steps + 1]
+            Y_traj = Y[total_idx: total_idx + num_steps + 1]
+            #
+            trajectory_length_list.append(num_steps + 1)
+            #
+            trajectory_list.append([torch.from_numpy(X_traj).float().unsqueeze(1), torch.from_numpy(Y_traj).float().unsqueeze(1)])
+            total_idx += num_steps + 1
+        return trajectory_list, trajectory_length_list
+
+    def autoencoder_training(input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list):
+        """Training the AE model"""
+        # Create an instance of the model
+        model = AutoEncoderModel(input_dim, latent_dim, output_dim)
+        # Optimizer and loss function
+        optimizer = optim.Adam(model.parameters(), lr=1e-3)
+        loss_fn = nn.MSELoss()
+
+        for epoch in range(num_epochs):
+            model.train()
+            optimizer.zero_grad()
+
+            loss = 0
+            for traj_idx in range(traj_num):
+                trajectory = trajectory_list[traj_idx][0]
+                steps = list(range(0, trajectory_length_list[traj_idx]))
+                # Use the first state x_0 as the input
+                x0 = trajectory[0]  #
+                # Target states
+                target = trajectory_list[traj_idx][1]  #
+
+                # Compute the predictions
+                output = model(x0, steps)  #
+
+                # Compute the loss (mean squared error)
+                loss += loss_fn(output, target)
+            loss.backward()
+            optimizer.step()
+
+            if epoch % 10 == 0:
+                print(f"Epoch {epoch}: Loss = {loss.item()}")
+        return model
+
+    def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, save_dir="./results/", prefix="traj"):
+        """
+        Args:
+            model: a callable model such that model(x0, [i]) → prediction at time i
+            trajectory_list: list of lists, each inner list holds the initial state x0 for a trajectory
+            true_q_seq: list of true q trajectories (same length as trajectory_list)
+            save_dir: where to save plots
+            prefix: filename prefix for saved plots
+        """
+        traj_num = len(trajectory_list)
+        q_seq_learned_model = [[] for _ in range(traj_num)]
+
+        for traj_idx in range(traj_num):
+            x0 = trajectory_list[traj_idx][0][0]  # initial state or sequence
+            q_seq_learned_model[traj_idx].append(x0[0][0].numpy())
+
+            for i in range(1, len(true_q_seq[traj_idx])):
+                y = model(x0, [i]).detach().numpy()[0][0][0]
+                q_seq_learned_model[traj_idx].append(y)
+
+            # Plot true vs predicted
+            plt.figure(figsize=(10, 4))
+            plt.plot(np.array(true_q_seq[traj_idx]), label="True q", marker='o')
+            plt.plot(np.array(q_seq_learned_model[traj_idx]), label="Model q", marker='x')
+            plt.title(f"Trajectory {traj_idx}")
+            plt.xlabel("Time step")
+            plt.ylabel("q value")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(f"{save_dir}/{prefix}_{traj_idx}.png")
+            plt.close()
+
+        return q_seq_learned_model
+
+
+class AutoEncoderModel(nn.Module):
+    def __init__(self, input_dim, latent_dim, output_dim):
+        super(AutoEncoderModel, self).__init__()
+        # Encoder: maps x to latent space y
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, 2000),
+            nn.ReLU(),
+            nn.Linear(2000, 1000),
+            nn.ReLU(),
+            nn.Linear(1000, latent_dim)
+        )
+        # Decoder: maps latent representation y back to x-hat
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, 1000),
+            nn.ReLU(),
+            nn.Linear(1000, 2000),
+            nn.ReLU(),
+            nn.Linear(2000, output_dim)
+        )
+        # Trainable square matrix K of shape (latent_dim, latent_dim)
+        self.K = nn.Parameter(torch.eye(latent_dim))
+
+    def forward(self, x0, steps):
+        """
+        x0: tensor of shape [1, input_dim] (initial state)
+        steps: list of integers representing future time steps (e.g., [1, 2, ..., N])
+        Returns: tensor of predictions of shape [len(steps), batch_size, input_dim]
+        """
+        y0 = self.encoder(x0)  # Compute initial latent representation
+        predictions = []
+        for i in steps:
+            # Compute K^i
+            K_power = torch.matrix_power(self.K, i)
+            # Propagate the latent state: y_i = K^i * y0
+            y_i = torch.matmul(y0, K_power.t())
+            # Decode the latent state to get x-hat
+            xhat_i = self.decoder(y_i)
+            predictions.append(xhat_i)
+        # Stack predictions along a new dimension
+        return torch.stack(predictions, dim=0)
+
+
 
 
 
@@ -180,3 +549,30 @@ print("Eigenvalues of the system:", eigvals_sorted)
 
 
 
+input_dim = 2 * depth  # Input space dimension
+output_dim = 2
+latent_dim = 10  # Latent space dimension
+num_epochs = 250
+
+# Get trajectories within X
+trajectory_list, trajectory_length_list = autoencoder.get_trajectories(traj_num, X, Y, q_seq)
+
+
+model = autoencoder.autoencoder_training(
+    input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list)
+
+
+autoencoder.simulate_and_plot_from_initial_state(
+    model=model,
+    trajectory_list=trajectory_list,
+    true_q_seq=q_seq,
+    save_dir="./results/",
+    prefix="q_model_vs_true"
+)
+
+# Analyzing the linear mapping
+K_matrix = model.K.detach().cpu().numpy()
+eigvals = np.linalg.eigvals(K_matrix)
+# Printing sorted eigenvalues
+eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
+print("Eigenvalues for K_matrix:", eigvals_sorted)
