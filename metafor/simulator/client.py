@@ -6,16 +6,17 @@ from typing import Type
 
 from metafor.simulator.job import Job, Distribution, JobStatus
 
-
 import logging
 logger = logging.getLogger(__name__)
 
 class Client(ABC):
 
-    def __init__(self, name: str, apiname: str, distribution: Distribution):
+    def __init__(self, name: str, apiname: str, distribution: Distribution, rho: float, job_type: Type[Job]):
         self.name = name
         self.apiname = apiname
         self.distribution: float = distribution
+        self.rate_tps: float = rho / job_type.mean()
+        self.job_type: Type[Job] = job_type
         self.server = None
 
     def set_server(self, s):
@@ -40,12 +41,12 @@ class Client(ABC):
 
 # Open loop load generation client. Creates an unbounded concurrency
 class OpenLoopClient(Client):
-    def __init__(self, name: str, apiname: str, distribution: Distribution):
-        super().__init__(name, apiname, distribution)
+    def __init__(self, name: str, apiname: str, distribution: Distribution, rho: float, job_type: Type[Job]):
+        super().__init__(name, apiname, distribution, rho, job_type)
 
     def generate(self, t: float, payload):
-        job = Job(t)
-        next_t = t + self.distribution.sample()
+        job = self.job_type(t)
+        next_t = t + self.distribution(self.rate_tps)
         assert self.server is not None, "Server is not set for client " + self.name
         offered = self.server.offer(job, t)
         if offered is None:
@@ -59,8 +60,10 @@ class OpenLoopClient(Client):
 
 # Open loop load generation client, with timeout. Creates an unbounded concurrency
 class OpenLoopClientWithTimeout(OpenLoopClient):
-    def __init__(self, name: str, apiname: str, distribution: Distribution, timeout: float, max_retries: int):
-        super().__init__(name, apiname, distribution)
+    def __init__(self, name: str, apiname: str, distribution: Distribution, 
+                 rho: float, job_type: Type[Job], timeout: float, max_retries: int,
+                 rho_fault: float, rho_reset: float, fault_start: float, fault_duration: float):
+        super().__init__(name, apiname, distribution, rho, job_type)
         self.timeout = timeout
         self.max_retries: int = max_retries
         self.rho_fault : float = rho_fault
@@ -73,8 +76,17 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
 
     def generate(self, t: float, payload=None):
         job = Job(name=self.apiname, timestamp=t, max_retries=self.max_retries, retries_left=self.max_retries)
+        
         logger.info("Job %f %s" % (t, self.apiname))
-        next_t = t + self.distribution.sample()
+
+        if t < self.fault_start[0]: # must be modified when there are more instances of faults
+            next_t = t + self.distribution(self.rate_tps).sample()
+        elif t >= self.fault_start[0] and t < self.fault_start[0] + self.fault_duration:
+            next_t = t + self.distribution(self.rate_tps_fault).sample()
+        elif t >= self.fault_start[0] + self.fault_duration:
+            next_t = t + self.distribution(self.rate_tps_reset).sample()
+
+
         assert self.server is not None, "Server is not set for client " + self.name
         offered = self.server.offer(job, t)
         if offered is None:

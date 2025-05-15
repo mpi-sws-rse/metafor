@@ -3,15 +3,17 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "metaphor"
+name = "metafor"
 version = "0.1.0"
 dependencies = [
-  "numpy",
-  "scipy",
-  "pandas",
-  "matplotlib",
-  "fiddle"
+  "numpy==1.26.4",
+  "scipy==1.15.3",
+  "pandas==2.2.3",
+  "matplotlib==3.10.3",
+  "fiddle",
+  "scikit-learn==1.6.1",
 ]
+
 requires-python = ">=3.8"
 authors = [
   {name = "Alexandra Bugariu", email = "bugariua@mpi-sws.org"},
@@ -22,6 +24,7 @@ authors = [
 maintainers = [
   {name = "Mahmoud Salamati", email = "msalamati@mpi-sws.org"}
 ]
+
 description = "A CTMC-based analysis tool for software systems"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -31,23 +34,17 @@ classifiers = [
   "Programming Language :: Python"
 ]
 
-dependencies = [
-  'numpy', 
-  'matplotlib',
-  'scipy',
-  'pandas'
-]
 
-[project.optional-dependencies]
-cli = [
-  "click",
-]
+#[project.optional-dependencies]
+#cli = [
+#  "click",
+#]
 
 #[project.urls]
 #Homepage = "https://example.com"
 #Documentation = "https://readthedocs.org"
-Repository = "https://github.com/mpi-sws-rse/metaphor.git"
-"Bug Tracker" = "https://github.com/mpi-sws-rse/metaphor/issues"
+Repository = "https://github.com/mpi-sws-rse/metafor.git"
+"Bug Tracker" = "https://github.com/mpi-sws-rse/metafor/issues"
 #Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
 
 #[project.scripts]
