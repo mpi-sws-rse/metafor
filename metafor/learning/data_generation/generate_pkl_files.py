@@ -10,10 +10,10 @@ from typing import List
 import numpy as np
 import pandas
 
-from Server import Server
+from metafor.simulator.server import  Server
 from Statistics import StatData
-from Client import Client, OpenLoopClient, OpenLoopClientWithTimeout
-from Job import exp_job, bimod_job
+from metafor.simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
+from metafor.simulator.job import exp_job, bimod_job, ExponentialDistribution
 
 done: bool = False
 import pickle
