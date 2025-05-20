@@ -20,33 +20,32 @@ import pickle
 
 # Print the mean value, the variance, and the standard deviation at each stat point in each second
 def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int,
-                          mean_t: float, rho, rho_fault, fault_start, fault_duration, qsize, osize):
+                          mean_t: float, rho: float, rho_fault: float, fault_start: float, fault_duration: float,
+                          qsize: int, osize: int):
     global done
-    ss_size = qsize * osize
-    num_traj = len(fault_start)  # number of continuous trajectories
-    num_datapoints = []
-    qlen_dataset = []
-    olen_dataset = []
+    ss_size = qsize * osize # this is used to create the two-dimensional state space for computing empirical dist pi_seq
+    num_traj = len(fault_start)  # number of continuous trajectories (currently there are only two)
+    num_datapoints = [] # list containing number of time steps within each continuous trajectory
+    qlen_dataset = [] # dataset containing number of jobs in queue per run
+    olen_dataset = [] # dataset containing retry numbers per run
     for l in range(num_traj):
         if l == 0:
-            traj_start = 0
+            traj_start = 0 # corresponding to the trajectory starting from zero
         else:
-            traj_start = fault_start[l-1] + fault_duration
+            traj_start = fault_start[l-1] + fault_duration  # corresponding to the trajectory starting from full
         num_datapoints.append(math.ceil((fault_start[l]-traj_start)/step_time))
         qlen_dataset.append(np.zeros((num_runs, num_datapoints[l])))
         olen_dataset.append(np.zeros((num_runs, num_datapoints[l])))
     run_ind = 0
-    actual_data_num_seq = [[]*i for i in range(len(file_names))]
+    actual_data_num_seq = [[]*i for i in range(len(file_names))] # list of the "actual" number of datapoints per run
     for file_name in file_names:
-        step_ind = 0
-        k_overall = 1
-        traj_idx = 0
-        k_traj = 1
-        discrete_time_point = 1 * step_time
+        k_overall = 1 # this index is used to track number of datapoints in the run
+        traj_idx = 0 # this index keeps track of the trajectory id
+        discrete_time_point = 1 * step_time # the exact (discrete) time
+        # initially for every run muner of jobs and number of retries are zero
         last_q_val = 0
         last_o_val = 0
-        wait_ind = False # if true, must wait until the end of the fault period
-        can_continue = True # will be set to True w
+        wait_ind = False # while true, must wait until the end of the fault period
         with open(file_name, "r") as f:
             row_num = len(pandas.read_csv(file_name))
             for i, line in enumerate(f.readlines()):
@@ -54,46 +53,48 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                     continue  # drop the header
                 split_line: List[str] = line.split(',')
                 current_cont_time = float(split_line[0])
+                # checking if the current traj is over (and simulation isn't over)
                 if current_cont_time > fault_start[traj_idx] and current_cont_time < max_t:
+                    # since previous traj is over, k_overall contains the actual
                     actual_data_num_seq[run_ind].append(k_overall)
-                    k_traj = 0
-                    k_overall = 0
-                    traj_idx += 1
-                    wait_ind = True
+                    k_overall = 0 # reset k_overall for the next traj
+                    traj_idx += 1 # update traj index
+                    wait_ind = True # activated once the first trajectory was ended
+                    # compute the discrete time point corresponding to the current continuous time
                     discrete_time_point = (math.floor((fault_start[traj_idx - 1] + fault_duration)/step_time)*step_time)
-                #fault_start_i = fault_start[traj_idx]  # corresponding to the end of current trajectory
-                if  wait_ind:
-                    can_continue = current_cont_time > (fault_start[traj_idx - 1] + fault_duration)
-                    if can_continue:
-                        wait_ind = False
-                if (current_cont_time < max_t) and (current_cont_time > discrete_time_point) and can_continue:
-
-
+                if  wait_ind: # only activated during the fault trigger
+                    # check if the fault duration is over and deactivate wait_ind
+                    if current_cont_time > (fault_start[traj_idx - 1] + fault_duration)
+                        wait_ind = False #
+                if (current_cont_time < max_t) and (current_cont_time > discrete_time_point) and (not wait_ind):
+                    # compute number of intermediate discrete time points between the until current_cont_time
                     n_mid = math.floor((current_cont_time-discrete_time_point)/step_time)
+                    # for the time steps between prev discrete_time_point and current_cont_time copy the last values
                     for i in range(n_mid):
-                        qlen_dataset[traj_idx][run_ind, k_traj] = last_q_val
-                        olen_dataset[traj_idx][run_ind, k_traj] = last_o_val
-                        k_traj += 1
-                        k_overall += 1
-                    last_q_val = float(split_line[4]) * 1
-                    last_o_val = float(split_line[5]) * 1
-                    qlen_dataset[traj_idx][run_ind, k_traj] = last_q_val
-                    olen_dataset[traj_idx][run_ind, k_traj] = last_o_val
-                    k_traj += 1
+                        qlen_dataset[traj_idx][run_ind, k_overall] = last_q_val
+                        olen_dataset[traj_idx][run_ind, k_overall] = last_o_val
+                        k_overall += 1 #
+                    # use data in csv files to update values
+                    last_q_val = float(split_line[4])
+                    last_o_val = float(split_line[5])
+                    # update the content of datasets
+                    qlen_dataset[traj_idx][run_ind, k_overall] = last_q_val
+                    olen_dataset[traj_idx][run_ind, k_overall] = last_o_val
                     k_overall += 1
                     discrete_time_point = (math.floor(current_cont_time/step_time)+1) * step_time
-        actual_data_num_seq[run_ind].append(k_overall)
-        run_ind += 1
+        actual_data_num_seq[run_ind].append(k_overall) # store number of actual datapoints in the current run
+        run_ind += 1 # update the run number
 
-    step_ind = np.min(actual_data_num_seq, axis = 0)
-    q_seq = [[]*num_traj for l in range(num_traj)]
-    o_seq = [[]*num_traj for l in range(num_traj)]
-    pi_seq = [[]*num_traj for l in range(num_traj)]
+    common_data_num = np.min(actual_data_num_seq, axis = 0) # minimum number of data points among all runs
+    q_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of jobs in the queue
+    o_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of retried jobs
+    pi_emp_seq = [[]*num_traj for l in range(num_traj)] # seq of empirical distributions
     for traj_idx in range(num_traj):
-        for step in range(step_ind[traj_idx]):
-            q_step = 0
-            o_step = 0
-            pi_step = np.zeros(ss_size)
+        for step in range(common_data_num[traj_idx]):
+            q_step = 0 # initialization for average number of jobs in the queue
+            o_step = 0 # initialization for average number of retried jobs
+            pi_step = np.zeros(ss_size)  # initialization for empirical distribution
+            # compute empirical averages
             for run_ind in range(num_runs):
                 q_step += qlen_dataset[traj_idx][run_ind, step] / num_runs
                 o_step += olen_dataset[traj_idx][run_ind, step] / num_runs
@@ -102,11 +103,11 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                             index_composer(qlen_dataset[traj_idx][run_ind, step], olen_dataset[traj_idx][run_ind, step], qsize, osize))
                 pi_diff[int(state)] = 1 / num_runs
                 pi_step += pi_diff
-            q_seq[traj_idx].append(q_step)
-            o_seq[traj_idx].append(o_step)
-            pi_seq[traj_idx].append(pi_step)
+            q_ave_seq[traj_idx].append(q_step)
+            o_ave_seq[traj_idx].append(o_step)
+            pi_emp_seq[traj_idx].append(pi_step)
 
-    return q_seq, o_seq, pi_seq
+    return q_ave_seq, o_ave_seq, pi_emp_seq
 
 
 
