@@ -64,7 +64,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                     discrete_time_point = (math.floor((fault_start[traj_idx - 1] + fault_duration)/step_time)*step_time)
                 if  wait_ind: # only activated during the fault trigger
                     # check if the fault duration is over and deactivate wait_ind
-                    if current_cont_time > (fault_start[traj_idx - 1] + fault_duration)
+                    if current_cont_time > (fault_start[traj_idx - 1] + fault_duration) # check if the fault is over
                         wait_ind = False #
                 if (current_cont_time < max_t) and (current_cont_time > discrete_time_point) and (not wait_ind):
                     # compute number of intermediate discrete time points between the until current_cont_time
