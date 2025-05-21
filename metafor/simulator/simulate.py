@@ -117,8 +117,8 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
             df.to_csv(current_fn, index=False)
 
 
-    latency_ave, latency_var, latency_std, runtime = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t)
-    plot_results(step_time, latency_ave, latency_var, latency_std, runtime, 'discrete_results.pdf')
+    latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t)
+    plot_results(step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, 'discrete_results.pdf')
 
 
 # Print the mean value, the variance, and the standard deviation at each stat point in each second
@@ -126,6 +126,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
     num_datapoints = math.ceil(max_t / step_time)
     latency_dateset = np.zeros((num_runs, num_datapoints))
     runtime_dateset = np.zeros((num_runs, num_datapoints))
+    qlen_dateset = np.zeros((num_runs, num_datapoints))
     run_ind = 0
     for file_name in file_names:
         step_ind = 0
@@ -139,26 +140,36 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                     #latency = float(split_line[2]) * 1
                     latency = float(split_line[1]) * 1
                     runtime = float(split_line[5])
+                    qlen = float(split_line[2])
                     latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
+                    qlen_dateset[run_ind, step_ind] = qlen
                     step_ind += 1
                 elif i == row_num - 1 and step_ind < num_datapoints:
                     # latency = float(split_line[2]) * 1
                     latency = float(split_line[1]) * 1
                     runtime = float(split_line[5])
+                    qlen = float(split_line[2])
                     latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
+                    qlen_dateset[run_ind, step_ind] = qlen
         run_ind += 1
     latency_ave = [0]
     latency_var = [0]
     latency_std = [0]
     runtime = [0]
+    qlen_ave = [0]
+    qlen_var = [0]
+    qlen_std = [0]
     for step in range(num_datapoints):
         latency_ave.append(np.mean(latency_dateset[:, step]))
         latency_var.append(np.var(latency_dateset[:, step]))
         latency_std.append(np.std(latency_dateset[:, step]))
         runtime.append(np.sum(runtime_dateset[:, step]))
-    return latency_ave,  latency_var, latency_std, runtime
+        qlen_ave.append(np.mean(qlen_dateset[:, step]))
+        qlen_var.append(np.var(qlen_dateset[:, step]))
+        qlen_std.append(np.std(qlen_dateset[:, step]))
+    return latency_ave,  latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std
 
 
 def write_to_file(fn: str, stats_data: List[StatData], stat_fn, first: bool):

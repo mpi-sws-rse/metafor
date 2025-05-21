@@ -288,7 +288,6 @@ eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
 print("Eigenvalues of the system:", eigvals_sorted)
 
 
-
 input_dim = 2 * depth  # Input space dimension
 output_dim = 2
 latent_dim = 10  # Latent space dimension
