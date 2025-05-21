@@ -69,14 +69,15 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                 if (current_cont_time < max_t) and (current_cont_time > discrete_time_point) and (not wait_ind):
                     # compute number of intermediate discrete time points between the until current_cont_time
                     n_mid = math.floor((current_cont_time-discrete_time_point)/step_time)
+                    
                     # for the time steps between prev discrete_time_point and current_cont_time copy the last values
                     for i in range(n_mid):
                         qlen_dataset[traj_idx][run_ind, k_overall] = last_q_val
                         olen_dataset[traj_idx][run_ind, k_overall] = last_o_val
                         k_overall += 1 #
                     # use data in csv files to update values
-                    last_q_val = float(split_line[4])
-                    last_o_val = float(split_line[5])
+                    last_q_val = float(split_line[2])
+                    last_o_val = float(split_line[3])
                     # update the content of datasets
                     qlen_dataset[traj_idx][run_ind, k_overall] = last_q_val
                     olen_dataset[traj_idx][run_ind, k_overall] = last_o_val
@@ -89,6 +90,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
     q_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of jobs in the queue
     o_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of retried jobs
     pi_emp_seq = [[]*num_traj for l in range(num_traj)] # seq of empirical distributions
+
     for traj_idx in range(num_traj):
         for step in range(common_data_num[traj_idx]):
             q_step = 0 # initialization for average number of jobs in the queue
