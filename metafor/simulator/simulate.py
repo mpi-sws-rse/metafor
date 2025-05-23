@@ -201,7 +201,7 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
          OpenLoopClientWithTimeout(name, apiname, distribution, rho, job_type, timeout_t, max_retries, rho_fault, rho_reset, fault_start,
                                    fault_duration))
     ]:
-        service_time_distribution = {"request":distribution(rho / job_type.mean())}
+        service_time_distribution = {"request":distribution(1/job_type.mean())}
         server = Server(name, queue_size, 1, service_time_distribution, retry_queue_size)
         server.set_context(Context(52))
         client.server = server

@@ -125,7 +125,10 @@ class Server:
         assert (self.busy > 0)
         completed = self.jobs[n]
         assert completed is not None
-        completed.status = JobStatus.COMPLETED
+
+        # commenting this below line as the If condition at line 100 in client.py
+        # never gets invoked, leading to no retries. 
+        #completed.status = JobStatus.COMPLETED
         completed.completed_t = t
 
         if completed.max_retries > completed.retries_left:  # a retried job is completed
@@ -146,7 +149,7 @@ class Server:
              #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
         # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
         #                                              self.queue.len(), self.retries, self.dropped, runtime))
-
+        
         events = []
         if self.queue.len() > 0:
             next_job = self.queue.pop()
@@ -155,6 +158,7 @@ class Server:
 
             self.jobs[n] = next_job
             service_time = self.service_time_distribution[next_job.name].sample()
+            #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[next_job.name].mean,service_time))
             next_job.size = service_time
             events = [(t + service_time, self.job_done, n)]
         else:
@@ -186,6 +190,7 @@ class Server:
                     self.jobs[i] = job
                     job.status = JobStatus.PROCESSING
                     service_time = self.service_time_distribution[job.name].sample()
+                    #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[job.name].mean,service_time))
                     job.size = service_time
                     logger.info("Processing %s at %f" % (job.name, t))
                     return t + service_time, self.job_done, i
@@ -199,5 +204,6 @@ class Server:
                 self.queue.append(job)
             else:
                 job.status = JobStatus.DROPPED
+                logger.info("Dropped %s at %f" % (job.name, t))
                 self.dropped += 1
             return None
