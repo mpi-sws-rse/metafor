@@ -20,6 +20,10 @@ def delete_results(extensions: List[str]):
 
 
 def main():
+    """ 
+    Main function that generates simulation data (.csv files) based on values of different parameters.
+    """
+
     delete_results([".csv", ".png"])
 
     total_time = 1000000 # maximum simulation time (in s) for all the simulations
@@ -57,6 +61,8 @@ def main():
                             total_time, step_time, rho_fault, rho_reset, fault_start, fault_duration)
 
     if genpkl:
+        # When genpkl is true, .pkl files are also generated from the .csv files
+        
         from generate_pkl_files import convert_csv_to_pkl
         convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration)
 

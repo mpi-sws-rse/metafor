@@ -91,11 +91,15 @@ class Simulator:
 #             heapq.heapify(q)
 
 
-# Run a simulation `run_nums` times, outputting the results to `x_fn`, where x in [1, num_runs].
-# One simulation is run for each client in `clients`.
-# `max_t` is the maximum time to run the simulation (in ms).
+
 def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_t: float, rho,
              queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, fault_duration):
+    """
+    Run a simulation `run_nums` times, outputting the results to `x_fn`, where x in [1, num_runs].
+    One simulation is run for each client in `clients`.
+    `max_t` is the maximum time to run the simulation (in ms).
+    
+    """
     file_names: List[str] = []
 
     for i in range(num_runs):
@@ -121,8 +125,10 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
     plot_results(step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, 'discrete_results.pdf')
 
 
-# Print the mean value, the variance, and the standard deviation at each stat point in each second
 def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int, mean_t: float):
+    """
+    Print the mean value, the variance, and the standard deviation at each stat point in each second
+    """
     num_datapoints = math.ceil(max_t / step_time)
     latency_dateset = np.zeros((num_runs, num_datapoints))
     runtime_dateset = np.zeros((num_runs, num_datapoints))
@@ -190,6 +196,7 @@ def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, n
 def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size: int, retry_queue_size: int, timeout_t: float,
                  max_retries: int, rho_fault: float, rho_reset: float, fault_start: float,
                  fault_duration: float) -> List[Client]:
+    
     clients = []
     job_name = apiname
     job_type = exp_job(mean_t)

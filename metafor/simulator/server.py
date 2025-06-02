@@ -14,8 +14,11 @@ from metafor.simulator.job import Distribution, Job, JobStatus
 import logging
 logger = logging.getLogger(__name__)
 
-# manage the output from the simulation
+
 class Context:
+    """
+    manage the output from the simulation
+    """
     def __init__(self, id: int):
         self.id = id
         self.result = []
@@ -85,8 +88,11 @@ class FCFSQueue:
         return "FCFS"
 
 
-# Server that consumes a queue of tasks of a fixed size (`queue_size`), with a fixed concurrency (MPL)
 class Server:
+    """
+    Server that consumes a queue of tasks of a fixed size (`queue_size`), with a fixed concurrency (MPL)    
+    """
+
     def __init__(self, name: str, queue_size: int, thread_pool: int,
                  service_time_distribution: dict[str, Distribution],
                  retry_queue_size: int):
@@ -122,13 +128,28 @@ class Server:
 
 
     def job_done(self, t: float, n: int) -> List:
+        """
+        This function is invoked when a job is completed
+        Once the job completes, the current context is added to the log
+        and jobs waiting in queue are processed.
+        
+        Args:
+            t : timestamp
+            n :  number of threads (less than thread_pool)
+            
+        Returns:
+            If queue is not empty, it returns the dequeued job else None.
+
+        """
+        
         assert (self.busy > 0)
         completed = self.jobs[n]
         assert completed is not None
 
         # commenting this below line as the If condition at line 100 in client.py
-        # never gets invoked, leading to no retries. 
-        #completed.status = JobStatus.COMPLETED
+        # never gets invoked, leading to no retries. Moreover, the status is already
+        # updated by the done function in client.py 
+        # completed.status = JobStatus.COMPLETED
         completed.completed_t = t
 
         if completed.max_retries > completed.retries_left:  # a retried job is completed
@@ -138,6 +159,7 @@ class Server:
         end_time = time.time()
         runtime = end_time - self.start_time
         assert self.context is not None, "Context not set: cannot output results"
+    
         self.context.write(
             {'timestamp': t,
              'latency' : t - completed.created_t,
@@ -145,6 +167,8 @@ class Server:
              'retries' : self.retries,
              'dropped' : self.dropped,
              'runtime' : runtime,
+             'retries_left' : self.jobs[n].retries_left,
+             'service_time' : self.jobs[n].size,
              })
              #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
         # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
@@ -172,6 +196,20 @@ class Server:
         return events
 
     def offer(self, job: Job, t: float):
+        """
+        This function gets invoked when a job has to be processed.
+        If the server is available, the job is processed otherwise it is added
+        to the queue (waiting). If the queue is full, the job is dropped. The retries
+        mechanism is implemented by the timeout() in client.py  
+
+        Args:
+            job: the current job to be processed
+            t : timestamp
+            
+        Returns:
+            If the job is processed, it returns the completed job else None.
+        """
+
         if job.max_retries > job.retries_left: # this is a retried job
             self.retries += 1
             # if self.retries < self.retry_queue_size:

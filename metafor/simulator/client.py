@@ -60,6 +60,17 @@ class OpenLoopClient(Client):
 
 # Open loop load generation client, with timeout. Creates an unbounded concurrency
 class OpenLoopClientWithTimeout(OpenLoopClient):
+    """
+    Function implementing Client api with retries and timeouts.
+    If the job is not complete before $timeout$ elapses, it is retried $max_retries$ number
+    of times.
+    We use two modes - Normal mode and Fault mode.
+    In the current setup, the server utlization rate is set to rho during inital phase and 
+    the late phase of the simulation (Normal mode). In between, a request storm occurs which
+    is modelled using a fault rate and fault duration capturing the intensity and duration
+    of the fault (Fault mode). 
+    
+    """
     def __init__(self, name: str, apiname: str, distribution: Distribution, 
                  rho: float, job_type: Type[Job], timeout: float, max_retries: int,
                  rho_fault: float, rho_reset: float, fault_start: float, fault_duration: float):
@@ -75,6 +86,21 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
 
 
     def generate(self, t: float, payload=None):
+        """
+        This function is invoked when client requests a new job (job creation).
+        For normal mode, the arrival rate of a new job is $rho$. For
+        fault mode, the arrival rate is given by $rho_fault$. Higher rate 
+        signify smaller intervals between job arrival, leading to incrase in 
+        number of jobs arriving into the system.     
+
+        Args:
+            t : timeout
+
+        Returns:
+            A new job if no job is currently being processed by the server.
+            If a job is already being processed by the server, then a retry 
+            job is also scheduled at timeout.
+        """
         job = Job(name=self.apiname, timestamp=t, max_retries=self.max_retries, retries_left=self.max_retries)
         
         logger.info("Job %f %s" % (t, self.apiname))
@@ -96,6 +122,16 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
             return [(next_t, self.generate, None), (t + self.timeout, self.on_timeout, job), offered]
 
     def on_timeout(self, t, job):
+        """
+        This function is invoked when a job is under processing after timeout. 
+        
+        Args:
+            t : timeout
+            job : a retry job
+
+        Returns:
+            A retry job is scheduled at timeout if job is still under processing else None.
+        """
         logger.info("on timeout called at %f with job %s" % (t, job))
         if job.status != JobStatus.COMPLETED and job.status != JobStatus.DROPPED:
             # we have timed out: generate another instance, if retries left
@@ -113,6 +149,9 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
             return []
         
     def done(self, t: float, event: Job):
+        """
+        This function is invoked when a job is completed.
+        """
         # job completed
         #if t - event.created_t > self.timeout and event.retries_left > 0:
         #    # Offer another job as a replacement for the timed-out one
