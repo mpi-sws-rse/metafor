@@ -18,16 +18,17 @@ from numpy.linalg import lstsq
 
 os.makedirs("results", exist_ok=True)
 
-def prepare_training_data(q_seq, o_seq, depth):
+
+def prepare_training_data(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth):
     """ Preparing input-output training datasets"""
     X = []
     Y = []
 
-    for q, o in zip(q_seq, o_seq):
+    for q, o, l, d, r, s  in zip(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq):
         T = len(q)
         for t in range(depth, T):
-            x = q[t - depth:t] + o[t - depth:t]  # concatenate d history from q and o
-            y = q[t: t + 1] + o[t: t + 1]
+            x = q[t - depth:t] + r[t - depth:t]  # concatenate d history of features
+            y = q[t: t + 1] + r[t: t + 1] 
             X.append(x)
             Y.append(y)
 
@@ -47,7 +48,7 @@ class linear_model():
 
 
     # List of functions used for LS estimation:
-    def simulate_linear_model(theta, q_seq, o_seq, depth):
+    def simulate_linear_model(theta, q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth):
         """
         Autoregressive rollout using a linear model that predicts both [q_t, o_t]
 
@@ -61,19 +62,30 @@ class linear_model():
         """
         model_preds = []
 
-        for q, o in zip(q_seq, o_seq):
+        for q, o, l, d, r, s  in zip(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq):
             T = len(q)
             q_pred = list(q[:depth])  # True q values for initialization
             o_hist = list(o[:depth])  # True o values for initialization
-
+            l_hist = list(l[:depth])  # True l values for initialization
+            d_hist = list(d[:depth])  # True d values for initialization
+            r_hist = list(r[:depth])  # True r values for initialization
+            s_hist = list(s[:depth])  # True s values for initialization
             for t in range(depth, T):
                 q_input = q_pred[-depth:]
                 o_input = o_hist[-depth:]
-                x = np.array(q_input + o_input)
+                l_input = l_hist[-depth:]
+                d_input = d_hist[-depth:]
+                r_input = r_hist[-depth:]
+                s_input = s_hist[-depth:]
+                x = np.array(q_input + r_input)
                 y_pred = x @ theta  #
 
                 q_pred.append(y_pred[0])
-                o_hist.append(y_pred[1])
+                #o_hist.append(y_pred[1])
+                #l_hist.append(y_pred[2])
+                #d_hist.append(y_pred[2])
+                r_hist.append(y_pred[1])
+                #s_hist.append(y_pred[2])
 
             model_preds.append(q_pred)
 
@@ -115,10 +127,22 @@ class linear_model():
         # Second row
         A_theta[1, :] = theta[:, 1]  # next o
 
-        # Shift previous q and o values down by 1
-        A_theta[2:, :-2] = np.eye(2*d - 2)
+        # Third row
+        #A_theta[2, :] = theta[:, 2]  # next l
 
+        # Fourth row
+        #A_theta[3, :] = theta[:, 3]  # next d
+
+        # Fifth row
+        #A_theta[4, :] = theta[:, 4]  # next r
+
+        # Sixth row
+        #A_theta[5, :] = theta[:, 5]  # next s
+        # Shift previous values down by 1
+        A_theta[2:, :-2] = np.eye(2*d - 2)
         return A_theta
+
+
 
 
 # List of functions and classes used for V2 autoencoder formulation:
@@ -254,18 +278,25 @@ class AutoEncoderModel(nn.Module):
 
 
 
-
-
+ 
 # Loading the trajectories...
 with open("data_generation/q_seq.pkl", "rb") as f:
     q_seq = pickle.load(f)
 with open("data_generation/o_seq.pkl", "rb") as f:
     o_seq = pickle.load(f)
+with open("data_generation/l_seq.pkl", "rb") as f:
+    l_seq = pickle.load(f)
+with open("data_generation/d_seq.pkl", "rb") as f:
+    d_seq = pickle.load(f)
+with open("data_generation/r_seq.pkl", "rb") as f:
+    r_seq = pickle.load(f)
+with open("data_generation/s_seq.pkl", "rb") as f:
+    s_seq = pickle.load(f)
 
 traj_num = len(q_seq) # Number of trajectories within the dataset
 depth = 10 # History length, also known as depth in system identification
 
-X, Y = prepare_training_data(q_seq, o_seq, depth)
+X, Y = prepare_training_data(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth)
 
 # Evaluating the performance of least-squares optimizer
 
@@ -274,7 +305,7 @@ X, Y = prepare_training_data(q_seq, o_seq, depth)
 theta = linear_model.train_linear_least_squares(X, Y)
 
 # Compute the model predictions
-model_preds = linear_model.simulate_linear_model(theta, q_seq, o_seq, depth=depth)
+model_preds = linear_model.simulate_linear_model(theta, q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth=depth)
 
 # Plot and compare the output of model and true trajectories
 linear_model.plot_predictions_vs_true(q_seq, model_preds)
