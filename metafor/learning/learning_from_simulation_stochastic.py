@@ -25,7 +25,133 @@ from scipy.optimize import least_squares
 import cvxpy as cp
 import osqp
 
+from scipy.ndimage import gaussian_filter
+
 os.makedirs("results", exist_ok=True)
+
+
+def matrix_modifier(A):
+    """Given a square matrix, this function computes a modified matrix,
+     which is suitable for visualization."""
+    n = np.shape(A)[0] # dimension of the linear mapping
+    A_mod = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            A_mod[i, j] = max(0, A[i, j]) - min(0, A[j, i])
+    return A_mod
+
+def flow_computer(A, q: int, o: int, qsize: int, osize: int):
+    """Given a square matrix which is entry-wise non-negative, this function computes compute a flow vector,
+    that determines the dominant flow strength along x and y directions.
+    """
+    n = np.shape(A)[0]
+    s = index_composer(q, o, qsize, osize)
+    q_sum = 0 # summation of probabilities along queue direction
+    o_sum = 0 # summation of probabilities along orbit/retry direction
+    for s_prin in range(n):
+        q_prin, o_prin = index_decomposer(s_prin, qsize, osize)
+        q_sum += (q_prin - q) * A[s, s_prin]
+        o_sum += (o_prin - o) * A[s, s_prin]
+        #q_sum += max(-1, min( 1, (q_prin - q))) * A[s, s_prin]
+        #o_sum += max(-1, min( 1, (o_prin - o))) * A[s, s_prin]
+    return q_sum, o_sum
+
+def viz_linear_mapping(A, qsize: int, osize: int,  num_x, num_y, show_equilibrium=True):
+    """visualize the dynamics of a linear mapping"""
+    if qsize > osize:
+        x_to_y_range = int(qsize / osize)
+    else:
+        x_to_y_range = 1
+        assert False, "For visualization, set queue size > orbit size (revisit this assumption)"
+
+    # Downsample the i and j ranges for better visibility
+    i_values = np.linspace(0, qsize / x_to_y_range, num_x, endpoint=False)  #
+    j_values = np.linspace(0, osize, num_y, endpoint=False)  #
+
+    # Create meshgrid for i and j values
+    I, J = np.meshgrid(i_values, j_values)
+
+    # Create arrays for the horizontal (U) and vertical (V) components
+    U = np.zeros(I.shape)  # Horizontal component
+    V = np.zeros(I.shape)  # Vertical component
+
+
+    A_mod = matrix_modifier(A)
+
+    # Compute magnitudes and angles for each (i, j)
+    for idx_i, i in enumerate(i_values):
+        for idx_j, j in enumerate(j_values):
+            u, v = flow_computer(A, i * x_to_y_range, j, qsize, osize)
+            U[idx_j, idx_i] = u
+            V[idx_j, idx_i] = v
+    U = gaussian_filter(U, sigma=1)
+    V = gaussian_filter(V, sigma=1)
+    # Compute magnitude (for color) and angle (for arrow direction)
+    magnitude = np.sqrt(U ** 2 + V ** 2)  # Magnitude of the vector
+    angle = np.arctan2(V, U)  # Angle of the vector (atan2 handles f_x=0 correctly)
+
+    # Find the maximum absolute values
+    max_mag = np.max(magnitude)
+
+    # Normalize the horizontal (U) and vertical (V) components by the maximum values
+    # magnitude_normalized = (magnitude / max_mag)
+
+    # Define a fixed maximum arrow length for visibility
+    fixed_max_length = qsize / (x_to_y_range * max(num_x, num_y))
+
+    # Flatten the arrays for plotting
+    I_flat = I.flatten()
+    J_flat = J.flatten()
+    U_flat = np.cos(angle).flatten() * fixed_max_length  # Normalize the direction to length fixed_max_length
+    V_flat = np.sin(angle).flatten() * fixed_max_length  # Normalize the direction to length fixed_max_length
+    # magnitude_flat = magnitude_normalized.flatten()
+    magnitude_flat = magnitude.flatten()
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(9, 6))
+
+    # Create a colormap for the arrow colors based on the magnitude
+    cmap = plt.cm.viridis
+    norm = plt.Normalize(vmin=np.min(magnitude_flat), vmax=np.max(magnitude_flat))
+    colors = cmap(norm(magnitude_flat))
+
+    # Plot the arrows using the fixed length and color by magnitude
+    _ = ax.quiver(I_flat, J_flat, U_flat, V_flat, color=colors,
+                  angles='xy', scale_units='xy', scale=1, width=0.003)
+
+    # Add a colorbar based on the magnitude
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array(magnitude_flat)  # Link the data to the ScalarMappable
+    cbar = plt.colorbar(sm, ax=ax)  # Attach the colorbar to the current axis
+
+    if show_equilibrium:
+        # Create a circle at the (almost) equilibrium point
+        res, obj_val = self.equilibrium_computer(qsize, osize, arrival_rate, service_rate, mu_retry_base, mu_drop_base,
+                                                 thread_pool,
+                                                 tail_prob)
+        if abs(obj_val) < .01:
+            print("found an almost equilibrium point")
+            circle = plt.Circle((res.x[0] / x_to_y_range, res.x[1]), .01 * qsize / x_to_y_range, color='red', fill=True)
+            ax.add_artist(circle)
+
+    # Get current tick positions on the x-axis
+    xticks = ax.get_xticks()
+
+    # Re-scale the tick labels to the correct numbers
+    scaled_xticks = xticks * x_to_y_range
+    scaled_xticks.astype(int)
+
+    # Set the new scaled tick labels
+    ax.set_xticklabels(scaled_xticks)
+
+    # Set labels for the axes
+    ax.set_xlabel('Queue length')
+    ax.set_ylabel('Orbit length')
+
+    # Display the plot
+    plt.show()
+    plt.savefig("results/2D_flow.png")
+
 
 
 def learn_dtmc_transition_matrix(
@@ -97,7 +223,7 @@ def index_composer(n_main_queue, n_retry_queue, qsize, osize):
     main_queue_size = qsize
 
     total_ind = n_retry_queue * main_queue_size + n_main_queue
-    return total_ind
+    return int(total_ind)
 
 
 def index_decomposer(total_ind, qsize, osize):
@@ -664,19 +790,20 @@ qsize = 100
 osize = 30
 
 # theta = np.matmul(np.linalg.inv(np.matmul(X.T, X)), np.matmul(X.T, Y))
-# theta = linear_model.train_linear_least_squares(X, Y) # without structure
+theta = linear_model.train_linear_least_squares(X, Y) # without structure
 # theta = linear_model.train_linear_least_squares_with_structure(pi_seq, qsize, osize)  # enforcing structure
 # theta = linear_model.sgd_with_reset(X, Y)
 
-theta_red = linear_model.train_linear_least_squares(X_mod, Y_mod) # without structure
+# theta_red = linear_model.train_linear_least_squares(X_mod, Y_mod) # without structure
 # theta_red = linear_model.convex_op(X_mod, Y_mod)
 # theta_red = linear_model.convex_op_sparse(X_mod, Y_mod)
 
-theta = augment_matrix(theta_red, important_indices, np.shape(X)[1])
+# theta = augment_matrix(theta_red, important_indices, np.shape(X)[1])
 
+viz_linear_mapping(theta, qsize, osize,  30, 30, False)
 
-print("the learning error is", np.linalg.norm(Y_mod - X_mod @ theta_red, 'fro') ** 2)
-distance_array = sparsity_measure(theta)
+# print("the learning error is", np.linalg.norm(Y_mod - X_mod @ theta_red, 'fro') ** 2)
+# distance_array = sparsity_measure(theta)
 
 # Compute the model predictions
 model_preds, true_vals = linear_model.simulate_linear_model(theta, pi_seq, depth, qsize, osize)
