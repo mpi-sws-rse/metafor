@@ -26,9 +26,123 @@ import cvxpy as cp
 import osqp
 
 from scipy.ndimage import gaussian_filter
+from scipy.linalg import expm
+
+import sys
+
 
 os.makedirs("results", exist_ok=True)
 
+
+def stationary_distribution_eig(P):
+    """
+    Computes the stationary distribution via eigen decomposition.
+
+    Args:
+        P: (n x n) transition matrix
+
+    Returns:
+        pi: stationary distribution (1D array)
+    """
+    eigvals, eigvecs = np.linalg.eig(P.T)
+    # Find the eigenvector associated with eigenvalue 1
+    idx = np.argmin(np.abs(eigvals - 1))
+    pi = np.real(eigvecs[:, idx])
+    pi = pi / np.sum(pi)
+    return pi
+
+def is_irreducible(P):
+    """
+    Checks irreducibility of a transition matrix using graph connectivity.
+
+    Args:
+        P: (n x n) numpy array, transition probability matrix
+
+    Returns:
+        True if irreducible, False otherwise
+    """
+    n = P.shape[0]
+    G = nx.DiGraph()
+    for i in range(n):
+        for j in range(n):
+            if P[i, j] > 0:
+                G.add_edge(i, j)
+
+    return nx.is_strongly_connected(G)
+
+def get_analytic_ctmc(lambdaa, mu, timeout_t, max_retries, qsize, osize):
+    # Define server processing rate
+    api = {"insert": Work(mu, [])}
+
+    # Configure server parameters: queue size, orbit size, threads
+    server = Server("52", api, qsize=qsize, orbit_size=osize, thread_pool=1)
+
+    # Define client request behavior
+    src = Source("client", "insert", lambdaa, timeout=timeout_t, retries=max_retries)
+
+    # Build the request-response system
+    p = Program("Service52")
+    p.add_server(server)
+    p.add_source(src)
+    p.connect("client", "52")
+
+    Q = p.build().Q
+
+    np.save("results/Q_mat.npy", Q)
+    return None
+
+
+def compute_prior_counts(Q, step_time, beta):
+    """
+    Converts CTMC generator Q into prior pseudocounts for Dirichlet prior.
+
+    Args:
+        Q: CTMC generator matrix (n x n)
+        tau: sampling time
+        beta: total prior count mass per row
+
+    Returns:
+        B: prior count matrix (n x n)
+    """
+    P0 = expm(Q * step_time)
+    B = beta * P0
+    return B
+
+
+def sample_transition_matrix_on_the_fly(counts, alpha, num_samples, seed=None):
+    """
+    Samples transition matrices from posterior and computes mean/std on-the-fly.
+
+    Args:
+        counts: (n, n) transition count matrix.
+        alpha: (n, n) Dirichlet prior (default = ones).
+        num_samples: number of posterior samples.
+        seed: random seed (optional).
+
+    Returns:
+        mean_estimate: (n, n) posterior mean estimate.
+        std_estimate: (n, n) posterior standard deviation estimate.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    n = counts.shape[0]
+    if alpha is None:
+        alpha = np.ones_like(counts)
+
+    mean_est = np.zeros((n, n))
+    M2 = np.zeros((n, n))  # Sum of squares of differences from the mean
+
+    for s in range(1, num_samples + 1):
+        print("computations for sample", s)
+        for i in range(n):
+            sample_row = np.random.dirichlet(counts[i] + alpha[i])
+            delta = sample_row - mean_est[i]
+            mean_est[i] += delta / s
+            M2[i] += delta * (sample_row - mean_est[i])
+
+    std_est = np.sqrt(M2 / (num_samples - 1)) if num_samples > 1 else np.zeros_like(M2)
+    return mean_est, std_est
 
 def matrix_modifier(A):
     """Given a square matrix, this function computes a modified matrix,
@@ -148,8 +262,8 @@ def viz_linear_mapping(A, qsize: int, osize: int,  num_x, num_y, show_equilibriu
     ax.set_xlabel('Queue length')
     ax.set_ylabel('Orbit length')
 
-    # Display the plot
-    plt.show()
+    # Display and save the plot
+    # plt.show()
     plt.savefig("results/2D_flow.png")
 
 
@@ -310,6 +424,34 @@ class linear_model():
         """
         theta, _, _, _ = lstsq(X, Y, rcond=None)
         return theta  # shape: (input_dim,)
+
+    def soft_constrained_with_gd(X):
+        pi_seq = torch.tensor(X, dtype=torch.float32)  # Shape: (N+1, n)
+        N, n = pi_seq.shape[0] - 1, pi_seq.shape[1]
+
+        # Parameter: transition matrix
+        P = nn.Parameter(torch.randn(n, n))
+
+        optimizer = torch.optim.Adam([P], lr=1e-2)
+        lambda1 = 10.0  # non-negativity penalty
+        lambda2 = 10.0  # row sum penalty
+
+        for epoch in range(1000):
+            pred_pis = pi_seq[:-1] @ P
+            data_loss = torch.sum((pi_seq[1:] - pred_pis) ** 2)
+
+            nonneg_penalty = torch.sum(torch.relu(-P) ** 2)
+            rowsum_penalty = torch.sum((P.sum(dim=1) - 1) ** 2)
+
+            loss = data_loss + lambda1 * nonneg_penalty + lambda2 * rowsum_penalty
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if epoch % 10 == 0:
+                print(f"Epoch {epoch}: Loss = {loss.item()}")
+        return P
+
 
     def train_linear_least_squares_with_structure(pi_seq, qsize, osize):
         """Only works for depth equal to one!"""
@@ -774,8 +916,12 @@ with open("data_generation/pi_seq.pkl", "rb") as f:
     pi_seq = pickle.load(f)
 with open("data_generation/q_seq.pkl", "rb") as f:
     q_seq = pickle.load(f)
+with open("data_generation/o_seq.pkl", "rb") as f:
+    o_seq = pickle.load(f)
 with open("data_generation/q_seq_stochastic.pkl", "rb") as f:
     q_seq_stochastic = pickle.load(f)
+with open("data_generation/o_seq_stochastic.pkl", "rb") as f:
+    o_seq_stochastic = pickle.load(f)
 traj_num = len(pi_seq)  # Number of trajectories within the dataset
 depth = 1  # History length, also known as depth in system identification
 
@@ -789,8 +935,49 @@ Y_mod = Y[np.ix_(np.arange(np.shape(Y)[0]), important_indices)]
 qsize = 100
 osize = 30
 
+
+# Check if analytical ctmc is already computed
+if not os.path.exists("results/Q_mat.npy"):
+    sys.path.append("/Users/mahmoud/Documents/GITHUB/metafor")
+    from metafor.dsl.dsl import Server, Work, Source, Program
+    get_analytic_ctmc(lambdaa = 9.7, mu = 10, timeout_t = 9, max_retries = 3, qsize = 100, osize = 30)
+else:
+    print("Q_mat already exists. Skipping generation.")
+Q = np.load("results/Q_mat.npy")
+
+n_states = qsize * osize
+counts = np.zeros((n_states, n_states), dtype=int)
+traj_num = len(q_seq)
+for traj_idx in range(traj_num):
+    traj_len = len(q_seq[traj_idx])
+    for i in range(traj_len - 1):
+        q_t = q_seq_stochastic[traj_idx][i]
+        q_next = q_seq_stochastic[traj_idx][i + 1]
+        o_t = o_seq_stochastic[traj_idx][i]
+        o_next = o_seq_stochastic[traj_idx][i + 1]
+        s_t = index_composer(q_t, o_t, qsize, osize)
+        s_next = index_composer(q_next, o_next, qsize, osize)
+        counts[s_t, s_next] += 1
+
+
+# Simulate transitions to get count matrix
+np.random.seed(42)
+
+B = compute_prior_counts(Q, step_time=0.5, beta=10000.0)
+
+# Sample from Bayesian posterior & compute mean estimate and uncertainty
+posterior_mean, posterior_std = sample_transition_matrix_on_the_fly(counts, alpha = B, num_samples=100)
+
+print("Posterior mean transition matrix:")
+print(posterior_mean)
+
+print("\nPosterior standard deviation:")
+print(posterior_std)
+
+# theta = linear_model.soft_constrained_with_gd(X)
+
 # theta = np.matmul(np.linalg.inv(np.matmul(X.T, X)), np.matmul(X.T, Y))
-theta = linear_model.train_linear_least_squares(X, Y) # without structure
+# theta = linear_model.train_linear_least_squares(X, Y) # without structure
 # theta = linear_model.train_linear_least_squares_with_structure(pi_seq, qsize, osize)  # enforcing structure
 # theta = linear_model.sgd_with_reset(X, Y)
 
@@ -800,10 +987,11 @@ theta = linear_model.train_linear_least_squares(X, Y) # without structure
 
 # theta = augment_matrix(theta_red, important_indices, np.shape(X)[1])
 
-viz_linear_mapping(theta, qsize, osize,  30, 30, False)
+# viz_linear_mapping(theta, qsize, osize,  30, 30, False)
 
 # print("the learning error is", np.linalg.norm(Y_mod - X_mod @ theta_red, 'fro') ** 2)
 # distance_array = sparsity_measure(theta)
+theta = posterior_mean
 
 # Compute the model predictions
 model_preds, true_vals = linear_model.simulate_linear_model(theta, pi_seq, depth, qsize, osize)
@@ -816,4 +1004,5 @@ eigvals = np.linalg.eigvals(theta)
 eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
 print("Eigenvalues of the system:", eigvals_sorted)
 
+finish = 1
 # learn_dtmc_transition_matrix(q_seq_stochastic, qsize, 2)
