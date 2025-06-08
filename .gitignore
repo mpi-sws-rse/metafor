@@ -12,6 +12,8 @@ __pycache__/
 # outputs
 *.png
 *.pkl
+*.pdf
+*.pth
  
 # Distribution / packaging
 .Python
@@ -40,7 +42,7 @@ MANIFEST
 *.spec
 
 # Polts
-#*.png
+*.png
 
 # Installer logs
 pip-log.txt
