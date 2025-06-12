@@ -26,12 +26,244 @@ import cvxpy as cp
 import osqp
 
 from scipy.ndimage import gaussian_filter
-from scipy.linalg import expm
+from scipy.linalg import expm, eigvals, eig
 
 import sys
-
+import random
+import cma
+from functools import partial
 
 os.makedirs("results", exist_ok=True)
+
+
+from scipy.optimize import curve_fit
+from scipy.optimize import least_squares
+from scipy.optimize import minimize
+
+def residuals(params, k, y):
+    c, lam = params
+    return y - c * (1 - lam ** k)
+
+def fit_least_squares(k, y, c0=50.0, lam0=0.98):
+    result = least_squares(residuals, x0=[c0, lam0], args=(k, y), bounds=([0, 0], [np.inf, 1.0]))
+    return result.x  # returns [c, lambda]
+
+def model_y(k, c, lam):
+    return c * (1 - lam ** k)
+
+def model_dy(k, c, lam):
+    return c * (lam ** (k-1))
+
+def fit_curve_fit(k, y, model, c0=50.0, lam0=0.98):
+    popt, _ = curve_fit(model, k, y, p0=[c0, lam0], bounds=([0, 0], [100, 1.0]))
+    return popt  # returns [c, lambda]
+
+
+# --- Loss function: only validate on extrapolation region ---
+def generalization_loss(params, k_train, y_train, k_val, y_val):
+    c, lam = params
+    """if not (0 <= lam <= 1):
+        return np.inf  # penalize invalid lambda"""
+    y_pred_val = model_y(k_val, c, lam)
+    return np.mean((y_val - y_pred_val) ** 2)
+
+# --- Main fitting routine ---
+def generalization_guided_fit(y, N1, N2):
+    k = np.arange(len(y))
+    k_train, y_train = k[:N1], y[:N1]
+    k_val, y_val = k[N1:N1 + N2], y[N1:N1+ N2]
+
+    result = minimize(
+        generalization_loss,
+        x0=[50.0, 0.98],  # initial guess
+        args=(k_train, y_train, k_val, y_val),
+        bounds=[(0, 100), (0, 1)],
+        method='Powell',  # or method='Powell'
+    )
+    c_opt, lam_opt = result.x
+    return c_opt, lam_opt
+
+# ---- Extrapolation-Guided Fit Function ----
+def extrapolation_guided_fit(y, N1, N2):
+    """
+    y: observed sequence (1D array)
+    N1: number of initial samples used to fit the dynamics
+    N2: number of future points to extrapolate
+    """
+    # Step 1: Fit difference sequence y_{i+1} - y_i
+    dy = np.diff(y[:N1])                    # length N1 - 1
+    k_diff = np.arange(N1 - 1)
+    c1, lam1 = fit_curve_fit(k_diff, dy, model_dy)        # First-stage fit
+
+    # Step 2: Generate N2 future values
+    y_aug = list(y[:N1])
+    for i in range(N1, N1 + N2):
+        delta = c1 * lam1 ** (i - 1)
+        y_aug.append(y_aug[-1] + delta)
+
+    y_aug = np.array(y_aug)
+    k_aug = np.arange(len(y_aug))
+
+    # Step 3: Final fit to full sequence
+    c_final, lam_final = fit_curve_fit(k_aug, y_aug, model_y)
+
+    return {
+        "c1": c1, "lam1": lam1,
+        "c_final": c_final, "lam_final": lam_final,
+        "k_aug": k_aug, "y_aug": y_aug
+    }
+
+
+def fit_c_lambda(y, c0=50, lambda0=0.98, lr=1e-6, steps=1000):
+    N = len(y)
+    c = c0
+    lam = lambda0
+
+    for step in range(steps):
+        r = y - c * (1 - lam ** np.arange(N))
+        grad_c = -np.sum(r * (1 - lam ** np.arange(N)))
+        grad_lam = np.sum(r * c * np.arange(N) * lam ** (np.arange(N) - 1))
+
+        c -= lr * grad_c
+        lam -= lr * grad_lam
+
+        # Optional: project lambda to [0, 1]
+        # lam = np.clip(lam, 1e-6, 1.0)
+
+        # Optional: print loss
+        if step % 100 == 0:
+            loss = 0.5 * np.sum(r ** 2)
+            print(f"Step {step}: loss = {loss:.6f}, c = {c:.4f}, lambda = {lam:.4f}")
+
+    return c, lam
+
+# === Compute stationary distribution & second-largest real eigenvalue of Q ===
+def compute_stationary_distribution_lambda2(Q):
+    """
+        Computes the stationary distribution of a CTMC generator matrix Q using eigen decomposition.
+
+        Args:
+            Q (ndarray): Generator matrix (n x n)
+
+        Returns:
+            pi (ndarray): Stationary distribution (1D array of length n)
+            lambda2: second-largest real part
+        """
+    # Transpose Q to find left eigenvectors
+    w, v = eig(Q.T)
+    idx = np.argmin(np.abs(w))  # eigenvalue closest to 0
+    pi = np.real(v[:, idx])
+    pi = pi / np.sum(pi)  # normalize to ensure it's a probability vector
+    lambdas = np.real(w)
+    lambdas_sorted = np.sort(lambdas)[::-1]
+    lambda2 = lambdas_sorted[1]
+    return pi, lambda2
+
+# === Fitness function: squared error on qlen and settling time ===
+def evaluate_fitness_traj(x, mu, max_retries, qsize, osize):
+    lambdaa = x[0]
+    timeout_t = x[1]
+    print("computing the fitness value")
+    Q = get_analytic_ctmc(lambdaa, mu, timeout_t, max_retries, qsize, osize)
+    try:
+        print("arr_rate and Timeout are", lambdaa, timeout_t)
+        error = 0
+        num_steps = 50
+        T_s = 0.5
+        discrete_transition_mat = expm(Q * T_s * num_steps)
+        for traj_id in range(len(q_seq)):
+            pi_t = pi_seq[traj_id][0] # initial distribution taken from the collected data
+            for t in range(0, len(q_seq[traj_id]) - num_steps, num_steps):
+                pi_t = np.matmul(pi_t, discrete_transition_mat)
+                q_ave_model = qlen_average(pi_t, qsize, osize)
+                q_ave_true = q_seq[traj_id][t+1]
+                error += (q_ave_true - q_ave_model)**2
+        print("error is", error)
+        return error
+    except Exception:
+        return np.inf  # penalize invalid matrices
+
+# === Fitness function: squared error on qlen and settling time ===
+def evaluate_fitness(x, mu, max_retries, qsize, osize, q_ave_target, T_s_target):
+    lambdaa = x[0]
+    timeout_t = x[1]
+    print("computing the fitness value")
+    try:
+        # print("Timeout and max_retries are", timeout_t, max_retries)
+        print("arr_rate and Timeout are", lambdaa, timeout_t)
+        Q = get_analytic_ctmc(lambdaa, mu, timeout_t, max_retries, qsize, osize)
+        pi_ss, lambda2 = compute_stationary_distribution_lambda2(Q)
+        q_ave = qlen_average(pi_ss, qsize, osize)
+        T_s = 1 / abs(lambda2) if lambda2 != 0 else np.inf
+        print("q_ave, T_s are taking values", q_ave, T_s)
+        error = (q_ave - q_ave_target)**2 + .01 * (T_s - T_s_target)**2
+        return error
+    except Exception:
+        return np.inf  # penalize invalid matrices
+
+# --- CMA-ES wrapper ---
+def run_cmaes_optimization(q_ave_target, T_s_target, lambdaa, mu, timeout_t, max_retries, qsize, osize,
+                           sigma, max_iter):
+    x0 = [lambdaa, timeout_t]  # Initial guess: [arr_rate, timeout]
+    bounds = [[lambdaa * .9, timeout_t * .8], [lambdaa * 1.1, timeout_t * 1.2]]  # bounds for params
+    es = cma.CMAEvolutionStrategy(x0, sigma, {'bounds': bounds, 'maxiter': max_iter})
+
+    """def f(x, mu, max_retries_nom, qsize, osize, q_ave_target, T_s_target):
+        return evaluate_fitness(x, mu, max_retries_nom, qsize, osize, q_ave_target, T_s_target)"""
+
+    """f = partial(evaluate_fitness, mu=mu, max_retries=max_retries, qsize=qsize, osize=osize,
+                q_ave_target=q_ave_target, T_s_target=T_s_target)"""
+
+    f = partial(evaluate_fitness_traj, mu=mu, max_retries=max_retries, qsize=qsize, osize=osize)
+
+    es.optimize(f)
+
+    best_params = np.abs(es.result.xbest)
+    best_params[3] = int(np.clip(round(best_params[3]), 1, 10))  # Ensure integer retry
+
+    return best_params, es.result.fbest
+
+# === Evolutionary optimizer ===
+def evolutionary_optimization(q_ave_target, T_s_target, lambdaa_nom, mu, timeout_nom, max_retries_nom, qsize, osize,
+                              pop_size, generations):
+    """population = [(
+        np.random.uniform(0.1, 5.0),  # arr_rate
+        np.random.uniform(0.1, 5.0),  # mu
+        np.random.uniform(0.1, 5.0),  # timeout
+        random.randint(1, 10)         # max_retry
+    ) for _ in range(pop_size)]"""
+
+    population = [(
+        np.random.uniform(0.9 * lambdaa_nom, 1.1 * lambdaa_nom),  # arr_rate
+        np.random.uniform(timeout_nom * .8, timeout_nom * 1.2),  # timeout
+        # random.randint(max(1, max_retries_nom // 3), int(max_retries_nom * 3))  # max_retry
+    ) for _ in range(pop_size)]
+
+    for gen in range(generations):
+        print("computing the generation", gen)
+        #fitnesses = [evaluate_fitness(lambdaa, mu, population[ind][0], population[ind][1], qsize, osize,
+         #                             q_ave_target, T_s_target) for ind in range(pop_size)]
+        fitnesses = [evaluate_fitness(population[ind][0], mu, population[ind][1], max_retries_nom, qsize, osize,
+                                      q_ave_target, T_s_target) for ind in range(pop_size)]
+        sorted_pop = [x for _, x in sorted(zip(fitnesses, population))]
+        elites = sorted_pop[:int(0.2 * pop_size)]
+
+        new_pop = elites[:]
+        while len(new_pop) < pop_size:
+            p1, p2 = random.sample(elites, 2)
+            child = tuple(
+                max(0.01, np.random.normal((x + y) / 2, abs(x - y) * 0.3)) if i < 3
+                else random.randint(1, 10)
+                for i, (x, y) in enumerate(zip(p1, p2))
+            )
+            new_pop.append(child)
+
+        population = new_pop
+
+    best = min(population, key=lambda x: evaluate_fitness(lambdaa, mu, x[0], x[1], qsize, osize, q_ave_target,
+                                                          T_s_target))
+
+    return best
 
 
 def stationary_distribution_eig(P):
@@ -89,7 +321,7 @@ def get_analytic_ctmc(lambdaa, mu, timeout_t, max_retries, qsize, osize):
     Q = p.build().Q
 
     np.save("results/Q_mat.npy", Q)
-    return None
+    return Q
 
 
 def compute_prior_counts(Q, step_time, beta):
@@ -936,6 +1168,25 @@ qsize = 100
 osize = 30
 
 
+sys.path.append("/Users/mahmoud/Documents/GITHUB")
+sys.path.append("/Users/mahmoud/Documents/GITHUB/metafor")
+sys.path.append("/Users/mahmoud/Documents/GITHUB/metafor/metafor")
+
+from metafor.dsl.dsl import Server, Work, Source, Program
+"""c, lam = generalization_guided_fit(q_seq[0][0:800], 100, 600)
+c1, lam1, c, lam, _, _ = extrapolation_guided_fit(q_seq[0][0:800], 700, 1000)
+q_ave_target, T_s_target = fit_least_squares(range(0,400), q_seq[0][0:400])
+q_ave_target, T_s_target = c_fit, lam_fit = fit_curve_fit(range(0,800), q_seq[0][0:800])
+q_ave_target, T_s_target = fit_c_lambda(q_seq[0][0:100])"""
+
+
+best_params = run_cmaes_optimization(10000, 1111, 9.7, 10, 9, 3, 100, 30, 0.5, 200)
+"""q_ave_target = 45
+T_s_target = 900 / 3
+# best_params = evolutionary_optimization(q_ave_target, T_s_target, 9.7, 10, 9, 3, 100, 30, 10, 100)
+best_params = run_cmaes_optimization(q_ave_target, T_s_target, 9.7, 10, 9, 3, 100, 30, 0.5, 200)
+
+
 # Check if analytical ctmc is already computed
 if not os.path.exists("results/Q_mat.npy"):
     sys.path.append("/Users/mahmoud/Documents/GITHUB/metafor")
@@ -974,6 +1225,13 @@ print(posterior_mean)
 print("\nPosterior standard deviation:")
 print(posterior_std)
 
+theta = posterior_mean"""
+
+
+Q = get_analytic_ctmc(lambdaa = 9.671253344100766, mu = 10, timeout_t = 10.799982905445487, max_retries = 3,
+                      qsize = 100, osize = 30)
+theta = expm(Q * .5)
+
 # theta = linear_model.soft_constrained_with_gd(X)
 
 # theta = np.matmul(np.linalg.inv(np.matmul(X.T, X)), np.matmul(X.T, Y))
@@ -991,7 +1249,7 @@ print(posterior_std)
 
 # print("the learning error is", np.linalg.norm(Y_mod - X_mod @ theta_red, 'fro') ** 2)
 # distance_array = sparsity_measure(theta)
-theta = posterior_mean
+
 
 # Compute the model predictions
 model_preds, true_vals = linear_model.simulate_linear_model(theta, pi_seq, depth, qsize, osize)
