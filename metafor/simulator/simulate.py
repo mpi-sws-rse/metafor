@@ -124,7 +124,7 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
     latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t)
     plot_results(step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, 'discrete_results.pdf')
 
-
+# The following function is NOT triggered when running data_generator.py
 def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int, mean_t: float):
     """
     Print the mean value, the variance, and the standard deviation at each stat point in each second
@@ -185,7 +185,7 @@ def write_to_file(fn: str, stats_data: List[StatData], stat_fn, first: bool):
         result: StatData = stat_fn(stats_data)
         f.write(result.as_csv() + '\n')
 
-
+# The following function is NOT triggered when running data_generator.py
 def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float):
     current_folder = os.getcwd()
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
