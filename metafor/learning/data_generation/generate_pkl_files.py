@@ -154,21 +154,21 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
 
 
 
-def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration):
+def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration, qsize, osize):
     current_folder = os.getcwd()
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
     # qsize and osize are fixed...
-    q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, 100, 20)    # fault_duration, qsize, osize
+    q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, qsize, osize)
     return q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq
 
 
 
 def convert_csv_to_pkl(max_t: float, runs: int, mean_t: float, rho: float, step_time: int,
-                            rho_fault: float, fault_start: float, fault_duration: float):
+                            rho_fault: float, fault_start: float, fault_duration: float, qsize: int, osize: int):
     results_file_name = "exp_results.csv"
 
     q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
-                                                       rho_fault, fault_start, fault_duration)
+                                                       rho_fault, fault_start, fault_duration, qsize, osize)
     # Save
     with open("q_seq.pkl", "wb") as f:
         pickle.dump(q_seq, f)
@@ -191,18 +191,21 @@ def index_composer(n_main_queue, n_retry_queue, qsize, osize):
     """This function converts two given input indices into one universal index in range [0, state_num].
     The input indices correspond to number of (1) jobs in queue and (2) jobs in the orbit."""
     main_queue_size = qsize
-
-    total_ind = n_retry_queue * main_queue_size + n_main_queue
+    # note that n_main_queue can become equal to qsize (strictly greater than qsie - 1)
+    total_ind = min(osize - 1, n_retry_queue) * main_queue_size + min(n_main_queue, main_queue_size - 1)
+    # total_ind = n_retry_queue * main_queue_size + n_main_queue
     return total_ind
 
 
 if __name__ == '__main__':
     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
-    rho = 9.7/10 # server's utilization rate
+    rho = 9.5/10 # server's utilization rate
     runs = 100 # how many times should the simulation be run
     step_time = .5 # sampling time
     sim_time = 1000 # maximum simulation time for an individual simulation
     rho_fault = np.random.uniform(rho,rho*200) # utilization rate during a fault
     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
     fault_duration = sim_time * .1  # fault duration
-    convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration)
+    qsize = 100  # maximum size of the arrivals queue
+    osize = 30  # bound over the orbit size
+    convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration, qsize, osize)
