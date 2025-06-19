@@ -261,7 +261,7 @@ def run_cmaes_optimization(q_ave_target, T_s_target, lambdaa, mu, timeout_t, max
     es.optimize(f)
 
     best_params = np.abs(es.result.xbest)
-    best_params[3] = int(np.clip(round(best_params[3]), 1, 10))  # Ensure integer retry
+    # best_params[3] = int(np.clip(round(best_params[3]), 1, 10))  # Ensure integer retry
 
     return best_params, es.result.fbest
 
