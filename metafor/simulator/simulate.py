@@ -209,7 +209,7 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
                                    fault_duration))
     ]:
         service_time_distribution = {"request":distribution(1/job_type.mean())}
-        server = Server(name, queue_size, 1, service_time_distribution, retry_queue_size)
+        server = Server(name, queue_size, 1, service_time_distribution, retry_queue_size, client)
         server.set_context(Context(52))
         client.server = server
         clients.append(client)
@@ -229,7 +229,7 @@ def make_sim_bimod(mean_t: float, mean_t_2: float, bimod_p: float, rho: float, q
                                                                                  timeout, max_retries, fault_start,
                                                                                  fault_duration))
     ]:
-        server = Server(1, name, client, rho, queue_size, retry_queue_size)
+        server = Server(1, name, client, rho, queue_size, retry_queue_size, client)
         client.server = server
         clients.append(client)
     return clients

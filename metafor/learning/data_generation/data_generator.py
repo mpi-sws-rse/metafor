@@ -36,7 +36,7 @@ def main():
     runs = 10 # how many times should the simulation be run
     step_time = .5 # sampling time
     sim_time = 1000 # maximum simulation time for an individual simulation
-    rho_fault = np.random.uniform(rho,rho*200) # utilization rate during a fault
+    rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
     rho_reset = rho * 5 / 5 # utilization rate after removing the fault
     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
     fault_duration = sim_time * .1  # fault duration

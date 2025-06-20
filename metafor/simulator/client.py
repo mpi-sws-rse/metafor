@@ -133,7 +133,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
             A retry job is scheduled at timeout if job is still under processing else None.
         """
         logger.info("on timeout called at %f with job %s" % (t, job))
-        if job.status != JobStatus.COMPLETED and job.status != JobStatus.DROPPED:
+        if job.status != JobStatus.COMPLETED:
             # we have timed out: generate another instance, if retries left
 
             if job.retries_left > 0:
