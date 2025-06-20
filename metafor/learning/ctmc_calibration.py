@@ -71,14 +71,18 @@ def simulate_linear_model(theta, pi_seq, depth, qsize, osize):
 
     return model_preds, true_vals
 
-def plot_predictions_vs_true(q_seq, model_preds, save_prefix="results/linear_model_traj"):
+def plot_predictions_vs_true(q_seq, model_preds, sampling_time, save_prefix="results/linear_model_traj"):
     for i, (true_q, pred_q) in enumerate(zip(q_seq, model_preds)):
-        plt.figure(figsize=(10, 4))
-        plt.plot(true_q, label="True q", marker='o')
-        plt.plot(pred_q, label="Linear Model q", marker='x')
-        plt.title(f"Trajectory {i}")
-        plt.xlabel("Time Step")
-        plt.ylabel("q value")
+        time_seq = [x * sampling_time for x in range(0, len(true_q))]
+        plt.figure(figsize=(10, 5))
+        plt.rc("font", size=14)
+        plt.rcParams["figure.figsize"] = [10, 5]
+        plt.rcParams["figure.autolayout"] = True
+        plt.plot(time_seq, true_q, label="DES output", marker='o')
+        plt.plot(time_seq, pred_q, label="CTMC output", marker='x')
+        # plt.title(f"Trajectory {i}")
+        plt.xlabel("Time", fontsize=14)
+        plt.ylabel("Average number of jobs", fontsize=14)
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
@@ -374,7 +378,7 @@ with open("data_generation/pi_seq.pkl", "rb") as f:
     pi_seq = pickle.load(f)
 with open("data_generation/q_seq.pkl", "rb") as f:
     q_seq = pickle.load(f)
-with open("data_generation/o_seq.pkl", "rb") as f:
+with open("data_generation/r_seq.pkl", "rb") as f:
     o_seq = pickle.load(f)
 with open("data_generation/q_seq_stochastic.pkl", "rb") as f:
     q_seq_stochastic = pickle.load(f)
@@ -386,14 +390,14 @@ depth = 1  # History length (should be replaced by one; not being considered for
 # server spec
 qsize = 100 # queue bound
 osize = 30 # orbit bound
-lambdaa = 9.7
+lambdaa = 9.5
 mu = 10
 timeout = 9
 max_retries = 3
 sampling_time = 0.5
 # CMAES parameters:
 sigma = .5
-max_iter = 5
+max_iter = 30
 
 # Uncomment the suitable approach below if CMAES takes reference settling time & pi_ss as references
 # N1 = 100 # Number of datapoints used for training
@@ -409,15 +413,16 @@ max_iter = 5
 # best_params = evolutionary_optimization(q_ave_target, T_s_target, lambdaa, mu, timeout, max_retries, qsize, osize, sigma, max_iter)
 
 
-# Uncomment if CMAES takes reference settling time & pi_ss as references
-dont_care_val = 1e8
-best_params = run_cmaes_optimization(dont_care_val, dont_care_val, lambdaa, mu, timeout, max_retries, qsize, osize, sigma, max_iter)
+# Uncomment if CMAES takes sequences of number of jobs and retries as references
+dont_care_val = 1e8 # not important
+best_params = run_cmaes_optimization(dont_care_val, dont_care_val, lambdaa, mu, timeout, max_retries,
+                                     qsize, osize, sigma, max_iter)
 
 
 
 
-lambda_mod = 9.671253344100766 # best_params[0]
-timeout_mod = 10.799982905445487 # best_params[1]
+lambda_mod = best_params[0][0] # 9.671253344100766
+timeout_mod = best_params[0][1] # 10.799982905445487
 
 
 Q = get_analytic_ctmc(lambdaa = lambda_mod, mu = 10, timeout_t = timeout_mod, max_retries = max_retries,
@@ -428,7 +433,7 @@ theta = expm(Q * sampling_time)
 model_preds, true_vals = simulate_linear_model(theta, pi_seq, depth, qsize, osize)
 
 # Plot and compare the output of the calibrated model and true trajectories
-plot_predictions_vs_true(true_vals, model_preds)
+plot_predictions_vs_true(true_vals, model_preds, sampling_time)
 
 # Printing sorted eigenvalues
 eigvals = np.linalg.eigvals(theta)
