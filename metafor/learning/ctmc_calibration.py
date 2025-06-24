@@ -30,7 +30,7 @@ sys.path.append("/Users/mahmoud/Documents/GITHUB/metafor/metafor")
 from metafor.dsl.dsl import Server, Work, Source, Program
 
 # List of functions used for LS estimation:
-def simulate_linear_model(theta, pi_seq, depth, qsize, osize):
+def simulate_linear_model(theta, theta_nom, pi_seq, depth, qsize, osize):
     """
     Autoregressive rollout using a linear model that predicts both [q_t, o_t]
 
@@ -40,46 +40,58 @@ def simulate_linear_model(theta, pi_seq, depth, qsize, osize):
         depth: number of historical steps used as input
 
     Returns:
-        model_preds: list of predicted q sequences
+        model_preds: list of predicted q sequences using the calibrated CTMC
+        model_preds_nom: list of predicted q sequences using the nominal CTMC
     """
     model_preds = []
+    model_preds_nom = []
     true_vals = []
 
     for pi_traj in zip(pi_seq):
         pi_traj = np.array(pi_traj).squeeze()
         T = len(pi_traj)
         pi_pred = list(pi_traj[:depth])  # True pi values for initialization
+        pi_pred_nom = list(pi_traj[:depth])
         q_pred = []
+        q_pred_nom = []
         q_true = []
         for t in range(depth):
             q_pred.append(qlen_average(pi_traj[t], qsize, osize))
+            q_pred_nom.append(qlen_average(pi_traj[t], qsize, osize))
             q_true.append(qlen_average(pi_traj[t], qsize, osize))
         for t in range(depth, T):
             pi_input = pi_pred[-depth:]
+            pi_input_nom = pi_pred_nom[-depth:]
             x = np.array(pi_input).squeeze()
+            x_nom = np.array(pi_input_nom).squeeze()
             y_pred = x @ theta  #
+            y_pred_nom = x_nom @ theta_nom  #
 
             """print("min value is", np.min(y_pred))
             print("max value is", np.max(y_pred))
             print("summation is", np.sum(y_pred))"""
             pi_pred.append(y_pred)
+            pi_pred_nom.append(y_pred_nom)
             q_pred.append(qlen_average(y_pred, qsize, osize))
+            q_pred_nom.append(qlen_average(y_pred_nom, qsize, osize))
             q_true.append(qlen_average(pi_traj[t], qsize, osize))
 
         model_preds.append(q_pred)
+        model_preds_nom.append(q_pred_nom)
         true_vals.append(q_true)
 
-    return model_preds, true_vals
+    return model_preds, model_preds_nom, true_vals
 
-def plot_predictions_vs_true(q_seq, model_preds, sampling_time, save_prefix="results/linear_model_traj"):
-    for i, (true_q, pred_q) in enumerate(zip(q_seq, model_preds)):
+def plot_predictions_vs_true(q_seq, model_preds, model_preds_nom, sampling_time, save_prefix="results/linear_model_traj"):
+    for i, (true_q, pred_q, pred_q_nom) in enumerate(zip(q_seq, model_preds, model_preds_nom)):
         time_seq = [x * sampling_time for x in range(0, len(true_q))]
         plt.figure(figsize=(10, 5))
         plt.rc("font", size=14)
         plt.rcParams["figure.figsize"] = [10, 5]
         plt.rcParams["figure.autolayout"] = True
         plt.plot(time_seq, true_q, label="DES output", marker='o')
-        plt.plot(time_seq, pred_q, label="CTMC output", marker='x')
+        plt.plot(time_seq, pred_q, label="Calibrated CTMC output", marker='x')
+        plt.plot(time_seq, pred_q_nom, label="Nominal CTMC output", marker='x')
         # plt.title(f"Trajectory {i}")
         plt.xlabel("Time", fontsize=14)
         plt.ylabel("Average number of jobs", fontsize=14)
@@ -421,19 +433,22 @@ best_params = run_cmaes_optimization(dont_care_val, dont_care_val, lambdaa, mu, 
 
 
 
-lambda_mod = best_params[0][0] # 9.671253344100766
-timeout_mod = best_params[0][1] # 10.799982905445487
+lambda_mod = 9.433 # best_params[0][0] # 9.671253344100766
+timeout_mod = 10.54 # best_params[0][1] # 10.799982905445487
 
 
-Q = get_analytic_ctmc(lambdaa = lambda_mod, mu = 10, timeout_t = timeout_mod, max_retries = max_retries,
+Q = get_analytic_ctmc(lambdaa = lambda_mod, mu = mu, timeout_t = timeout_mod, max_retries = max_retries,
+                      qsize = qsize, osize = osize)
+Q_nom = get_analytic_ctmc(lambdaa = lambdaa, mu = mu, timeout_t = timeout, max_retries = max_retries,
                       qsize = qsize, osize = osize)
 theta = expm(Q * sampling_time)
+theta_nom = expm(Q_nom * sampling_time)
 
 # Compute the model predictions
-model_preds, true_vals = simulate_linear_model(theta, pi_seq, depth, qsize, osize)
+model_preds, model_preds_nom, true_vals = simulate_linear_model(theta, theta_nom, pi_seq, depth, qsize, osize)
 
 # Plot and compare the output of the calibrated model and true trajectories
-plot_predictions_vs_true(true_vals, model_preds, sampling_time)
+plot_predictions_vs_true(true_vals, model_preds, model_preds_nom, sampling_time)
 
 # Printing sorted eigenvalues
 eigvals = np.linalg.eigvals(theta)
