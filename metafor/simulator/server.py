@@ -7,7 +7,7 @@ import time
 from collections import deque
 from typing import List, TextIO
 
-from metafor.simulator.client import Client
+from metafor.simulator.client import Client, OpenLoopClientWithTimeout
 from metafor.simulator.job import Distribution, Job, JobStatus
 
 
@@ -95,7 +95,7 @@ class Server:
 
     def __init__(self, name: str, queue_size: int, thread_pool: int,
                  service_time_distribution: dict[str, Distribution],
-                 retry_queue_size: int):
+                 retry_queue_size: int, client: OpenLoopClientWithTimeout):
         self.start_time = 0  # to be set by each simulation
         self.busy: int = 0
 
@@ -110,7 +110,7 @@ class Server:
         self.retry_queue_size: int = retry_queue_size
 
         self.jobs: List[Job | None] = [None for _ in range(thread_pool)]
-        # self.client: Client = client
+        self.client: Client = client
         # self.rho: float = rho
         # self.file: TextIO | None = None
         self.context = None
@@ -146,10 +146,8 @@ class Server:
         completed = self.jobs[n]
         assert completed is not None
 
-        # commenting this below line as the If condition at line 100 in client.py
-        # never gets invoked, leading to no retries. Moreover, the status is already
-        # updated by the done function in client.py 
-        # completed.status = JobStatus.COMPLETED
+        
+        completed.status = JobStatus.COMPLETED
         completed.completed_t = t
 
         if completed.max_retries > completed.retries_left:  # a retried job is completed
@@ -244,4 +242,5 @@ class Server:
                 job.status = JobStatus.DROPPED
                 logger.info("Dropped %s at %f" % (job.name, t))
                 self.dropped += 1
+                return t + self.client.timeout, self.client.on_timeout, job
             return None
