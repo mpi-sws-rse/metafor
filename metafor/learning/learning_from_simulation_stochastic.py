@@ -340,6 +340,37 @@ def compute_prior_counts(Q, step_time, beta):
     B = beta * P0
     return B
 
+def simulate_prior_counts(Q, step_time, N, T, rng=None):
+    """
+        Simulate DTMC derived from CTMC generator Q to compute empirical transition counts.
+
+        Args:
+            Q (ndarray): CTMC generator matrix (n x n)
+            step_time (float): Time step to discretize the CTMC
+            T (float): Total simulation time per trajectory
+            N (int): Number of trajectories to simulate
+            rng (np.random.Generator or None): Optional random number generator
+
+        Returns:
+            B (ndarray): Transition count matrix (n x n)
+        """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    n = Q.shape[0]
+    num_steps = int(T / step_time)
+    P = expm(Q * step_time)  # DTMC transition matrix
+    B = np.zeros((n, n), dtype=float)
+
+    for _ in range(N):
+        state = rng.integers(n)  # Uniform initial state
+        for _ in range(num_steps):
+            next_state = rng.choice(n, p=P[state])
+            B[state, next_state] += 1
+            state = next_state
+
+    return B
+
 
 def sample_transition_matrix_on_the_fly(counts, alpha, num_samples, seed=None):
     """
@@ -360,21 +391,26 @@ def sample_transition_matrix_on_the_fly(counts, alpha, num_samples, seed=None):
 
     n = counts.shape[0]
     if alpha is None:
-        alpha = np.ones_like(counts)
+        alpha = np.zeros_like(counts)
 
     mean_est = np.zeros((n, n))
     M2 = np.zeros((n, n))  # Sum of squares of differences from the mean
 
-    for s in range(1, num_samples + 1):
+    """for s in range(1, num_samples + 1):
         print("computations for sample", s)
         for i in range(n):
-            sample_row = np.random.dirichlet(counts[i] + alpha[i])
+            sample_row = np.random.dirichlet(np.maximum(counts[i] + alpha[i], 1))
             delta = sample_row - mean_est[i]
             mean_est[i] += delta / s
             M2[i] += delta * (sample_row - mean_est[i])
 
     std_est = np.sqrt(M2 / (num_samples - 1)) if num_samples > 1 else np.zeros_like(M2)
-    return mean_est, std_est
+    return mean_est, std_est"""
+    row_sums = (counts + alpha).sum(axis=1, keepdims=True)
+    row_sums[row_sums == 0] = 1  # prevent division by zero
+    mean_est = (counts + alpha) / row_sums
+
+    return mean_est, 0
 
 def matrix_modifier(A):
     """Given a square matrix, this function computes a modified matrix,
@@ -617,6 +653,16 @@ def qlen_average(pi, qsize, osize) -> float:
     if isinstance(val, float):
         return val
     return val[0]
+
+def olen_average(pi, qsize, osize) -> float:
+    """This function computes the average orbit length for a given prob distribution pi"""
+    length = 0
+    for n_retry_queue in range(osize):
+        weight = 0
+        for n_main_queue in range(qsize):
+            weight += pi[index_composer(n_main_queue, n_retry_queue, qsize, osize)]
+        length += weight * n_retry_queue
+    return length
 
 def sparsity_measure(P):
     ss_size = np.shape(P)[0]
@@ -1098,8 +1144,10 @@ class linear_model():
         Returns:
             model_preds: list of predicted q sequences
         """
-        model_preds = []
-        true_vals = []
+        model_preds_q = []
+        true_vals_q = []
+        model_preds_o = []
+        true_vals_o = []
 
         for pi_traj in zip(pi_seq):
             pi_traj = np.array(pi_traj).squeeze()
@@ -1107,9 +1155,13 @@ class linear_model():
             pi_pred = list(pi_traj[:depth])  # True pi values for initialization
             q_pred = []
             q_true = []
+            o_pred = []
+            o_true = []
             for t in range(depth):
                 q_pred.append(qlen_average(pi_traj[t], qsize, osize))
                 q_true.append(qlen_average(pi_traj[t], qsize, osize))
+                o_pred.append(olen_average(pi_traj[t], qsize, osize))
+                o_true.append(olen_average(pi_traj[t], qsize, osize))
             for t in range(depth, T):
                 pi_input = pi_pred[-depth:]
                 x = np.array(pi_input).squeeze()
@@ -1121,14 +1173,19 @@ class linear_model():
                 pi_pred.append(y_pred)
                 q_pred.append(qlen_average(y_pred, qsize, osize))
                 q_true.append(qlen_average(pi_traj[t], qsize, osize))
+                o_pred.append(olen_average(y_pred, qsize, osize))
+                o_true.append(olen_average(pi_traj[t], qsize, osize))
 
-            model_preds.append(q_pred)
-            true_vals.append(q_true)
+            model_preds_q.append(q_pred)
+            true_vals_q.append(q_true)
+            model_preds_o.append(o_pred)
+            true_vals_o.append(o_true)
 
-        return model_preds, true_vals
+        return model_preds_q, true_vals_q, model_preds_o, true_vals_o
 
-    def plot_predictions_vs_true(q_seq, model_preds, save_prefix="results/linear_model_traj"):
-        for i, (true_q, pred_q) in enumerate(zip(q_seq, model_preds)):
+    def plot_predictions_vs_true(q_seq, model_preds_q, o_seq, model_preds_o,
+                                 save_prefix="results/linear_model_traj"):
+        for i, (true_q, pred_q) in enumerate(zip(q_seq, model_preds_q)):
             plt.figure(figsize=(10, 4))
             plt.plot(true_q, label="True q", marker='o')
             plt.plot(pred_q, label="Linear Model q", marker='x')
@@ -1138,9 +1195,20 @@ class linear_model():
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
-            plt.savefig(f"{save_prefix}_{i}.png")
+            plt.savefig(f"{save_prefix}_q_{i}.png")
             plt.close()
-
+        for i, (true_o, pred_o) in enumerate(zip(o_seq, model_preds_o)):
+            plt.figure(figsize=(10, 4))
+            plt.plot(true_o, label="True o", marker='o')
+            plt.plot(pred_o, label="Linear Model o", marker='x')
+            plt.title(f"Trajectory {i}")
+            plt.xlabel("Time Step")
+            plt.ylabel("o value")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(f"{save_prefix}_o_{i}_.png")
+            plt.close()
 
 
 # Loading the trajectories...
@@ -1180,11 +1248,11 @@ q_ave_target, T_s_target = c_fit, lam_fit = fit_curve_fit(range(0,800), q_seq[0]
 q_ave_target, T_s_target = fit_c_lambda(q_seq[0][0:100])"""
 
 
-best_params = run_cmaes_optimization(10000, 1111, 9.7, 10, 9, 3, 100, 30, 0.5, 200)
+#best_params = run_cmaes_optimization(10000, 1111, 9.7, 10, 9, 3, 100, 30, 0.5, 200)
 """q_ave_target = 45
 T_s_target = 900 / 3
 # best_params = evolutionary_optimization(q_ave_target, T_s_target, 9.7, 10, 9, 3, 100, 30, 10, 100)
-best_params = run_cmaes_optimization(q_ave_target, T_s_target, 9.7, 10, 9, 3, 100, 30, 0.5, 200)
+best_params = run_cmaes_optimization(q_ave_target, T_s_target, 9.7, 10, 9, 3, 100, 30, 0.5, 200)"""
 
 
 # Check if analytical ctmc is already computed
@@ -1198,24 +1266,27 @@ Q = np.load("results/Q_mat.npy")
 
 n_states = qsize * osize
 counts = np.zeros((n_states, n_states), dtype=int)
-traj_num = len(q_seq)
+traj_num = len(q_seq_stochastic)
 for traj_idx in range(traj_num):
-    traj_len = len(q_seq[traj_idx])
+    traj_len = len(q_seq_stochastic[traj_idx])
     for i in range(traj_len - 1):
-        q_t = q_seq_stochastic[traj_idx][i]
-        q_next = q_seq_stochastic[traj_idx][i + 1]
+        q_t = min(qsize-1, q_seq_stochastic[traj_idx][i])
+        q_next = min(qsize-1, q_seq_stochastic[traj_idx][i + 1])
         o_t = o_seq_stochastic[traj_idx][i]
         o_next = o_seq_stochastic[traj_idx][i + 1]
         s_t = index_composer(q_t, o_t, qsize, osize)
         s_next = index_composer(q_next, o_next, qsize, osize)
+        if s_t >= n_states or s_next >= n_states:
+            aaa = 1
         counts[s_t, s_next] += 1
 
 
 # Simulate transitions to get count matrix
 np.random.seed(42)
 
-B = compute_prior_counts(Q, step_time=0.5, beta=10000.0)
-
+#B = compute_prior_counts(Q, step_time=0.5, beta=10000.0)
+B = simulate_prior_counts(Q, step_time=.5, N=n_states, T=10)
+# B = np.zeros((n_states, n_states))
 # Sample from Bayesian posterior & compute mean estimate and uncertainty
 posterior_mean, posterior_std = sample_transition_matrix_on_the_fly(counts, alpha = B, num_samples=100)
 
@@ -1225,12 +1296,12 @@ print(posterior_mean)
 print("\nPosterior standard deviation:")
 print(posterior_std)
 
-theta = posterior_mean"""
+theta = posterior_mean
 
 
-Q = get_analytic_ctmc(lambdaa = 9.671253344100766, mu = 10, timeout_t = 10.799982905445487, max_retries = 3,
-                      qsize = 100, osize = 30)
-theta = expm(Q * .5)
+# Q = get_analytic_ctmc(lambdaa = 9.671253344100766, mu = 10, timeout_t = 10.799982905445487, max_retries = 3,
+                      # qsize = 100, osize = 30)
+# theta = expm(Q * .5)
 
 # theta = linear_model.soft_constrained_with_gd(X)
 
@@ -1252,10 +1323,10 @@ theta = expm(Q * .5)
 
 
 # Compute the model predictions
-model_preds, true_vals = linear_model.simulate_linear_model(theta, pi_seq, depth, qsize, osize)
+model_preds_q, true_vals_q, model_preds_o, true_vals_o = linear_model.simulate_linear_model(theta, pi_seq, depth, qsize, osize)
 
 # Plot and compare the output of model and true trajectories
-linear_model.plot_predictions_vs_true(true_vals, model_preds)
+linear_model.plot_predictions_vs_true(true_vals_q, model_preds_q, model_preds_o, true_vals_o)
 
 # Printing sorted eigenvalues
 eigvals = np.linalg.eigvals(theta)

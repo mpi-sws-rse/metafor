@@ -86,21 +86,34 @@ def plot_predictions_vs_true(q_seq, model_preds, model_preds_nom, sampling_time,
     for i, (true_q, pred_q, pred_q_nom) in enumerate(zip(q_seq, model_preds, model_preds_nom)):
         time_seq = [x * sampling_time for x in range(0, len(true_q))]
         plt.figure(figsize=(10, 5))
-        plt.rc("font", size=14)
+        plt.rc("font", size=16)
         plt.rcParams["figure.figsize"] = [10, 5]
         plt.rcParams["figure.autolayout"] = True
-        plt.plot(time_seq, true_q, label="DES output", marker='o')
-        plt.plot(time_seq, pred_q, label="Calibrated CTMC output", marker='x')
-        plt.plot(time_seq, pred_q_nom, label="Nominal CTMC output", marker='x')
+        plt.plot(time_seq, true_q, label="Simulator's output", marker='o')
+        plt.plot(time_seq, pred_q_nom, label="Ab initio CTMC's output", marker='x')
+        plt.plot(time_seq, pred_q, label="Calibrated CTMC's output", marker='x')
         # plt.title(f"Trajectory {i}")
-        plt.xlabel("Time", fontsize=14)
-        plt.ylabel("Average number of jobs", fontsize=14)
+        plt.xlabel("Time", fontsize=16)
+        plt.ylabel("Average queue size", fontsize=16)
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
         plt.savefig(f"{save_prefix}_{i}.png")
         plt.close()
 
+def plot_eigs(eigs):
+    fig, ax = plt.subplots(figsize=(5, 5))
+
+    ax.scatter(eigs.real, eigs.imag, label='Eigenvalues', marker='x', color='#9f1853')
+    # Plot unit circle
+    theta = np.linspace(0, 2*np.pi, 100)
+    ax.plot(np.cos(theta), np.sin(theta), linestyle='-', color='#999', lw=0.75)
+    ax.set_xlabel('Real part')
+    ax.set_ylabel('Imaginary part')
+    ax.set_title('Eigenvalues')
+    #ax.legend()
+    plt.grid(True)
+    plt.savefig("results/eigvals.png")
 
 
 def residuals(params, k, y):
@@ -427,8 +440,8 @@ max_iter = 30
 
 # Uncomment if CMAES takes sequences of number of jobs and retries as references
 dont_care_val = 1e8 # not important
-best_params = run_cmaes_optimization(dont_care_val, dont_care_val, lambdaa, mu, timeout, max_retries,
-                                     qsize, osize, sigma, max_iter)
+#best_params = run_cmaes_optimization(dont_care_val, dont_care_val, lambdaa, mu, timeout, max_retries,
+ #                                    qsize, osize, sigma, max_iter)
 
 
 
