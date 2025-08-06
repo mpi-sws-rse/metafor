@@ -2,8 +2,7 @@
 
 import random
 from abc import ABC
-from typing import Type
-
+from typing import Type, List
 
 import logging
 logger = logging.getLogger(__name__)
@@ -22,6 +21,31 @@ class ExponentialDistribution(Distribution):
 
     def sample(self) -> float:
         return random.expovariate(self.mean)
+
+
+class WeibullDistribution(Distribution):
+    def __init__(self, mean: float):
+        self.mean = mean
+
+    def sample(self) -> float:
+        return random.weibullvariate(1.0/self.mean,1.0)
+
+# class HyperexponentialDistribution:
+#     def __init__(self, rates: List[float], probabilities: List[float]):
+#         assert len(rates) == len(probabilities), "Rates and probabilities must have the same length"
+#         assert abs(sum(probabilities) - 1.0) < 1e-6, "Probabilities must sum to 1"
+#         self.rates = rates  # List of rate parameters for each exponential component
+#         self.probabilities = probabilities  # Weights for each component
+
+#     def sample(self):
+#         # Choose a component based on probabilities
+#         component = random.choices(range(len(self.rates)), weights=self.probabilities, k=1)[0]
+#         # Sample from the selected exponential distribution
+#         return random.expovariate(self.rates[component])
+
+#     def mean(self):
+#         # Mean of hyperexponential is the weighted sum of individual means
+#         return sum(p / r for p, r in zip(self.probabilities, self.rates))
 
 
 class JobStatus:
@@ -73,6 +97,20 @@ def exp_job(mean: float) -> Type[Job]:
             return mean
 
     return ExpJob
+
+
+# Job with Weibull distributed latency
+def wei_job(mean: float) -> Type[Job]:
+    class WeiJob(Job):
+        def __init__(self, t: float, max_retries: int = 0, retries_left: int = 0):
+            super().__init__(t, max_retries, retries_left)
+            self.size = random.weibullvariate(mean, 1.0)
+
+        @staticmethod
+        def mean() -> float:
+            return mean
+
+    return WeiJob
 
 
 # Job with bimodal exponentially distributed latency
