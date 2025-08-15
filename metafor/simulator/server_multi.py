@@ -143,7 +143,7 @@ class Server:
             If queue is not empty, it returns the dequeued job else None.
 
         """
-        #print(" Job DONE ",self.id)
+        #print(" Job DONE ",n)
         #assert (self.busy > 0)
         completed = self.jobs[n]
         if completed is None:
@@ -156,38 +156,41 @@ class Server:
             completed.status = JobStatus.COMPLETED
             completed.completed_t = t
 
-        if completed.max_retries > completed.retries_left:  # a retried job is completed
-            self.retries -= 1
-        logger.info("Completing %s at %f" % (completed.name, t))
+            if completed.max_retries > completed.retries_left:  # a retried job is completed
+                self.retries -= 1
+            logger.info("Completing %s at %f" % (completed.name, t))
 
-        end_time = time.time()
-        runtime = end_time - self.start_time
-        assert self.context is not None, "Context not set: cannot output results"
+            end_time = time.time()
+            runtime = end_time - self.start_time
+            assert self.context is not None, "Context not set: cannot output results"
 
-        ################## TODO ###############################
-        # Ensure metrics like latency account for the total time
-        # a job spends across all servers.
-        self.context.write(
-            {'server': self.id,
-             'timestamp': t,
-             'latency' : t - completed.created_t,
-             'queue_length' : self.queue.len(),
-             'retries' : self.retries,
-             'dropped' : self.dropped,
-             'runtime' : runtime,
-             'retries_left' : self.jobs[n].retries_left,
-             'service_time' : self.jobs[n].size,
-             })
-             #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
+            #################################################
+            # Ensure metrics like latency account for the total time
+            # a job spends across all servers.
+            self.context.write(
+                {'server': self.id,
+                'timestamp': t,
+                'latency' : t - completed.created_t,
+                'queue_length' : self.queue.len(),
+                'retries' : self.retries,
+                'dropped' : self.dropped,
+                'runtime' : runtime,
+                'retries_left' : self.jobs[n].retries_left,
+                'service_time' : self.jobs[n].size,
+                })
+                #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
         # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
         #                                              self.queue.len(), self.retries, self.dropped, runtime))
         events = []
         
         # In job_done, forward completed jobs to downstream_server.offer if downstream_server exists.
         if self.downstream_server is not None:
-            service_time = self.downstream_server.service_time_distribution[self.jobs[n].name].sample()
-            #self.jobs[n].size = service_time
-            events.append((t + service_time, self.downstream_server.job_done, n))
+            service_time = self.service_time_distribution[self.jobs[n].name].sample()
+            # self.jobs[n].size = service_time
+            offered = self.downstream_server.offer(completed, t +service_time)
+            if offered is not None:
+                events.append(offered)
+        #     #events.append((t + service_time, self.downstream_server.job_done, n))
             
             
         
@@ -205,13 +208,6 @@ class Server:
         else:
             self.busy -= 1
             self.jobs[n] = None
-        
-        
-
-
-        # done_event = self.client.done(t, completed)
-        # if done_event is not None:
-        #     events.append(done_event)
 
         return events
 
@@ -234,7 +230,7 @@ class Server:
             # this is a retried job
             self.retries += 1
            
-        ###### TODO #####################
+        ##########################################################
         # Ensure dropped jobs or retries are handled consistently, 
         # considering the downstream server’s state.
         # Should we have a thread pool for each server?
@@ -251,7 +247,7 @@ class Server:
                     #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[job.name].mean,service_time))
                     job.size = service_time
                     logger.info("Processing %s at %f" % (job.name, t))
-                    print("job  offered at server",self.id,"  ",self.downstream_server)
+                    #print("job  offered at server",self.id,"  ",self.downstream_server)
                     # if self.downstream_server is not None:
                     #     offered = self.downstream_server.offer(job, t)
                     #     print("downstream offered ")

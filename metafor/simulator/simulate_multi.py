@@ -72,7 +72,7 @@ class Simulator:
             # valid heap
             if new_events is not None:
                 self.q.extend(new_events)
-                print("new_events ",new_events)
+                #print("new_events ",new_events)
                 heapq.heapify(self.q)   
 
     def analyze(self):
@@ -90,7 +90,7 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
     """
     file_names: List[str] = []
 
-    ######## TODO #########################
+    #####################################################
     # Initialize multiple servers and aggregate results.
     #
     for i in range(num_runs):
@@ -154,18 +154,18 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                 #print(split_line)
                 if float(split_line[1]) > (step_ind + 1) * step_time:
                     #latency = float(split_line[2]) * 1
-                    latency = float(split_line[2]) * 1
+                    latency = float(split_line[3]) * 1
                     runtime = float(split_line[6])
-                    qlen = float(split_line[3])
+                    qlen = float(split_line[2])
                     latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
                     qlen_dateset[run_ind, step_ind] = qlen
                     step_ind += 1
                 elif i == row_num - 1 and step_ind < num_datapoints:
                     # latency = float(split_line[2]) * 1
-                    latency = float(split_line[2]) * 1
+                    latency = float(split_line[3]) * 1
                     runtime = float(split_line[6])
-                    qlen = float(split_line[3])
+                    qlen = float(split_line[2])
                     latency_dateset[run_ind, step_ind] = latency
                     runtime_dateset[run_ind, step_ind] = runtime
                     qlen_dateset[run_ind, step_ind] = qlen
@@ -255,10 +255,10 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
     # for i in range(len(servers) - 1):
     #     servers[i].downstream_server = servers[i + 1]
 
-    print("inside make_sim_exp ",servers[0].id,"  ")
-    print("  ",servers[1].id)
+    #print("inside make_sim_exp ",servers[0].id,"  ")
+    #print("  ",servers[1].id)
     
-    print("  ",servers[0].downstream_server.id)
+    #print("  ",servers[0].downstream_server.id)
     return servers, clients
 
 

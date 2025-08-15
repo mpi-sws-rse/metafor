@@ -24,6 +24,35 @@ def plot_results(
     plt.rcParams["figure.figsize"] = [6, 10]
     plt.rcParams["figure.autolayout"] = True
 
+    ax = plt.GridSpec(3, 1)
+    ax.update(wspace=0.5, hspace=0.5)
+
+    ax1 = plt.subplot(ax[0, 0])  # row 0, col 0
+    ax1.plot(time, latency_ave_len_seq, color="tab:blue")
+    ax1.set_xlabel("Time bound (ms)", fontsize=8)
+    ax1.set_ylabel("Average Latency", fontsize=8)
+    ax1.grid("on")
+    ax1.set_xlim(0, max(time))
+    
+    ax2 = plt.subplot(ax[1, 0])  # row 3, col 0
+    ax2.plot(time, runtime_seq, color="tab:green")
+    ax2.set_xlabel("Time bound (ms)", fontsize=8)
+    ax2.set_ylabel("Runtime (sec)", fontsize=8)
+    ax2.grid("on")
+    ax2.set_xlim(0, max(time))
+
+    ax3 = plt.subplot(ax[2, 0])  # row 4, col 0
+    ax3.plot(time, main_queue_ave_len_seq, color="tab:blue")
+    ax3.set_xlabel("Time bound (ms)", fontsize=8)
+    ax3.set_ylabel("Average queue length", fontsize=8)
+    ax3.grid("on")
+    ax3.set_xlim(0, max(time))
+    plt.savefig(figure_name)
+    plt.close()
+
+    return
+
+
     ax = plt.GridSpec(7, 1)
     ax.update(wspace=0.5, hspace=0.5)
 

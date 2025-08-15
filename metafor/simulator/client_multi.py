@@ -124,20 +124,25 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         
         if offered is None:
             # No Job is to be processed
-            return [(next_t, self.generate, None)]
+            return [(next_t, self.generate, payload)]
         else:
             if self.server.downstream_server is not None:
+                return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
                 # Check if a downstream server exists
-                print("client downstream ",self.server,"  ",self.server.downstream_server)
-                forwarded_event = self.server.downstream_server.offer(job, t)
+                #print("client downstream ",self.server,"  ",self.server.downstream_server)
+                '''
+                service_time = self.server.downstream_server.service_time_distribution[job.name].sample()
+                forwarded_event = self.server.downstream_server.offer(job, t + service_time)
                 if forwarded_event is None:
-                    return [(next_t, self.generate, None), (t + self.timeout, self.on_timeout, job), offered]
+                    return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
                 else:
-                    return [(next_t, self.generate, forwarded_event), (t + self.timeout, self.on_timeout, job), offered]
+                    #forwarded_event = [forwarded_event,payload]
+                    return [(next_t, self.generate, forwarded_event), (t + self.timeout, self.on_timeout, job), offered, forwarded_event]
                     #payload = [(next_t, self.generate, None), (t + self.timeout, self.on_timeout, job)]
                     #return [(next_t, self.generate, None), (t + self.timeout, self.on_timeout, job), offered, forwarded_event]
+                '''
             else:
-                return [(next_t, self.generate, None), (t + self.timeout, self.on_timeout, job), offered]
+                return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
 
     def on_timeout(self, t, job):
         """
@@ -152,40 +157,31 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         """
         logger.info("on timeout called at %f with job %s" % (t, job))
         
-        ######### TODO ###########################################
-        # Modify on_timeout to check all servers in the chain for the 
+        ####################################################
+        # Modifying on_timeout to check all servers in the chain for the 
         # job’s status, as jobs may be in the queue or processing in
         # downstream servers.
         
         retried_jobs = []
         current = self.server
         while current:
-            if job in current.jobs and job.status != JobStatus.COMPLETED:
+            if job.status != JobStatus.COMPLETED:
                 if job.retries_left > 0:
                     logger.info(f"Job {job.created_t} timeout, retrying {job.max_retries - job.retries_left} at {t} on {current.sim_name}")
                     job.retries_left -= 1
-                    offered = self.server.offer(job, t)  # Retry at first server
+                    service_time = current.service_time_distribution[job.name].sample()
+                
+                    offered = current.offer(job, t + service_time)  # Retry at first server
                     if offered is not None:
-                        retried_jobs.append((t + self.timeout, self.on_timeout, job), offered)
+                        retried_jobs.append(offered)
+                    
+                    retried_jobs.append((t + self.timeout, self.on_timeout, job))
+                    #return retried_jobs
+                    t = t + service_time
             current = current.downstream_server  # Check downstream serve
         #logger.info(f"Job {job.created_t} not found in any server at {t}")
         return retried_jobs
-        #return []
-
-        # if job.status != JobStatus.COMPLETED:
-        #     # we have timed out: generate another instance, if retries left
-
-        #     if job.retries_left > 0:
-        #         logger.info("Job %f timeout, retrying %d at %f " % (job.created_t, job.max_retries - job.retries_left, t))
-        #         job.retries_left -= 1
-        #         offered = self.server.offer(job, t)
-        #         if offered is None:
-        #             return []
-        #         else:
-        #             return [(t + self.timeout, self.on_timeout, job), offered]
-        # else:
-        #     # this job has been completed or dropped already
-        #     return []
+    
         
     def done(self, t: float, event: Job):
         """
@@ -196,14 +192,6 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         #    # Offer another job as a replacement for the timed-out one
         #    return self.server.offer(self.job_type(t, self.max_retries, event.retries_left - 1), t)
         #else:
-
-        ######### TODO ##########################
-        # adjust done to handle completions from any 
-        # server in the chain
-        # current = self.server
-        # while current.downstream_server:
-        #     current = current.downstream_server
-        #     #if job in current.jobs and job.status != JobStatus.COMPLETED:
         
         event.status = JobStatus.COMPLETED
         return None
