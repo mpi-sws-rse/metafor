@@ -10,6 +10,15 @@ To generate data:
 cd data_generation/   
 python data_generator.py  --runs=100   
 ```
+To generate data in multiserver setting:    
+
+```bash 
+python data_generator_multi.py  --runs=10
+```
+
+This generates a file "discrete_results.pdf" which shows the average 
+queue length and latency for the simulations. We can infer metastability from 
+these plots as well.
 
 The above command generates a dataset consisting of $runs$ number of csv files.   
 Similarly, other arguments can be passed to the data generator file.   
