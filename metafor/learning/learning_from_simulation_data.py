@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-
+import random, copy
 
 import pickle
 import matplotlib.pyplot as plt
@@ -19,16 +19,27 @@ from numpy.linalg import lstsq
 os.makedirs("results", exist_ok=True)
 
 
-def prepare_training_data(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth):
+def set_seed(seed: int):
+
+    os.environ["PYTHONHASHSEED"] = str(seed)   # hash-based ops
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def prepare_training_data(q_seq, o_seq): #, l_seq, d_seq, r_seq, s_seq, depth):
     """ Preparing input-output training datasets"""
     X = []
     Y = []
 
-    for q, o, l, d, r, s  in zip(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq):
+    #for q, o, l, d, r, s  in zip(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq):
+    for q, o in zip(q_seq, o_seq):
         T = len(q)
         for t in range(depth, T):
-            x = q[t - depth:t] + r[t - depth:t]  # concatenate d history of features
-            y = q[t: t + 1] + r[t: t + 1] 
+            x = q[t - depth:t] + o[t - depth:t]  # concatenate d history of features
+            y = q[t: t + 1] + o[t: t + 1]
             X.append(x)
             Y.append(y)
 
@@ -164,12 +175,30 @@ class autoencoder():
             total_idx += num_steps + 1
         return trajectory_list, trajectory_length_list
 
-    def autoencoder_training(input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list):
+    def autoencoder_training(input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list,
+                             seed = None):
         """Training the AE model"""
+        # hyperparams
+        rolling_len = 1  # number of future steps to include in each window
+        step_time = 1  # stride for moving the start t, and spacing between horizons
         # Create an instance of the model
         model = AutoEncoderModel(input_dim, latent_dim, output_dim)
+        # Set and record a reproducibility seed (keeps API unchanged)
+        # --- minimal seeding right here ---
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+            torch.manual_seed(seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(seed)
+
+        # Track the best model
+        best_loss = float('inf')
+        best_state = None
+        best_epoch = -1
+
         # Optimizer and loss function
-        optimizer = optim.Adam(model.parameters(), lr=1e-3)
+        optimizer = optim.Adam(model.parameters(), lr=1*1e-4)
         loss_fn = nn.MSELoss()
 
         for epoch in range(num_epochs):
@@ -178,23 +207,54 @@ class autoencoder():
 
             loss = 0
             for traj_idx in range(traj_num):
+                T = trajectory_length_list[traj_idx]
                 trajectory = trajectory_list[traj_idx][0]
-                steps = list(range(0, trajectory_length_list[traj_idx]))
+                steps = list(np.arange(0, T, 1))
                 # Use the first state x_0 as the input
-                x0 = trajectory[0]  #
+                x0 = trajectory[0]
                 # Target states
-                target = trajectory_list[traj_idx][1]  #
-
+                target = trajectory_list[traj_idx][1][0:trajectory_length_list[traj_idx]]#[::1] #
                 # Compute the predictions
-                output = model(x0, steps)  #
-
+                output = model(x0, steps) #
                 # Compute the loss (mean squared error)
                 loss += loss_fn(output, target)
+                """for t in np.arange(0, T-1, step_time):
+                    horizon = min(rolling_len, T - 1 - t)
+                    steps = list(range(0, horizon+1))
+                    #steps = list(np.arange(0, trajectory_length_list[traj_idx], 1))
+                    #steps = list(range(0, trajectory_length_list[traj_idx]//10))
+                    # Use the first state x_0 as the input
+                    x0 = trajectory[t]  #
+                    # Target states
+                    #target = trajectory_list[traj_idx][1][0:trajectory_length_list[traj_idx]//10]#[::1]  #
+                    target = trajectory_list[traj_idx][1][t:t+horizon + 1]  # [::1]
+                    # Compute the predictions
+                    output = model(x0, steps)  #
+
+                    # Compute the loss (mean squared error)
+                    loss += loss_fn(output, target)"""
             loss.backward()
             optimizer.step()
+            # keep A stable; affine part guarantees one eigenvalue = 1 in augmented system
+            model.spectral_clip_()
+
+            # Update best snapshot
+            curr = loss.item()
+            if curr < best_loss:
+                best_loss = curr
+                best_state = copy.deepcopy(model.state_dict())
+                best_epoch = epoch
 
             if epoch % 10 == 0:
                 print(f"Epoch {epoch}: Loss = {loss.item()}")
+
+        # Restore the best weights and attach metadata
+        if best_state is not None:
+            model.load_state_dict(best_state)
+        model.training_seed = seed  # retrieve later to reproduce
+        model.best_epoch = best_epoch
+        model.best_loss = best_loss
+
         return model
 
     def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, save_dir="./results/", prefix="traj"):
@@ -210,12 +270,21 @@ class autoencoder():
         q_seq_learned_model = [[] for _ in range(traj_num)]
 
         for traj_idx in range(traj_num):
-            x0 = trajectory_list[traj_idx][0][0]  # initial state or sequence
+            T = len(true_q_seq[traj_idx])
+            steps = list(np.arange(0, T, 1))
+            # Use the first state x_0 as the input
+            x0 = trajectory_list[traj_idx][0][0]
+            # Target states
+            target = trajectory_list[traj_idx][1][0:trajectory_length_list[traj_idx]]#[::1] #
+            # Compute the predictions
+            model_output = model(x0, steps) #
+            q_seq_learned_model[traj_idx] = model_output[:, 0, 0].detach().cpu().tolist()
+            """x0 = trajectory_list[traj_idx][0][0]  # initial state or sequence
             q_seq_learned_model[traj_idx].append(x0[0][0].numpy())
 
             for i in range(1, len(true_q_seq[traj_idx])):
-                y = model(x0, [i]).detach().numpy()[0][0][0]
-                q_seq_learned_model[traj_idx].append(y)
+                y = model(x0, [i]).detach().numpy()[-1][0][0]
+                q_seq_learned_model[traj_idx].append(y)"""
 
             # Plot true vs predicted
             plt.figure(figsize=(10, 4))
@@ -238,45 +307,70 @@ class AutoEncoderModel(nn.Module):
         super(AutoEncoderModel, self).__init__()
         # Encoder: maps x to latent space y
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 2000),
+            nn.Linear(input_dim, 100 *1),
             nn.ReLU(),
-            nn.Linear(2000, 1000),
+            nn.Linear(100*1, 500*1),
             nn.ReLU(),
-            nn.Linear(1000, latent_dim)
+            nn.Linear(500*1, latent_dim)
         )
         # Decoder: maps latent representation y back to x-hat
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim, 1000),
+            nn.Linear(latent_dim, 500*1),
             nn.ReLU(),
-            nn.Linear(1000, 2000),
+            nn.Linear(500*1, 100),
             nn.ReLU(),
-            nn.Linear(2000, output_dim)
+            nn.Linear(100*1, output_dim)
         )
+        """self.encoder = nn.Sequential(nn.Linear(input_dim, latent_dim))#,
+            #nn.Tanh(),nn.Linear(5*1, latent_dim))
+        # Decoder: maps latent representation y back to x-hat
+        self.decoder = nn.Sequential(nn.Linear(latent_dim, output_dim))#,
+                                     #nn.Linear(5*1, output_dim))"""
         # Trainable square matrix K of shape (latent_dim, latent_dim)
-        self.K = nn.Parameter(torch.eye(latent_dim))
-
+        K0 = 1 * torch.eye(latent_dim)  # already stable
+        self.K = nn.Parameter(K0)
+        self.b = nn.Parameter(torch.zeros(latent_dim))
     def forward(self, x0, steps):
         """
         x0: tensor of shape [1, input_dim] (initial state)
         steps: list of integers representing future time steps (e.g., [1, 2, ..., N])
         Returns: tensor of predictions of shape [len(steps), batch_size, input_dim]
         """
-        y0 = self.encoder(x0)  # Compute initial latent representation
+        if len(steps) > 1: # call during training
+            horizon = len(steps)
+        else:
+            horizon = steps[0]
+        y_i = self.encoder(x0)  # Compute initial latent representation
         predictions = []
-        for i in steps:
-            # Compute K^i
-            K_power = torch.matrix_power(self.K, i)
-            # Propagate the latent state: y_i = K^i * y0
-            y_i = torch.matmul(y0, K_power.t())
+        for i in range(horizon):
+            if i > 0:
+                # Compute K^i
+                #K_power = torch.matrix_power(self.K, i)
+                # Propagate the latent state: y_i = K * y_i-1 + b
+                y_i = torch.matmul(y_i, self.K.t()) + self.b
             # Decode the latent state to get x-hat
             xhat_i = self.decoder(y_i)
             predictions.append(xhat_i)
         # Stack predictions along a new dimension
         return torch.stack(predictions, dim=0)
 
-
-
-
+    @torch.no_grad()
+    def spectral_clip_(self, n_power_iter=2, eps=1e-12):
+        """Project A so its spectral norm <= alpha (cheap power iteration)."""
+        W = self.K
+        # flatten to 2D just in case
+        Wm = W.reshape(W.shape[0], -1)
+        # power iteration
+        u = torch.randn(Wm.size(0), device=W.device)
+        u = u / (u.norm() + eps)
+        for _ in range(n_power_iter):
+            v = Wm.t().mv(u);
+            v = v / (v.norm() + eps)
+            u = Wm.mv(v);
+            u = u / (u.norm() + eps)
+        sigma = (u @ (Wm @ v)).item()
+        if sigma > .99:
+            W.mul_(.99 / (sigma + eps))
 
  
 # Loading the trajectories...
@@ -294,15 +388,15 @@ with open("data_generation/s_seq.pkl", "rb") as f:
     s_seq = pickle.load(f)
 
 traj_num = len(q_seq) # Number of trajectories within the dataset
-depth = 10 # History length, also known as depth in system identification
+depth = 1 # History length, also known as depth in system identification
 
-X, Y = prepare_training_data(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth)
+X, Y = prepare_training_data(q_seq, o_seq) #, l_seq, d_seq, r_seq, s_seq, depth)
 
 # Evaluating the performance of least-squares optimizer
 
 # Compute the LS gain
 #theta = np.matmul(np.linalg.inv(np.matmul(X.T, X)), np.matmul(X.T, Y))
-theta = linear_model.train_linear_least_squares(X, Y)
+"""theta = linear_model.train_linear_least_squares(X, Y)
 
 # Compute the model predictions
 model_preds = linear_model.simulate_linear_model(theta, q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth=depth)
@@ -316,20 +410,20 @@ A_theta = linear_model.build_effective_transition_matrix(theta, depth=depth)
 # Printing sorted eigenvalues
 eigvals = np.linalg.eigvals(A_theta)
 eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
-print("Eigenvalues of the system:", eigvals_sorted)
+print("Eigenvalues of the system:", eigvals_sorted)"""
 
-
+set_seed(858257303)
 input_dim = 2 * depth  # Input space dimension
 output_dim = 2
 latent_dim = 10  # Latent space dimension
-num_epochs = 250
+num_epochs = 300
 
 # Get trajectories within X
 trajectory_list, trajectory_length_list = autoencoder.get_trajectories(traj_num, X, Y, q_seq)
 
 
 model = autoencoder.autoencoder_training(
-    input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list)
+    input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list, seed = 858257303)
 
 
 autoencoder.simulate_and_plot_from_initial_state(
@@ -343,6 +437,6 @@ autoencoder.simulate_and_plot_from_initial_state(
 # Analyzing the linear mapping
 K_matrix = model.K.detach().cpu().numpy()
 eigvals = np.linalg.eigvals(K_matrix)
-# Printing sorted eigenvalues
+# Printing sortd eigenvalues
 eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
 print("Eigenvalues for K_matrix:", eigvals_sorted)
