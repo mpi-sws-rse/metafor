@@ -137,13 +137,25 @@ def empirical_T_delta(K, P, Z0_list, delta, Tmax=2000):
 
 deltas = [0.05,0.1,0.2,0.3,0.5,0.8,1]
 data = []
+data1 = []
 for d in deltas:
     P = estimate_P(K_matrix, kmax=100000)
     times = empirical_T_delta(K_matrix, P, [Z[0] for Z in Z_trajs], delta=d, Tmax=50000)
-    print("empirical mean T_delta:", times.mean())
+    print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
     data.append(times.mean())
+    data1.append(times.std())
 
+data = np.array(data)
+data1 = np.array(data1)
 
-plt.plot(deltas, data, color="tab:green")
+plt.plot(deltas, data, color="tab:green",label='Mean')
+
+# Plot shaded standard deviation
+plt.fill_between(deltas, data - data1, data + data1, color='blue', alpha=0.2, label='±1 std. dev.')
+# Label and show
+plt.title("$\delta$-settling times")
+plt.xlabel("$\delta$",fontsize=16)
+plt.ylabel("Timesteps",fontsize=16)
+plt.legend()
 plt.savefig("Mixing_times.pdf")
 plt.close()
