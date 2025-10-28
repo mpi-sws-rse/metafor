@@ -31,6 +31,7 @@ def main():
     retry_queue_size = 20 # only used when learning in the space of prob distributions is desired.
     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
     rho = 9.7/10 # server's utilization rate
+    
     timeout_t = 9 # timeout after which the client retries, if the job is not done
     max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
     runs = 10 # how many times should the simulation be run
@@ -40,7 +41,7 @@ def main():
     rho_reset = rho * 5 / 5 # utilization rate after removing the fault
     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
     fault_duration = sim_time * .1  # fault duration
-
+    throttle=False
 
     parser = argparse.ArgumentParser()
 
@@ -49,6 +50,7 @@ def main():
     parser.add_argument("--qsize", help="maximum size of the arrivals queue", default=100, type=int, required=False)
     parser.add_argument("--rsize", help="maximum size of the retries queue", default=20, type=int, required=False)
     parser.add_argument("--genpkl", help="Generate the pkl files from csv", default=False, type=bool, required=False)
+    parser.add_argument("--throttle", help="Apply throttling strategy", default=False, type=bool, required=False)
   
     args = parser.parse_args()
 
@@ -58,7 +60,7 @@ def main():
     retry_queue_size = args.rsize
     genpkl = args.genpkl
     run_discrete_experiment(sim_time, runs, mean_t, rho, main_queue_size, retry_queue_size, timeout_t, max_retries,
-                            total_time, step_time, rho_fault, rho_reset, fault_start, fault_duration)
+                            total_time, step_time, rho_fault, rho_reset, fault_start, fault_duration,throttle)
 
     if genpkl:
         # When genpkl is true, .pkl files are also generated from the .csv files

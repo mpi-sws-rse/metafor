@@ -22,7 +22,7 @@ import pickle
 # Print the mean value, the variance, and the standard deviation at each stat point in each second
 def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int,
                           mean_t: float, rho: float, rho_fault: float, fault_start: float, fault_duration: float,
-                          qsize: int, osize: int):
+                          qsize: int, osize: int, num_servers: int):
     global done
     ss_size = qsize * osize # this is used to create the two-dimensional state space for computing empirical dist pi_seq
     num_traj = len(fault_start)  # number of continuous trajectories (currently there are only two)
@@ -114,6 +114,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
 
     common_data_num = np.min(actual_data_num_seq, axis = 0) # minimum number of data points among all runs
     q_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of jobs in the queue
+    q_ave_seq = [[[]*num_traj for l in range(num_traj)]*k for k in range(num_servers)] # seq of average number of jobs in the queue
     o_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of retried jobs
     l_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average latency
     d_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of dropped jobs
@@ -155,11 +156,11 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
 
 
 
-def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration, qsize, osize):
+def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration, qsize, osize, num_servers):
     current_folder = os.getcwd()
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
     # qsize and osize are fixed...
-    q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, qsize, osize)
+    q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, qsize, osize, num_servers)
     return q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq
 
 
@@ -202,7 +203,7 @@ def index_composer(n_main_queue, n_retry_queue, qsize, osize):
 
 if __name__ == '__main__':
     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
-    rho = 9.7/10 # server's utilization rate
+    rho = 9.5/10 # server's utilization rate
     runs = 100 # how many times should the simulation be run
     step_time = .5 # sampling time
     sim_time = 1000 # maximum simulation time for an individual simulation

@@ -108,11 +108,11 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         siml.reset()
         siml.sim(max_t)
         print("LIST OF SERVERS ",servers)
-        print(siml.contexts[0].result[0:5])
-        print(siml.contexts[1].result[0:5])
+        # print(siml.contexts[0].result[0:5])
+        # print(siml.contexts[1].result[0:5])
         
         for server in servers:
-            print(server, "       ",server.downstream_server)
+            # print(server,"   ",server.id,"      ",server.downstream_server)
             # print(server.context.result[0:5])
             # print(server.downstream_server.context.result[0:5])
             # #exit() 

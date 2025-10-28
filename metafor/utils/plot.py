@@ -24,29 +24,50 @@ def plot_results(
     plt.rcParams["figure.figsize"] = [6, 10]
     plt.rcParams["figure.autolayout"] = True
 
-    ax = plt.GridSpec(3, 1)
+    ax = plt.GridSpec(2, 1)
     ax.update(wspace=0.5, hspace=0.5)
 
+    color="tab:blue"
     ax1 = plt.subplot(ax[0, 0])  # row 0, col 0
-    ax1.plot(time, latency_ave_len_seq, color="tab:blue")
+    ax1.plot(time, latency_ave_len_seq, color=color)
     ax1.set_xlabel("Time bound (ms)", fontsize=8)
-    ax1.set_ylabel("Average Latency", fontsize=8)
+    ax1.set_ylabel("Average Latency", fontsize=8, color=color)
     ax1.grid("on")
     ax1.set_xlim(0, max(time))
-    
-    ax2 = plt.subplot(ax[1, 0])  # row 3, col 0
-    ax2.plot(time, runtime_seq, color="tab:green")
-    ax2.set_xlabel("Time bound (ms)", fontsize=8)
-    ax2.set_ylabel("Runtime (sec)", fontsize=8)
-    ax2.grid("on")
-    ax2.set_xlim(0, max(time))
+    ax1.tick_params(axis='y', labelcolor=color)
 
-    ax3 = plt.subplot(ax[2, 0])  # row 4, col 0
+    ax11 = ax1.twinx()
+    color="tab:red"
+    ax1.set_ylabel("Average LateArrival rate", color=color)
+    avg_arr_rate = np.ones(len(time))
+    avg_arr_rate[np.arange(int(0.45*len(time)),int(0.55*len(time)))] = 10
+    ax11.plot(time, avg_arr_rate, color=color)
+    ax11.tick_params(axis='y',labelcolor=color)
+    
+    # ax2 = plt.subplot(ax[1, 0])  # row 3, col 0
+    # ax2.plot(time, runtime_seq, color="tab:green")
+    # ax2.set_xlabel("Time bound (ms)", fontsize=8)
+    # ax2.set_ylabel("Runtime (sec)", fontsize=8)
+    # ax2.grid("on")
+    # ax2.set_xlim(0, max(time))
+
+    ax3 = plt.subplot(ax[1, 0])  # row 4, col 0
+    color="tab:blue"
     ax3.plot(time, main_queue_ave_len_seq, color="tab:blue")
     ax3.set_xlabel("Time bound (ms)", fontsize=8)
-    ax3.set_ylabel("Average queue length", fontsize=8)
+    ax3.set_ylabel("Average queue length", fontsize=8,color=color)
     ax3.grid("on")
     ax3.set_xlim(0, max(time))
+    ax3.tick_params(axis='y', labelcolor=color)
+
+    ax31 = ax3.twinx()
+    color="tab:red"
+    ax31.set_ylabel("Average LateArrival rate", color=color)
+    avg_arr_rate = np.ones(len(time))
+    avg_arr_rate[np.arange(int(0.45*len(time)),int(0.55*len(time)))] = 10
+    ax31.plot(time, avg_arr_rate, color=color)
+    ax31.tick_params(axis='y',labelcolor=color)
+    #plt.show()
     plt.savefig(figure_name)
     plt.close()
 

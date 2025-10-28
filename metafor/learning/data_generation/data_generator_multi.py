@@ -67,8 +67,8 @@ def main():
     if genpkl:
         # When genpkl is true, .pkl files are also generated from the .csv files
         
-        from generate_pkl_files import convert_csv_to_pkl
-        convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration)
+        from generate_pkl_files_multi import convert_csv_to_pkl
+        convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration, num_servers)
 
 if __name__ == '__main__':
     main()

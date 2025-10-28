@@ -16,11 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 
-############# TODO #############################
+#########################################
 # Allow Context to log metrics for multiple servers, 
 # possibly with a server identifier in the result dictionary.
 # Extend analyze to report metrics per server (e.g., 
 # queue lengths and latencies for each server)
+
 class Context:
     """
     manage the output from the simulation
@@ -158,27 +159,27 @@ class Server:
 
             if completed.max_retries > completed.retries_left:  # a retried job is completed
                 self.retries -= 1
-            logger.info("Completing %s at %f" % (completed.name, t))
+            logger.info("Completing %s at %f on server %d" % (completed.name, t,self.id))
 
             end_time = time.time()
             runtime = end_time - self.start_time
             assert self.context is not None, "Context not set: cannot output results"
 
-            #################################################
-            # Ensure metrics like latency account for the total time
-            # a job spends across all servers.
-            self.context.write(
-                {'server': self.id,
-                'timestamp': t,
-                'latency' : t - completed.created_t,
-                'queue_length' : self.queue.len(),
-                'retries' : self.retries,
-                'dropped' : self.dropped,
-                'runtime' : runtime,
-                'retries_left' : self.jobs[n].retries_left,
-                'service_time' : self.jobs[n].size,
-                })
-                #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
+        #################################################
+        # Ensure metrics like latency account for the total time
+        # a job spends across all servers.
+        self.context.write(
+            {'server': self.id,
+            'timestamp': t,
+            'latency' : t - completed.created_t,
+            'queue_length' : self.queue.len(),
+            'retries' : self.retries,
+            'dropped' : self.dropped,
+            'runtime' : time.time() - self.start_time,
+            'retries_left' : self.jobs[n].retries_left,
+            'service_time' : self.jobs[n].size,
+            })
+            #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
         # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
         #                                              self.queue.len(), self.retries, self.dropped, runtime))
         events = []
@@ -240,13 +241,13 @@ class Server:
             self.busy += 1
             for i in range(self.thread_pool):
                 if self.jobs[i] is None:
-                    logger.info("Processing %s at %f" % (job.name, t))
+                    logger.info("Processing %s at %f on server %d" % (job.name, t, self.id))
                     self.jobs[i] = job
                     job.status = JobStatus.PROCESSING
                     service_time = self.service_time_distribution[job.name].sample()
                     #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[job.name].mean,service_time))
                     job.size = service_time
-                    logger.info("Processing %s at %f" % (job.name, t))
+                    logger.info("Processing %s at %f on server %d" % (job.name, t, self.id))
                     #print("job  offered at server",self.id,"  ",self.downstream_server)
                     # if self.downstream_server is not None:
                     #     offered = self.downstream_server.offer(job, t)

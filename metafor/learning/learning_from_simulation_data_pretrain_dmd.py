@@ -38,7 +38,6 @@ def prepare_training_data(q_seq, o_seq): #, l_seq, d_seq, r_seq, s_seq, depth):
     #for q, o, l, d, r, s  in zip(q_seq, o_seq, l_seq, d_seq, r_seq, s_seq):
     for q, o in zip(q_seq, o_seq):
         T = len(q)
-    
         for t in range(depth, T):
             x = q[t - depth:t] + o[t - depth:t]  # concatenate d history of features
             y = q[t: t + 1] + o[t: t + 1]
@@ -157,6 +156,81 @@ class linear_model():
 
 
 
+def pretrain_autoencoder_recon(model, trajectory_list, trajectory_length_list, pretrain_epochs=50, lr=1e-3, device='cpu'):
+    """Quick reconstruction pretrain: minimize decoder(encoder(x)) ~ x (one-step)"""
+    model.to(device)
+    opt = torch.optim.Adam(list(model.encoder.parameters()) + list(model.decoder.parameters()), lr=lr)
+    loss_fn = nn.MSELoss()
+    model.train()
+    for ep in range(pretrain_epochs):
+        opt.zero_grad()
+        loss = 0.0
+        count = 0
+        for traj_idx in range(len(trajectory_list)):
+            X_traj = trajectory_list[traj_idx][0].to(device)   # shape (T, 1, input_dim)
+            # For each time in trajectory, reconstruct the input window
+            # note: X_traj[t] has shape (1, input_dim)
+            for t in range(X_traj.shape[0]):
+                x = X_traj[t].squeeze(0)   # shape (input_dim)
+                x = x.unsqueeze(0)         # shape (1, input_dim)
+                z = model.encoder(x)
+                xhat = model.decoder(z)
+                loss = loss + loss_fn(xhat, x)
+                count += 1
+        loss = loss / (count + 1e-12)
+        loss.backward()
+        opt.step()
+        if (ep % 10) == 0:
+            print(f"[AE pretrain] Epoch {ep} recon loss: {loss.item():.6f}")
+    print("[AE pretrain] done")
+    return model
+
+def build_latent_snapshots(model, trajectory_list, device='cpu'):
+    """Construct Z and Zp by encoding consecutive inputs (windows) from trajectories.
+       Returns Z (latent_dim x N), Zp (latent_dim x N) as numpy arrays (column snapshots).
+    """
+    model.to(device)
+    model.eval()
+    Z_list = []
+    Zp_list = []
+    with torch.no_grad():
+        for traj_idx in range(len(trajectory_list)):
+            X_traj = trajectory_list[traj_idx][0].to(device)  # shape (T, 1, input_dim)
+            T = X_traj.shape[0]
+            if T < 2:
+                continue
+            # encode each window to latent
+            Z_traj = []
+            for t in range(T):
+                x = X_traj[t].squeeze(0).unsqueeze(0)  # shape (1, input_dim)
+                z = model.encoder(x)                   # shape (1, latent_dim)
+                Z_traj.append(z.cpu().numpy().reshape(-1))  # flatten to (latent_dim,)
+            Z_traj = np.stack(Z_traj, axis=1)  # shape (latent_dim, T)
+            # snapshots pairs (columns): z_0 -> z_1, z_1 -> z_2, ..., z_{T-2}->z_{T-1}
+            Z_list.append(Z_traj[:, :-1])
+            Zp_list.append(Z_traj[:, 1:])
+    if len(Z_list) == 0:
+        raise RuntimeError("No snapshot data found. Check trajectory_list")
+    Z = np.concatenate(Z_list, axis=1)   # (latent_dim, N_total)
+    Zp = np.concatenate(Zp_list, axis=1) # (latent_dim, N_total)
+    return Z, Zp
+
+def dmd_regression(Z, Zp, reg=1e-6):
+    """Compute K such that Zp ≈ K Z using Tikhonov regularization:
+       K = Zp @ Z^T @ (Z @ Z^T + reg*I)^{-1}
+       Returns K as numpy array with shape (latent_dim, latent_dim).
+    """
+    # Z, Zp shape: (m, N)
+    m, N = Z.shape
+    # compute covariance-like matrices
+    ZZt = Z @ Z.T   # (m,m)
+    ZptZt = Zp @ Z.T  # (m,m)
+    # regularize and invert
+    reg_eye = reg * np.eye(m)
+    inv = np.linalg.inv(ZZt + reg_eye)
+    K = ZptZt @ inv
+    return K
+
 
 # List of functions and classes used for V2 autoencoder formulation:
 class autoencoder():
@@ -193,6 +267,33 @@ class autoencoder():
             torch.manual_seed(seed)
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(seed)
+        
+        ##########################################################################
+
+        device="cpu"
+        model = pretrain_autoencoder_recon(model, trajectory_list, trajectory_length_list, pretrain_epochs=50, lr=1e-3, device=device)
+
+        # Build latent snapshots Z, Zp
+        Z, Zp = build_latent_snapshots(model, trajectory_list, device=device)
+        print("Built latent snapshots shapes:", Z.shape, Zp.shape)  # (latent_dim, N)
+
+        # Compute DMD (regularized least squares)
+        reg = 1e-6
+        K_init = dmd_regression(Z, Zp, reg=reg)  # shape (latent_dim, latent_dim)
+
+        # Assign into model.K (careful: model.forward uses y_row @ K.T,
+        # and we solved z_next_col = K * z_col, which is consistent)
+        with torch.no_grad():
+            model.K.data.copy_(torch.from_numpy(K_init).float().to(model.K.device))
+            # model.b can be set to the empirical latent offset if you want (optional)
+            # compute empirical bias: b ≈ mean(z_{t+1} - K z_t)
+            bias = np.mean(Zp - (K_init @ Z), axis=1)  # shape (latent_dim,)
+            model.b.data.copy_(torch.from_numpy(bias).float().to(model.b.device))
+
+        # enforce spectral clipping / stability if you want
+        model.spectral_clip_()
+
+        ###########################################################################
 
         # Track the best model
         best_loss = float('inf')
@@ -214,7 +315,6 @@ class autoencoder():
                 steps = list(np.arange(0, T, 1))
                 # Use the first state x_0 as the input
                 x0 = trajectory[0]
-                
                 # Target states
                 target = trajectory_list[traj_idx][1][0:trajectory_length_list[traj_idx]]#[::1] #
                 # Compute the predictions
@@ -222,9 +322,7 @@ class autoencoder():
                 #print("x0 ",x0,"  output ",output[0][0],"  target ",target[0][0],"  steps ",steps)
                 # Compute the loss (mean squared error)
                 #print(target[0:T,:,:].shape)
-  
-                #loss += loss_fn(output, target[0:T,:,:])
-                loss += loss_fn(output, target)
+                loss += loss_fn(output, target[0:T,:,:])
                 #print(" traj id ",traj_idx,"  loss ",loss)
                 """for t in np.arange(0, T-1, step_time):
                     horizon = min(rolling_len, T - 1 - t)
@@ -308,54 +406,6 @@ class autoencoder():
             plt.close()
 
         return q_seq_learned_model
-    
-
-    @staticmethod
-    def simulate_latent_trajectories(model, trajectory_list, traj_num, save_dir="./results/", prefix="latent"):
-        """
-        Simulate trajectories in the latent space using the learned Koopman operator K.
-
-        Args:
-            model: trained AutoEncoderModel with attributes encoder, K, b
-            trajectory_list: list of (X_traj, Y_traj) pairs
-            traj_num: number of trajectories
-            save_dir: where to save latent trajectory plots
-            prefix: filename prefix for saved plots
-        """
-        K = model.K.detach().cpu()
-        b = model.b.detach().cpu()
-
-        latent_trajectories = []
-
-        for traj_idx in range(traj_num):
-            # get initial input
-            x0 = trajectory_list[traj_idx][0][0]  # initial state [1, input_dim]
-            y0 = model.encoder(x0).detach().cpu()  # encode to latent space
-
-            T = len(trajectory_list[traj_idx][0])  # trajectory length
-            y_seq = [y0.squeeze().numpy()]
-
-            # propagate in latent space
-            y = y0
-            for t in range(1, T):
-                y = y @ K.T + b
-                y_seq.append(y.squeeze().numpy())
-
-            latent_trajectories.append(np.array(y_seq))
-
-            # optional: plot first 2 dims
-            plt.figure(figsize=(6, 5))
-            y_seq = np.array(y_seq)
-            plt.plot(y_seq[:, 0], y_seq[:, 1], '-o', markersize=2)
-            plt.title(f"Latent trajectory {traj_idx}")
-            plt.xlabel("Latent dim 1")
-            plt.ylabel("Latent dim 2")
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{save_dir}/{prefix}_{traj_idx}.png")
-            plt.close()
-
-        return latent_trajectories
 
 
 class AutoEncoderModel(nn.Module):
@@ -449,16 +499,7 @@ with open("data_generation/s_seq.pkl", "rb") as f:
 traj_num = len(q_seq) # Number of trajectories within the dataset
 depth = 1 # History length, also known as depth in system identification
 
-# print(len(q_seq[0]))
-# exit()
-# T=len(q_seq[0])
-#T=100
 X, Y = prepare_training_data(q_seq, l_seq) #, l_seq, d_seq, r_seq, s_seq, depth)
-
-# q_seq[0] = q_seq[0][0:100]
-# #q_seq[1] = q_seq[1][0:100] 
-# q_seq[1] = q_seq[0][0:100] #this basically enforces only the intital traj 
-# print(len(q_seq),"  ",len(q_seq[0]))
 
 # Evaluating the performance of least-squares optimizer
 
@@ -486,9 +527,6 @@ output_dim = 2
 latent_dim = 20  # Latent space dimension
 num_epochs = 1000
 
-
-
-
 # Get trajectories within X
 trajectory_list, trajectory_length_list = autoencoder.get_trajectories(traj_num, X, Y, q_seq)
 
@@ -505,21 +543,16 @@ autoencoder.simulate_and_plot_from_initial_state(
     prefix="q_model_vs_true"
 )
 
-latent_trajs = autoencoder.simulate_latent_trajectories(
-    model=model,
-    trajectory_list=trajectory_list,
-    traj_num=traj_num,
-    save_dir="./results/",
-    prefix="latent_traj"
-)
-
 # Analyzing the linear mapping
 K_matrix = model.K.detach().cpu().numpy()
 
 
+with open("model.pkl", "wb") as f:
+        pickle.dump(model,f)
+
 
 with open("K_matrix.pkl", "wb") as f:
-        pickle.dump((model,K_matrix,X,Y,trajectory_list,trajectory_length_list,latent_trajs),f)
+        pickle.dump((K_matrix,X,Y,trajectory_list,trajectory_length_list),f)
 
 print("K_matrix ",K_matrix)
 

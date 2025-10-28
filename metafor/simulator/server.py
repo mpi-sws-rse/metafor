@@ -88,6 +88,30 @@ class FCFSQueue:
         return "FCFS"
 
 
+
+class LIFOStack:
+    def __init__(self):
+        self.deque = deque()
+
+    def append(self, job):
+        """Add a job to the top of the stack."""
+        self.deque.append(job)
+
+    def pop(self):
+        """Remove and return the job from the top of the stack."""
+        return self.deque.pop()
+
+    def len(self) -> int:
+        """Return the number of jobs in the stack."""
+        return len(self.deque)
+
+    @staticmethod
+    def name() -> str:
+        """Return the name of this scheduling discipline."""
+        return "LIFO"
+
+
+
 class Server:
     """
     Server that consumes a queue of tasks of a fixed size (`queue_size`), with a fixed concurrency (MPL)    
@@ -95,11 +119,12 @@ class Server:
 
     def __init__(self, name: str, queue_size: int, thread_pool: int,
                  service_time_distribution: dict[str, Distribution],
-                 retry_queue_size: int, client: OpenLoopClientWithTimeout):
+                 retry_queue_size: int, client: OpenLoopClientWithTimeout, throttle:bool):
         self.start_time = 0  # to be set by each simulation
         self.busy: int = 0
 
         self.queue: FCFSQueue = FCFSQueue()
+        #self.queue: LIFOStack = LIFOStack()
         self.queue_size: int = queue_size
 
         self.service_time_distribution = service_time_distribution
@@ -118,6 +143,7 @@ class Server:
         # statistics
         self.retries: int = 0
         self.dropped: int = 0  # cumulative number
+        self.throttle: bool = throttle
 
     def set_context(self, c: Context):
         self.context = c
@@ -220,6 +246,7 @@ class Server:
         if self.busy < self.thread_pool:
             # The server isn't entirely busy, so we can start on the job immediately
             self.busy += 1
+            #print("busy ",self.busy,"  ",self.thread_pool)
             for i in range(self.thread_pool):
                 if self.jobs[i] is None:
                     logger.info("Processing %s at %f" % (job.name, t))
@@ -233,14 +260,41 @@ class Server:
             # Should never get here because jobs slots should always be available if busy < thread_pool
             assert False
         else:
-            # The server is busy, so try to enqueue the job, if there is enough space in the queue
-            if self.queue.len() < self.queue_size:
-                job.status = JobStatus.ENQUEUED
-                logger.info("Enqueueing %s at %f" % (job.name, t))
-                self.queue.append(job)
+            if self.throttle is False:    
+                # The server is busy, so try to enqueue the job, if there is enough space in the queue
+                if self.queue.len() < self.queue_size:
+                    job.status = JobStatus.ENQUEUED
+                    logger.info("Enqueueing %s at %f" % (job.name, t))
+                    self.queue.append(job)
+                else:
+                    job.status = JobStatus.DROPPED
+                    logger.info("Dropped %s at %f" % (job.name, t))
+                    self.dropped += 1
+                    return t + self.client.timeout, self.client.on_timeout, job
+                return None
+            
             else:
-                job.status = JobStatus.DROPPED
-                logger.info("Dropped %s at %f" % (job.name, t))
-                self.dropped += 1
-                return t + self.client.timeout, self.client.on_timeout, job
-            return None
+                # Throttling strategy kicks in  as soon as queuue is 70% full
+                # The server is busy, so try to enqueue the job, if there is enough space in the queue
+                if self.queue.len() < 0.7*self.queue_size:
+                    job.status = JobStatus.ENQUEUED
+                    logger.info("Enqueueing %s at %f" % (job.name, t))
+                    self.queue.append(job)        
+                elif self.queue.len() < self.queue_size:
+                    admission_prob = 0.1 
+                    if np.random.random() < admission_prob:
+                        job.status = JobStatus.ENQUEUED
+                        logger.info("Enqueueing %s at %f" % (job.name, t))
+                        self.queue.append(job)
+                    else:
+                        job.status = JobStatus.DROPPED
+                        logger.info("Dropped %s at %f" % (job.name, t))
+                        self.dropped += 1
+                        return t, self.client.on_timeout, job
+                
+                else:
+                    job.status = JobStatus.DROPPED
+                    logger.info("Dropped %s at %f" % (job.name, t))
+                    self.dropped += 1
+                    return t + self.client.timeout, self.client.on_timeout, job
+                return None
