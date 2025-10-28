@@ -93,7 +93,7 @@ class Simulator:
 
 
 def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_t: float, rho,
-             queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, fault_duration, throttle):
+             queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, fault_duration, throttle, queue_type):
     """
     Run a simulation `run_nums` times, outputting the results to `x_fn`, where x in [1, num_runs].
     One simulation is run for each client in `clients`.
@@ -107,7 +107,7 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         current_fn = str(i + 1) + '_' + fn
         file_names.append(current_fn)
         job_type = exp_job(mean_t)
-        clients = sim_fn(mean_t, "client", "request", rho, queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, fault_duration,throttle)
+        clients = sim_fn(mean_t, "client", "request", rho, queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, fault_duration,throttle,queue_type)
         for client in clients:
             client.server.file = current_fn
             client.server.start_time = time.time()
@@ -198,7 +198,7 @@ def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, n
 # Simulation with unimodal exponential service time and timeout
 def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size: int, retry_queue_size: int, timeout_t: float,
                  max_retries: int, rho_fault: float, rho_reset: float, fault_start: float,
-                 fault_duration: float, throttle:bool) -> List[Client]:
+                 fault_duration: float, throttle:bool, queue_type:str) -> List[Client]:
     
     clients = []
     job_name = apiname
@@ -212,7 +212,7 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
                                    fault_duration))
     ]:
         service_time_distribution = {"request":distribution(1/job_type.mean())}
-        server = Server(name, queue_size, 1, service_time_distribution, retry_queue_size, client,throttle)
+        server = Server(name, queue_size, 1, service_time_distribution, retry_queue_size, client,throttle, queue_type)
         server.set_context(Context(52))
         client.server = server
         clients.append(client)
@@ -240,14 +240,14 @@ def make_sim_bimod(mean_t: float, mean_t_2: float, bimod_p: float, rho: float, q
 
 def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, queue_size: int, retry_queue_size: int,
                             timeout_t: float, max_retries: int, total_time: float, step_time: int,
-                            rho_fault: float, rho_reset: float, fault_start: float, fault_duration: float, throttle:bool):
+                            rho_fault: float, rho_reset: float, fault_start: float, fault_duration: float, throttle:bool, queue_type:str):
     results_file_name = "exp_results.csv"
     start_time = time.time()
     process = multiprocessing.Process(target=run_sims, args=(max_t, results_file_name, runs, step_time, make_sim_exp,
                                                              mean_t, rho, queue_size, retry_queue_size,
                                                              timeout_t,
                                                              max_retries, rho_fault, rho_reset, fault_start,
-                                                             fault_duration,throttle))
+                                                             fault_duration, throttle, queue_type))
     process.start()
     process.join(total_time)
     if process.is_alive():

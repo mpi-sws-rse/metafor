@@ -119,12 +119,14 @@ class Server:
 
     def __init__(self, name: str, queue_size: int, thread_pool: int,
                  service_time_distribution: dict[str, Distribution],
-                 retry_queue_size: int, client: OpenLoopClientWithTimeout, throttle:bool):
+                 retry_queue_size: int, client: OpenLoopClientWithTimeout, throttle:bool, queue_type:str):
         self.start_time = 0  # to be set by each simulation
         self.busy: int = 0
 
-        self.queue: FCFSQueue = FCFSQueue()
-        #self.queue: LIFOStack = LIFOStack()
+        if queue_type=="fifo":
+            self.queue: FCFSQueue = FCFSQueue()
+        else:
+            self.queue: LIFOStack = LIFOStack()
         self.queue_size: int = queue_size
 
         self.service_time_distribution = service_time_distribution
@@ -144,6 +146,7 @@ class Server:
         self.retries: int = 0
         self.dropped: int = 0  # cumulative number
         self.throttle: bool = throttle
+        self.queue_type=queue_type
 
     def set_context(self, c: Context):
         self.context = c
