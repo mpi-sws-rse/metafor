@@ -21,7 +21,7 @@ from metafor.simulator.job import exp_job, bimod_job, wei_job, ExponentialDistri
 import logging
 logger = logging.getLogger(__name__)
 
-
+import pickle
 
 
 class Simulator:
@@ -116,7 +116,7 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
             # print(server.context.result[0:5])
             # print(server.downstream_server.context.result[0:5])
             # #exit() 
-            df = pd.DataFrame(server.context.result, columns=['server', 'timestamp', 'queue_length', 'latency', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time'])
+            df = pd.DataFrame(server.context.result, columns=['server', 'timestamp', 'latency', 'queue_length', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time'])
             df.to_csv(f"{i + 1}_{fn}",  header=False,  mode='a', index=False)
             # if server.downstream_server:
             #     df = pd.DataFrame(server.downstream_server.context.result, columns=['server', 'timestamp', 'queue_length', 'latency', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time'])
@@ -130,11 +130,14 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         # df.to_csv(current_fn, index=False)
 
     #exit()
-    latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t)
-    plot_results(step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, 'discrete_results.pdf')
+    for i in range(1,num_servers+1):
+        latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t,i)
+        plot_results(step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, "discrete_results_multi_"+str(i)+".pdf")
+        with open("discrete_results_multi_"+str(i)+".pkl", "wb") as f:
+            pickle.dump((step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, rho), f)
 
 
-def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int, mean_t: float):
+def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int, mean_t: float, sid:int):
     """
     Print the mean value, the variance, and the standard deviation at each stat point in each second
     """
@@ -152,23 +155,25 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                     continue  # drop the header
                 split_line: List[str] = line.split(',')
                 #print(split_line)
-                if float(split_line[1]) > (step_ind + 1) * step_time:
-                    #latency = float(split_line[2]) * 1
-                    latency = float(split_line[3]) * 1
-                    runtime = float(split_line[6])
-                    qlen = float(split_line[2])
-                    latency_dateset[run_ind, step_ind] = latency
-                    runtime_dateset[run_ind, step_ind] = runtime
-                    qlen_dateset[run_ind, step_ind] = qlen
-                    step_ind += 1
-                elif i == row_num - 1 and step_ind < num_datapoints:
-                    # latency = float(split_line[2]) * 1
-                    latency = float(split_line[3]) * 1
-                    runtime = float(split_line[6])
-                    qlen = float(split_line[2])
-                    latency_dateset[run_ind, step_ind] = latency
-                    runtime_dateset[run_ind, step_ind] = runtime
-                    qlen_dateset[run_ind, step_ind] = qlen
+                server_id = int(split_line[0])
+                if server_id==sid:
+                    if float(split_line[1]) > (step_ind + 1) * step_time:
+                        #latency = float(split_line[2]) * 1
+                        latency = float(split_line[2]) * 1
+                        runtime = float(split_line[6])
+                        qlen = float(split_line[3])
+                        latency_dateset[run_ind, step_ind] = latency
+                        runtime_dateset[run_ind, step_ind] = runtime
+                        qlen_dateset[run_ind, step_ind] = qlen
+                        step_ind += 1
+                    elif i == row_num - 1 and step_ind < num_datapoints:
+                        # latency = float(split_line[2]) * 1
+                        latency = float(split_line[2]) * 1
+                        runtime = float(split_line[6])
+                        qlen = float(split_line[3])
+                        latency_dateset[run_ind, step_ind] = latency
+                        runtime_dateset[run_ind, step_ind] = runtime
+                        qlen_dateset[run_ind, step_ind] = qlen
         run_ind += 1
     latency_ave = [0]
     latency_var = [0]
@@ -210,10 +215,6 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
     clients = []
     job_name = apiname
 
-    ######### TODO ###########################3
-    # Create a chain of servers and link them.
-    #
-    
     if dist=="exp":
         job_type = exp_job(mean_t)
         distribution = ExponentialDistribution

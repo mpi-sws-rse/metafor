@@ -5,6 +5,9 @@ import argparse
 import numpy as np
 from metafor.simulator.simulate import run_discrete_experiment
 
+import logging
+logging.disable(logging.CRITICAL)
+
 def delete_files(folder: str, extension: str):
     for file in os.listdir(folder):
         if file.endswith(extension):
@@ -31,16 +34,24 @@ def main():
     retry_queue_size = 20 # only used when learning in the space of prob distributions is desired.
     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
     rho = 9.7/10 # server's utilization rate
+    #rho = 5.0/10 # server's utilization rate
+
     
     timeout_t = 9 # timeout after which the client retries, if the job is not done
     max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
     runs = 10 # how many times should the simulation be run
-    step_time = .5 # sampling time
+    step_time = 0.5 # sampling time
     sim_time = 1000 # maximum simulation time for an individual simulation
     rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
+    #rho_fault = rho*2 # utilization rate during a fault
+    
     rho_reset = rho * 5 / 5 # utilization rate after removing the fault
     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
     fault_duration = sim_time * .1  # fault duration
+
+    # fault_start = [sim_time * .49, sim_time]  # start time for fault (last entry is not an actual fault time)
+    # fault_duration = sim_time * .02  # fault duration
+
     throttle=False
     queue_type="fifo"
 
@@ -61,6 +72,8 @@ def main():
     main_queue_size = args.qsize
     retry_queue_size = args.rsize
     genpkl = args.genpkl
+    throttle = args.throttle
+    queue_type = args.queue_type
     run_discrete_experiment(sim_time, runs, mean_t, rho, main_queue_size, retry_queue_size, timeout_t, max_retries,
                             total_time, step_time, rho_fault, rho_reset, fault_start, fault_duration,throttle,queue_type)
 

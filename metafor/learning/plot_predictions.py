@@ -84,78 +84,63 @@ class AutoEncoderModel(nn.Module):
         if sigma > .99:
             W.mul_(.99 / (sigma + eps))
 
+def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, save_dir="./results/", prefix="traj"):
+        """
+        Args:
+            model: a callable model such that model(x0, [i]) → prediction at time i
+            trajectory_list: list of lists, each inner list holds the initial state x0 for a trajectory
+            true_q_seq: list of true q trajectories (same length as trajectory_list)
+            save_dir: where to save plots
+            prefix: filename prefix for saved plots
+        """
+        traj_num = len(trajectory_list)
+        q_seq_learned_model = [[] for _ in range(traj_num)]
 
+        for traj_idx in range(traj_num):
+            T = len(true_q_seq[traj_idx])
+            steps = list(np.arange(0, T, 1))
+            # Use the first state x_0 as the input
+            x0 = trajectory_list[traj_idx][0][0]
+            # Target states
+            target = trajectory_list[traj_idx][1][0:trajectory_length_list[traj_idx]]#[::1] #
+            # Compute the predictions
+            model_output = model(x0, steps) #
+            q_seq_learned_model[traj_idx] = model_output[:, 0, 0].detach().cpu().tolist()
+            """x0 = trajectory_list[traj_idx][0][0]  # initial state or sequence
+            q_seq_learned_model[traj_idx].append(x0[0][0].numpy())
 
+            for i in range(1, len(true_q_seq[traj_idx])):
+                y = model(x0, [i]).detach().numpy()[-1][0][0]
+                q_seq_learned_model[traj_idx].append(y)"""
+
+            # Plot true vs predicted
+            plt.figure(figsize=(10, 4))
+            plt.plot(np.array(true_q_seq[traj_idx]), label="True q", marker='o')
+            plt.plot(np.array(q_seq_learned_model[traj_idx]), label="Model q", marker='x')
+            plt.title(f"Trajectory {traj_idx}",fontsize=16)
+            plt.xlabel("Time step",fontsize=16)
+            plt.ylabel("q value",fontsize=16)
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(f"{save_dir}/{prefix}_{traj_idx}.pdf")
+            plt.close()
+
+        return q_seq_learned_model
 
 file =  'K_matrix.pkl'
 
 with open(file, "rb") as f:
         model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)
 
-traj_num = len(trajectory_list)
-
-# file =  'model.pkl'
-
-# with open(file, "rb") as f:
-#         model = pickle.load(f)
-
-print(Z_trajs[0].shape)
-
-X_traj = []
-for i in range(2):
-    t1 = []
-    for x in trajectory_list[i]:
-        l = [l[0] for l in x]
-        t1.append(l)
-    X_traj.append(np.array(t1))
+with open("data_generation/q_seq.pkl", "rb") as f:
+    q_seq = pickle.load(f)
 
 
-# print(len(X_traj),"  ",X_traj[0].shape)
-
-
-# print(len(trajectory_list),"  ",len(trajectory_list[0][0]),"  ",len(trajectory_list[0][0][0]))
-
-
-
-
-def estimate_P(K, kmax=500):
-    return np.linalg.matrix_power(K, kmax)
-
-def empirical_T_delta(K, P, Z0_list, delta, Tmax=2000):
-    times = []
-    for z0 in Z0_list:
-        z = z0.copy()
-        for t in range(Tmax):
-            if np.max(np.abs(z - P @ z0)) < delta:
-                times.append(t); break
-            z = K @ z
-        else:
-            times.append(Tmax)
-    return np.array(times)
-
-
-
-deltas = [0.05,0.1,0.2,0.3,0.5,0.8,1]
-data = []
-data1 = []
-for d in deltas:
-    P = estimate_P(K_matrix, kmax=100000)
-    times = empirical_T_delta(K_matrix, P, [Z[0] for Z in Z_trajs], delta=d, Tmax=50000)
-    print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
-    data.append(times.mean())
-    data1.append(times.std())
-
-data = np.array(data)
-data1 = np.array(data1)
-
-plt.plot(deltas, data, color="tab:green",label='Mean')
-
-# Plot shaded standard deviation
-plt.fill_between(deltas, data - data1, data + data1, color='blue', alpha=0.2, label='±1 std. dev.')
-# Label and show
-plt.title("$\delta$-settling times")
-plt.xlabel("$\delta$",fontsize=16)
-plt.ylabel("Timesteps",fontsize=16)
-plt.legend()
-plt.savefig("Mixing_times.pdf")
-plt.close()
+simulate_and_plot_from_initial_state(
+    model=model,
+    trajectory_list=trajectory_list,
+    true_q_seq=q_seq,
+    save_dir="./results/",
+    prefix="q_model_vs_true"
+)

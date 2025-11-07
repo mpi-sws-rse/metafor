@@ -45,6 +45,13 @@ def prepare_training_data(q_seq, o_seq): #, l_seq, d_seq, r_seq, s_seq, depth):
             X.append(x)
             Y.append(y)
 
+    
+    if len(X[-1])==1:
+        X = X[:-1]
+    if len(Y[-1])==1:
+        Y = Y[:-1]
+    
+            
     X = np.array(X)
     Y = np.array(Y)
     return X, Y
@@ -304,7 +311,7 @@ class autoencoder():
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
-            plt.savefig(f"{save_dir}/{prefix}_{traj_idx}.png")
+            plt.savefig(f"{save_dir}/{prefix}_{traj_idx}.pdf")
             plt.close()
 
         return q_seq_learned_model
@@ -435,16 +442,16 @@ class AutoEncoderModel(nn.Module):
 # Loading the trajectories...
 with open("data_generation/q_seq.pkl", "rb") as f:
     q_seq = pickle.load(f)
-with open("data_generation/o_seq.pkl", "rb") as f:
-    o_seq = pickle.load(f)
+# with open("data_generation/o_seq.pkl", "rb") as f:
+#     o_seq = pickle.load(f)
 with open("data_generation/l_seq.pkl", "rb") as f:
     l_seq = pickle.load(f)
-with open("data_generation/d_seq.pkl", "rb") as f:
-    d_seq = pickle.load(f)
-with open("data_generation/r_seq.pkl", "rb") as f:
-    r_seq = pickle.load(f)
-with open("data_generation/s_seq.pkl", "rb") as f:
-    s_seq = pickle.load(f)
+# with open("data_generation/d_seq.pkl", "rb") as f:
+#     d_seq = pickle.load(f)
+# with open("data_generation/r_seq.pkl", "rb") as f:
+#     r_seq = pickle.load(f)
+# with open("data_generation/s_seq.pkl", "rb") as f:
+#     s_seq = pickle.load(f)
 
 traj_num = len(q_seq) # Number of trajectories within the dataset
 depth = 1 # History length, also known as depth in system identification
@@ -484,7 +491,7 @@ set_seed(858257303)
 input_dim = 2 * depth  # Input space dimension
 output_dim = 2
 latent_dim = 20  # Latent space dimension
-num_epochs = 1000
+num_epochs = 500
 
 
 

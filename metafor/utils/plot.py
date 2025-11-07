@@ -38,7 +38,7 @@ def plot_results(
 
     ax11 = ax1.twinx()
     color="tab:red"
-    ax1.set_ylabel("Average LateArrival rate", color=color)
+    ax1.set_ylabel("Average Arrival rate", color=color)
     avg_arr_rate = np.ones(len(time))
     avg_arr_rate[np.arange(int(0.45*len(time)),int(0.55*len(time)))] = 10
     ax11.plot(time, avg_arr_rate, color=color)
@@ -62,7 +62,7 @@ def plot_results(
 
     ax31 = ax3.twinx()
     color="tab:red"
-    ax31.set_ylabel("Average LateArrival rate", color=color)
+    ax31.set_ylabel("Average Arrival rate", color=color)
     avg_arr_rate = np.ones(len(time))
     avg_arr_rate[np.arange(int(0.45*len(time)),int(0.55*len(time)))] = 10
     ax31.plot(time, avg_arr_rate, color=color)

@@ -165,7 +165,7 @@ def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, n
 
 
 def convert_csv_to_pkl(max_t: float, runs: int, mean_t: float, rho: float, step_time: int,
-                            rho_fault: float, fault_start: float, fault_duration: float, qsize: int=100, osize: int=20):
+                            rho_fault: float, fault_start: float, fault_duration: float, qsize: int=100, osize: int=30):
     results_file_name = "exp_results.csv"
 
     q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
