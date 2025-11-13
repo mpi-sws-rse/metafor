@@ -306,7 +306,7 @@ class autoencoder():
             plt.plot(np.array(true_q_seq[traj_idx]), label="True q", marker='o')
             plt.plot(np.array(q_seq_learned_model[traj_idx]), label="Model q", marker='x')
             plt.title(f"Trajectory {traj_idx}",fontsize=16)
-            plt.xlabel("Time step",fontsize=16)
+            plt.xlabel("Timestep",fontsize=16)
             plt.ylabel("q value",fontsize=16)
             plt.legend()
             plt.grid(True)
@@ -442,10 +442,18 @@ class AutoEncoderModel(nn.Module):
 # Loading the trajectories...
 with open("data_generation/q_seq.pkl", "rb") as f:
     q_seq = pickle.load(f)
+
 # with open("data_generation/o_seq.pkl", "rb") as f:
 #     o_seq = pickle.load(f)
 with open("data_generation/l_seq.pkl", "rb") as f:
     l_seq = pickle.load(f)
+
+#scaling factor  - sampling data every 10 steps
+q_seq[0] = q_seq[0][0::10]
+q_seq[1] = q_seq[1][0::10]
+l_seq[0] = l_seq[0][0::10]
+l_seq[1] = l_seq[1][0::10]
+
 # with open("data_generation/d_seq.pkl", "rb") as f:
 #     d_seq = pickle.load(f)
 # with open("data_generation/r_seq.pkl", "rb") as f:
@@ -465,7 +473,7 @@ X, Y = prepare_training_data(q_seq, l_seq) #, l_seq, d_seq, r_seq, s_seq, depth)
 # q_seq[0] = q_seq[0][0:100]
 # #q_seq[1] = q_seq[1][0:100] 
 # q_seq[1] = q_seq[0][0:100] #this basically enforces only the intital traj 
-# print(len(q_seq),"  ",len(q_seq[0]))
+#print(len(q_seq),"  ",len(q_seq[0]))
 
 # Evaluating the performance of least-squares optimizer
 
@@ -491,7 +499,7 @@ set_seed(858257303)
 input_dim = 2 * depth  # Input space dimension
 output_dim = 2
 latent_dim = 20  # Latent space dimension
-num_epochs = 500
+num_epochs = 1000
 
 
 

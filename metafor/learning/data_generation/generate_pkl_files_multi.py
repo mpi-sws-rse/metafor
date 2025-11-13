@@ -28,7 +28,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
     global done
     for sid in range(1,num_servers+1):
        
-        ss_size = qsize * osize # this is used to create the two-dimensional state space for computing empirical dist pi_seq
+        ss_size = qsize * osize * 2 # this is used to create the two-dimensional state space for computing empirical dist pi_seq
         num_traj = len(fault_start)  # number of continuous trajectories (currently there are only two)
         num_datapoints = [] # list containing number of time steps within each continuous trajectory
         qlen_dataset = [] # dataset containing number of jobs in queue per run
@@ -110,6 +110,8 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                             last_r_val = float(split_line[7])
                             last_s_val = float(split_line[8])
                             # update the content of datasets
+                            print(" traj_idx ",traj_idx," run ind ",run_ind,"  k_overall ",k_overall)
+
                             qlen_dataset[traj_idx][run_ind, k_overall] = last_q_val
                             olen_dataset[traj_idx][run_ind, k_overall] = last_o_val
                             llen_dataset[traj_idx][run_ind, k_overall] = last_l_val
@@ -215,15 +217,28 @@ def index_composer(n_main_queue, n_retry_queue, qsize, osize):
 
 
 if __name__ == '__main__':
+    total_time = 1000000 # maximum simulation time (in s) for all the simulations
+    main_queue_size = 100 # maximum size of the arrivals queue
+    retry_queue_size = 30 # only used when learning in the space of prob distributions is desired.
     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
-    rho = 9.7/10 # server's utilization rate
+    rho = 9.5/10 # server's utilization rate
+    
+    
+    timeout_t = 9 # timeout after which the client retries, if the job is not done
+    max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
     runs = 100 # how many times should the simulation be run
-    step_time = .5 # sampling time
-    sim_time = 1000 # maximum simulation time for an individual simulation
-    rho_fault = np.random.uniform(rho,rho*200) # utilization rate during a fault
+    step_time = 0.5 # sampling time
+    sim_time = 10000 # maximum simulation time for an individual simulation
+    #rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
+    rho_fault = rho*10 # utilization rate during a fault
+    
+    
+    rho_reset = rho * 5 / 5 # utilization rate after removing the fault
     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
-    fault_duration = sim_time * .1  # fault duration
+    fault_duration = sim_time * .01  # fault duration
+    dist = "exp" 
+    num_servers = 2
     qsize = 100  # maximum size of the arrivals queue
     osize = 30  # bound over the orbit size
-    num_servers=2
+    
     convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration, num_servers, qsize, osize)

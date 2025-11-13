@@ -42,7 +42,7 @@ for file in pickle_files:
         
         ax1.plot(time, latency_ave, color=color,label=int(file[-5:-4]))
         k=k+1
-ax1.set_xlabel("Time bound (ms)", fontsize=16)
+ax1.set_xlabel("Time", fontsize=16)
 ax1.set_ylabel("Average Latency", fontsize=16, color=color)
 ax1.grid("on")
 ax1.set_xlim(0, max(time))
@@ -51,9 +51,9 @@ ax1.legend()
 
 ax11 = ax1.twinx()
 color="tab:red"
-ax11.set_ylabel("Average Arrival rate",fontsize=16, color=color)
+ax11.set_ylabel("Average Arrival Rate",fontsize=16, color=color)
 avg_arr_rate = np.ones(len(time))
-avg_arr_rate[np.arange(int(0.45*len(time)),int(0.55*len(time)))] = 10
+avg_arr_rate[np.arange(int(0.45*len(time)),int(0.46*len(time)))] = 10
 ax11.plot(time, avg_arr_rate, color=color)
 ax11.tick_params(axis='y',labelcolor=color)
 
@@ -91,8 +91,8 @@ for file in pickle_files:
         
         ax3.plot(time, qlen_ave, color=color,label=int(file[-5:-4]))
         k=k+1
-ax3.set_xlabel("Time bound (ms)", fontsize=16)
-ax3.set_ylabel("Average queue length", fontsize=16,color=color)
+ax3.set_xlabel("Time", fontsize=16)
+ax3.set_ylabel("Average Queue Length", fontsize=16,color=color)
 ax3.grid("on")
 ax3.set_xlim(0, max(time))
 ax3.tick_params(axis='y', labelcolor=color)
@@ -102,7 +102,7 @@ ax31 = ax3.twinx()
 color="tab:red"
 ax31.set_ylabel("Average Arrival rate", fontsize=16,color=color)
 avg_arr_rate = np.ones(len(time))
-avg_arr_rate[np.arange(int(0.45*len(time)),int(0.55*len(time)))] = 10
+avg_arr_rate[np.arange(int(0.45*len(time)),int(0.46*len(time)))] = 10
 ax31.plot(time, avg_arr_rate, color=color)
 ax31.tick_params(axis='y',labelcolor=color)
 #plt.show()

@@ -1,9 +1,9 @@
 import pickle
-import numpy as np
-import torch
-# from learning_from_simulation_data import AutoEncoderModel
-
 import matplotlib.pyplot as plt
+import os
+import numpy as np
+import pandas as pd
+import csv 
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -84,95 +84,34 @@ class AutoEncoderModel(nn.Module):
         if sigma > .99:
             W.mul_(.99 / (sigma + eps))
 
+x= []
+y= []
+pickle_files = ["K_matrix_10.pkl","K_matrix_20.pkl","K_matrix_50.pkl","K_matrix_75.pkl","K_matrix_90.pkl","K_matrix_97.pkl",]
 
 
-# print(len(X_traj),"  ",X_traj[0].shape)
+for file in pickle_files:
+    with open(file, "rb") as f:
+        model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)
+                
+        eigvals = np.linalg.eigvals(K_matrix)
+        # Printing sortd eigenvalues
+        eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
+        y.append(eigvals_sorted[0])
+        print(0.1*float(file[-6:-4]), "   ",eigvals_sorted[0])
+        x.append(0.1*float(file[-6:-4]))
+     
+     
 
 
-# print(len(trajectory_list),"  ",len(trajectory_list[0][0]),"  ",len(trajectory_list[0][0][0]))
+plt.figure(figsize=(9, 6))
 
-def estimate_P(K, kmax=500):
-    return np.linalg.matrix_power(K, kmax)
-
-def empirical_T_delta(K, P, Z0_list, delta, Tmax=2000):
-    times = []
-    #print(len(Z0_list),"  ",len(Z0_list[0]))
-    #Z0_list = Z0_list[0:10]
-    for z0 in Z0_list:
-        z = z0.copy()
-        for t in range(Tmax):
-            if np.max(np.abs(z - P @ z0)) < delta:
-                times.append(t); break
-            z = K @ z
-        else:
-            times.append(Tmax)
-    return np.array(times)
+plt.plot(x,y,marker='o',linewidth=2)
+#plt.title(f"Largest Eigenvalue for different arrival rates")
+plt.xlabel("Average Arrival Rate",fontsize=22)
+plt.ylabel("Largest $\lambda$",fontsize=22)
+plt.grid(True)
+plt.xticks(fontsize=16)
+plt.yticks(fontsize=16)
+plt.savefig("eval.pdf")
 
 
-
-file =  'K_matrix_multi_1.pkl'
-
-with open(file, "rb") as f:
-        model1,K_matrix1,X,Y,trajectory_list1,trajectory_length_list,Z_trajs1 = pickle.load(f)
-traj_num = len(trajectory_list1)
-# X_traj1 = []
-# for i in range(2):
-#     t1 = []
-#     for x in trajectory_list1[i]:
-#         l = [l[0] for l in x]
-#         t1.append(l)
-#     X_traj1.append(np.array(t1))
-
-
-deltas = [0.05,0.1,0.2,0.3,0.5,0.8,1]
-data = []
-data1 = []
-for d in deltas:
-    P = estimate_P(K_matrix1, kmax=100000)
-    times = empirical_T_delta(K_matrix1, P, [Z for Z in Z_trajs1[0]], delta=d, Tmax=50000)
-    print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
-    data.append(times.mean())
-    data1.append(times.std())
-
-data = np.array(data)
-data1 = np.array(data1)
-plt.plot(deltas, data, color="tab:green",label='1')
-# Plot shaded standard deviation
-plt.fill_between(deltas, data - data1, data + data1, color='green', alpha=0.2)
-
-
-
-
-file2 =  'K_matrix_multi_2.pkl'
-
-with open(file2, "rb") as f:
-        model2,K_matrix2,X,Y,trajectory_list2,trajectory_length_list,Z_trajs2 = pickle.load(f)
-traj_num = len(trajectory_list2)
-
-data2 = []
-data3 = []
-for d in deltas:
-    P = estimate_P(K_matrix2, kmax=100000)
-    times = empirical_T_delta(K_matrix2, P, [Z for Z in Z_trajs2[0]], delta=d, Tmax=50000)
-    print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
-    data2.append(times.mean())
-    data3.append(times.std())
-
-
-
-data2 = np.array(data2)
-data3 = np.array(data3)
-
-plt.plot(deltas, data2, color="tab:blue",label='2')
-
-# Plot shaded standard deviation
-plt.fill_between(deltas, data2 - data3, data2 + data3, color='blue', alpha=0.2)
-
-
-# Label and show
-plt.title("$\delta$-settling times")
-plt.xlabel("$\delta$",fontsize=16)
-plt.ylabel("Timesteps",fontsize=16)
-plt.legend()
-plt.savefig("Mixing_times_multi.pdf")
-plt.close()

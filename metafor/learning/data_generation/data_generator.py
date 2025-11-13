@@ -34,20 +34,21 @@ def main():
     retry_queue_size = 20 # only used when learning in the space of prob distributions is desired.
     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
     rho = 9.7/10 # server's utilization rate
-    #rho = 5.0/10 # server's utilization rate
+    #rho = 1.0/10 # server's utilization rate
 
     
     timeout_t = 9 # timeout after which the client retries, if the job is not done
     max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
     runs = 10 # how many times should the simulation be run
     step_time = 0.5 # sampling time
-    sim_time = 1000 # maximum simulation time for an individual simulation
-    rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
-    #rho_fault = rho*2 # utilization rate during a fault
+    sim_time = 10000 # maximum simulation time for an individual simulation
+    #rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
+    rho_fault = rho*10 # utilization rate during a fault
+    
     
     rho_reset = rho * 5 / 5 # utilization rate after removing the fault
     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
-    fault_duration = sim_time * .1  # fault duration
+    fault_duration = sim_time * .01  # fault duration
 
     # fault_start = [sim_time * .49, sim_time]  # start time for fault (last entry is not an actual fault time)
     # fault_duration = sim_time * .02  # fault duration
@@ -57,7 +58,7 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--sim_time", help="maximum simulation time for an individual simulation", type=int, default=1000)
+    parser.add_argument("--sim_time", help="maximum simulation time for an individual simulation", type=int, default=10000)
     parser.add_argument("--runs", help="how many times should the simulation be run", default=100, type=int, required=False)
     parser.add_argument("--qsize", help="maximum size of the arrivals queue", default=100, type=int, required=False)
     parser.add_argument("--rsize", help="maximum size of the retries queue", default=20, type=int, required=False)

@@ -46,7 +46,7 @@ def settling_time(t, y, epsilon=0.02):
 
 # Example usage
 if __name__ == "__main__":
-    pickle_files = ["discrete_results_LONG.pkl"]  # can be one or multiple files
+    pickle_files = ["discrete_results_97.pkl"]  # can be one or multiple files
 
 
     data_list = []

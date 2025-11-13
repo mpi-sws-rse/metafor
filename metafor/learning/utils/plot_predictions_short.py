@@ -84,141 +84,68 @@ class AutoEncoderModel(nn.Module):
         if sigma > .99:
             W.mul_(.99 / (sigma + eps))
 
+def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, save_dir="./results/", prefix="traj"):
+        """
+        Args:
+            model: a callable model such that model(x0, [i]) → prediction at time i
+            trajectory_list: list of lists, each inner list holds the initial state x0 for a trajectory
+            true_q_seq: list of true q trajectories (same length as trajectory_list)
+            save_dir: where to save plots
+            prefix: filename prefix for saved plots
+        """
+        traj_num = len(trajectory_list)
+        q_seq_learned_model = [[] for _ in range(traj_num)]
+        x= 0 
+        for traj_idx in range(traj_num):
+            T = len(true_q_seq[traj_idx])
+            steps = list(np.arange(0, T, 1))
+            # Use the first state x_0 as the input
+            x0 = trajectory_list[traj_idx][0][0]
+            # Target states
+            target = trajectory_list[traj_idx][1][0:trajectory_length_list[traj_idx]]#[::1] #
+            # Compute the predictions
+            model_output = model(x0, steps) #
+            q_seq_learned_model[traj_idx] = model_output[:, 0, 0].detach().cpu().tolist()
+            """x0 = trajectory_list[traj_idx][0][0]  # initial state or sequence
+            q_seq_learned_model[traj_idx].append(x0[0][0].numpy())
 
+            for i in range(1, len(true_q_seq[traj_idx])):
+                y = model(x0, [i]).detach().numpy()[-1][0][0]
+                q_seq_learned_model[traj_idx].append(y)"""
 
-def settling_time(t, y, epsilon=0.02):
-    """
-    Finds the time at which the trajectory enters an epsilon band around 
-    the final value and stays within it thereafter.
-
-    Parameters
-    ----------
-    t : array_like
-        Time vector (same length as y).
-    y : array_like
-        Trajectory or response.
-    epsilon : float
-        Band half-width (absolute).
-
-    Returns
-    -------
-    ts : float or None
-        Settling time (None if it never settles).
-    """
-    t = np.asarray(t)
-    y = np.asarray(y)
-    final_value = y[-1]
-
-    lower = final_value-epsilon
-    upper = final_value+epsilon
-
-    for i in range(len(y)-200):
-        # If from this point onward the signal stays within the band
-        if np.all((y[i:] >= lower) & (y[i:] <= upper)):
-            return t[i]
-    return np.inf  # never settles
-
-
-
-
-def koopman_settling_time(A, L_e, L_e_prime, D_S, delta, eps=1e-12):
-    """
-    Compute the Koopman-based delta-settling time lower bound.
-
-    Parameters
-    ----------
-
-    """
-    # Compute eigenvalues
-    eigvals = np.linalg.eigvals(A)
-    eigvals = np.sort(np.abs(eigvals))[::-1]  # sort descending by magnitude
-
-    lambda_2 = eigvals[0]
-    if lambda_2 >= 1 - eps:
-        # no decay: infinite settling time
-        return np.inf
-
-    # Compute the bound
-    numerator = np.log((L_e * D_S) / (L_e_prime * delta))
-    denominator = -np.log(lambda_2)
-    T_delta = numerator / denominator
-
-    return T_delta
+            # Plot true vs predicted
+            plt.figure(figsize=(10, 4))
+            #x = x + 5*np.arange(len(np.array(true_q_seq[traj_idx])))
+            x = np.arange(len(np.array(true_q_seq[traj_idx])))
+            plt.plot(x,np.array(true_q_seq[traj_idx]), label="True q", marker='o',linewidth=1)
+            plt.plot(x,np.array(q_seq_learned_model[traj_idx]), label="Model q", marker='x',linewidth=1)
+            #plt.title(f"Trajectory {traj_idx+1}",fontsize=16)
+            plt.xlabel("Time",fontsize=20)
+            plt.ylabel("Average Queue Length",fontsize=20)
+            plt.xticks(fontsize=16)
+            plt.yticks(fontsize=16)
+            plt.legend(fontsize=22)
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(f"{save_dir}/{prefix}_{traj_idx}.pdf")
+            plt.close()
+            #x = x[-1] + 100 #fault injection duration
+        return q_seq_learned_model
 
 file =  'K_matrix.pkl'
 
 with open(file, "rb") as f:
         model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)
 
-traj_num = len(trajectory_list)
+with open("data_generation/q_seq.pkl", "rb") as f:
+    q_seq = pickle.load(f)
+q_seq[0] = q_seq[0][0::10]
+q_seq[1] = q_seq[1][0::10]
 
-# Example Koopman matrix (diagonalizable, spectral radius ~1)
-A = K_matrix
-
-# Encoder Lipschitz constants
-L_uB = 1.0       # upper Lipschitz
-L_lB = 0.01 # co-Lipschitz (lower bound)
-
-# Diameter of state space
-D_S = 105
-
-# Desired tolerance
-# delta = 10
-
-# T_delta, lambda_2, spectral_gap = koopman_settling_time(A, L_uB, L_lB, D_S, delta)
-
-# print(f"eval = {lambda_2:.4f}, spectral gap = {spectral_gap:.4f}")
-# print(f" settling time bound {T_delta:.2f} steps")
-
-
-pickle_files = ["discrete_results_LONG.pkl"]  # can be one or multiple files
-
-
-data_list = []
-for file in pickle_files:
-
-    with open(file, "rb") as f:
-        data = pickle.load(f)
-        data_list.append(data)
-        print(f"Loaded {file} with keys: {list(data.keys()) if isinstance(data, dict) else type(data)}")
-
-data = data_list[0]
-print(len(data))
-step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, rho = data
-print(len(qlen_ave))
-time1 = [i * step_time for i in list(range(0, len(qlen_ave)))]
-
-t = np.arange(len(qlen_ave))
-y = qlen_ave
-
-
-epsilons = np.arange(1,30,1)
-data1 = []
-for ep in epsilons:
-    ts = settling_time(t, y, epsilon=ep)
-    print(f"Settling time = {ts:.3f} s")
-
-    data1.append(ts)
-
-data1 = np.array(data1)
-
-plt.plot(epsilons, data1, color="tab:blue",label='Simulation')
-
-deltas = np.arange(1,30,1)
-data = []
-for delta in deltas:
-    ts = koopman_settling_time(A, L_uB, L_lB, D_S, delta=delta)
-    print(f"Settling time = ",ts)
-
-    data.append(ts)
-
-data = np.array(data)
-
-plt.plot(deltas, data, color="tab:green",label='Theoretical upper bound')
-
-plt.title("Settling time in simulations")
-plt.xlabel("Error band",fontsize=16)
-plt.ylabel("Timesteps",fontsize=16)
-plt.legend()
-plt.savefig("Mixing_times_final.pdf")
-plt.close()
+simulate_and_plot_from_initial_state(
+    model=model,
+    trajectory_list=trajectory_list,
+    true_q_seq=q_seq,
+    save_dir="./results/",
+    prefix="q_model_vs_true"
+)

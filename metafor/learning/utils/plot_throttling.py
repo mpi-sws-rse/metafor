@@ -5,7 +5,7 @@ from metafor.utils.plot import plot_results
 import numpy as np
 import pandas as pd
 import csv 
-pickle_files = ["discrete_results100.pkl","discrete_results105.pkl"]  # can be one or multiple files
+pickle_files = ["discrete_results_97.pkl","discrete_results_105.pkl"]  # can be one or multiple files
 
 
 data_list = []
@@ -48,15 +48,15 @@ cmap = plt.cm.viridis
 # for file in pickle_files:
 #     color = cmap(k/2) 
 
-file = "discrete_results100.pkl"  
+file = "discrete_results_97.pkl"  
 color="tab:blue"
 with open(file, "rb") as f:
     data = pickle.load(f)
     step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, rho = data
     
-    ax3.plot(time, qlen_ave, color=color,label="default")
+    ax3.plot(time, qlen_ave, color=color,label="Default")
 
-file ="discrete_results105.pkl"
+file ="discrete_results_105.pkl"
 color="tab:green"
 with open(file, "rb") as f:
     data = pickle.load(f)
@@ -64,8 +64,8 @@ with open(file, "rb") as f:
     
     ax3.plot(time, qlen_ave, color=color,label="Throttle")
 
-ax3.set_xlabel("Time bound (ms)", fontsize=16)
-ax3.set_ylabel("Average queue length", fontsize=16,color=color)
+ax3.set_xlabel("Time", fontsize=16)
+ax3.set_ylabel("Average Queue Length", fontsize=16,color=color)
 ax3.grid("on")
 ax3.set_xlim(0, max(time))
 ax3.tick_params(axis='y', labelcolor=color)
@@ -76,7 +76,7 @@ ax31 = ax3.twinx()
 color="tab:red"
 ax31.set_ylabel("Average Arrival rate", fontsize=16, color=color)
 avg_arr_rate = np.ones(len(time))
-avg_arr_rate[np.arange(int(0.45*len(time)),int(0.55*len(time)))] = 10
+avg_arr_rate[np.arange(int(0.45*len(time)),int(0.46*len(time)))] = 10
 ax31.plot(time, avg_arr_rate, color=color)
 ax31.tick_params(axis='y',labelcolor=color)
 #plt.show()

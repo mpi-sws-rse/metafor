@@ -263,7 +263,8 @@ class Server:
             # Should never get here because jobs slots should always be available if busy < thread_pool
             assert False
         else:
-            if self.throttle is False:    
+            
+            if self.throttle is False  or t<self.client.fault_start[0]:    
                 # The server is busy, so try to enqueue the job, if there is enough space in the queue
                 if self.queue.len() < self.queue_size:
                     job.status = JobStatus.ENQUEUED
@@ -279,12 +280,12 @@ class Server:
             else:
                 # Throttling strategy kicks in  as soon as queuue is 70% full
                 # The server is busy, so try to enqueue the job, if there is enough space in the queue
-                if self.queue.len() < 0.7*self.queue_size:
+                if self.queue.len() < 0.9*self.queue_size:
                     job.status = JobStatus.ENQUEUED
                     logger.info("Enqueueing %s at %f" % (job.name, t))
                     self.queue.append(job)        
                 elif self.queue.len() < self.queue_size:
-                    admission_prob = 0.1 
+                    admission_prob = 0.5 
                     if np.random.random() < admission_prob:
                         job.status = JobStatus.ENQUEUED
                         logger.info("Enqueueing %s at %f" % (job.name, t))
