@@ -110,7 +110,7 @@ def empirical_T_delta(K, P, Z0_list, delta, Tmax=2000):
 
 
 
-file =  'K_matrix_multi_1.pkl'
+file =  'files/learned_model_multi_1.pkl'
 
 with open(file, "rb") as f:
         model1,K_matrix1,X,Y,trajectory_list1,trajectory_length_list,Z_trajs1 = pickle.load(f)
@@ -124,7 +124,7 @@ traj_num = len(trajectory_list1)
 #     X_traj1.append(np.array(t1))
 
 
-deltas = [0.05,0.1,0.2,0.3,0.5,0.8,1]
+deltas = [0.0001,0.005,0.001,0.05,0.1,0.2,0.3,0.5,0.8,1]
 data = []
 data1 = []
 for d in deltas:
@@ -143,7 +143,7 @@ plt.fill_between(deltas, data - data1, data + data1, color='green', alpha=0.2)
 
 
 
-file2 =  'K_matrix_multi_2.pkl'
+file2 =  'files/learned_model_multi_2.pkl'
 
 with open(file2, "rb") as f:
         model2,K_matrix2,X,Y,trajectory_list2,trajectory_length_list,Z_trajs2 = pickle.load(f)

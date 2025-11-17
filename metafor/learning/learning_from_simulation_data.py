@@ -533,7 +533,7 @@ K_matrix = model.K.detach().cpu().numpy()
 
 
 
-with open("K_matrix.pkl", "wb") as f:
+with open("files/learned_model.pkl", "wb") as f:
         pickle.dump((model,K_matrix,X,Y,trajectory_list,trajectory_length_list,latent_trajs),f)
 
 print("K_matrix ",K_matrix)

@@ -87,7 +87,7 @@ class AutoEncoderModel(nn.Module):
 
 
 
-file =  'K_matrix_97.pkl'
+file =  'files/learned_model.pkl'
 
 with open(file, "rb") as f:
         model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)

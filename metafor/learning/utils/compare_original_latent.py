@@ -131,7 +131,7 @@ def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, sav
             x = x[-1] + 100 #fault injection duration
         return q_seq_learned_model
 
-file =  'K_matrix.pkl'
+file =  'files/learned_model.pkl'
 
 with open(file, "rb") as f:
         model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)

@@ -116,7 +116,7 @@ def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, sav
             # Plot true vs predicted
             plt.figure(figsize=(10, 4))
             #x = x + 5*np.arange(len(np.array(true_q_seq[traj_idx])))
-            x = np.arange(len(np.array(true_q_seq[traj_idx])))
+            x = 5*np.arange(len(np.array(true_q_seq[traj_idx])))
             plt.plot(x,np.array(true_q_seq[traj_idx]), label="True q", marker='o',linewidth=1)
             plt.plot(x,np.array(q_seq_learned_model[traj_idx]), label="Model q", marker='x',linewidth=1)
             #plt.title(f"Trajectory {traj_idx+1}",fontsize=16)
@@ -132,15 +132,22 @@ def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, sav
             #x = x[-1] + 100 #fault injection duration
         return q_seq_learned_model
 
-file =  'K_matrix.pkl'
+file =  'files/K_matrix_short.pkl'
 
 with open(file, "rb") as f:
         model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)
 
-with open("data_generation/q_seq.pkl", "rb") as f:
+with open("data_generation/files/exp_rho_97/q_seq.pkl", "rb") as f:
     q_seq = pickle.load(f)
+
+
+
 q_seq[0] = q_seq[0][0::10]
 q_seq[1] = q_seq[1][0::10]
+q_seq[0] = q_seq[0][0:100]
+#q_seq[1] = q_seq[1][0:100] 
+q_seq[1] = q_seq[0][0:100] #this basically enforces only the intital traj 
+
 
 simulate_and_plot_from_initial_state(
     model=model,
