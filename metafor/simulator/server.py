@@ -147,6 +147,7 @@ class Server:
         self.dropped: int = 0  # cumulative number
         self.throttle: bool = throttle
         self.queue_type=queue_type
+        self.completed_jobs: int = 0
 
     def set_context(self, c: Context):
         self.context = c
@@ -177,6 +178,7 @@ class Server:
 
         
         completed.status = JobStatus.COMPLETED
+        self.completed_jobs = self.completed_jobs+1
         completed.completed_t = t
 
         if completed.max_retries > completed.retries_left:  # a retried job is completed

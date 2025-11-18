@@ -104,7 +104,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         job = Job(name=self.apiname, timestamp=t, max_retries=self.max_retries, retries_left=self.max_retries)
         
         logger.info("Job %f %s" % (t, self.apiname))
-        print(t, "  ",self.fault_start)
+        #print(t, "  ",self.fault_start)
         if t < self.fault_start[0]: # must be modified when there are more instances of faults
             next_t = t + self.distribution(self.rate_tps).sample()
             #logger.info(" client rate %f   arrival   %f" % (self.rate_tps,self.distribution(self.rate_tps).sample()))

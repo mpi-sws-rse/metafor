@@ -36,7 +36,7 @@ would be used to learn the model for that server (described in the next section)
 To learn the Koopman based autoencoder model, goto the learning/ folder and run      
 
 ```bash 
-python learning_from_simulation_data.py       
+python train.py       
 ```
 This generates a file "learned_model.pkl" which stores the all the variables associated
 with the learned model.
