@@ -118,13 +118,20 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
             # print(len(client.server.context.result))
             #f.write(client.server.context.result)
             df = pd.DataFrame(client.server.context.result)
-            df.to_csv(current_fn, index=False)
+            directory = os.path.dirname("data/"+current_fn)
+            if directory and not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+            df.to_csv("data/"+current_fn, index=False)
 
 
     latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t)
     plot_results(step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, 'discrete_results.pdf')
     #with open("discrete_results_"+str(rho)+".pkl", "wb") as f:
-    with open("discrete_results_.pkl", "wb") as f:
+    
+    directory = os.path.dirname("data/sim_data.pkl")
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
+    with open("data/sim_data.pkl", "wb") as f:
         pickle.dump((step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, rho), f)
 
 # The following function is NOT triggered when running data_generator.py
@@ -139,8 +146,8 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
     run_ind = 0
     for file_name in file_names:
         step_ind = 0
-        with open(file_name, "r") as f:
-            row_num = len(pd.read_csv(file_name))
+        with open("data/"+file_name, "r") as f:
+            row_num = len(pd.read_csv("data/"+file_name))
             for i, line in enumerate(f.readlines()):
                 if i == 0:
                     continue  # drop the header

@@ -7,6 +7,7 @@ from metafor.simulator.simulate_multi import run_discrete_experiment
 
 import logging
 logging.disable(logging.CRITICAL)
+
 def delete_files(folder: str, extension: str):
     for file in os.listdir(folder):
         if file.endswith(extension):
@@ -42,10 +43,10 @@ def main():
     sim_time = 10000 # maximum simulation time for an individual simulation
     #rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
     rho_fault = rho*10 # utilization rate during a fault
+    fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
     
     
     rho_reset = rho * 5 / 5 # utilization rate after removing the fault
-    fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
     fault_duration = sim_time * .01  # fault duration
     dist = "exp" 
     num_servers = 2
@@ -58,6 +59,9 @@ def main():
     parser.add_argument("--qsize", help="maximum size of the arrivals queue", default=100, type=int, required=False)
     parser.add_argument("--rsize", help="maximum size of the retries queue", default=20, type=int, required=False)
     parser.add_argument("--genpkl", help="Generate the pkl files from csv", default=False, type=bool, required=False)
+    parser.add_argument("--fault_duration", help="Duration of fault rate injection as a fraction of simulation time", default=0.01*sim_time, type=float, required=False)
+    parser.add_argument("--verbose", help="Verbosity", default=True, type=bool, required=False)
+  
   
     args = parser.parse_args()
 
@@ -66,6 +70,13 @@ def main():
     main_queue_size = args.qsize
     retry_queue_size = args.rsize
     genpkl = args.genpkl
+    fault_duration = args.fault_duration * sim_time
+    verbose = args.verbose
+    fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
+    
+    if verbose==False:
+        logging.disable(logging.CRITICAL)
+
     run_discrete_experiment(sim_time, runs, mean_t, rho, main_queue_size, retry_queue_size, timeout_t, max_retries,
                             total_time, step_time, rho_fault, rho_reset, fault_start, fault_duration, dist, num_servers)
 

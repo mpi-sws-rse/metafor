@@ -24,6 +24,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                           mean_t: float, rho: float, rho_fault: float, fault_start: float, fault_duration: float,
                           qsize: int, osize: int):
     global done
+    
     ss_size = qsize * osize # this is used to create the two-dimensional state space for computing empirical dist pi_seq
     num_traj = len(fault_start)  # number of continuous trajectories (currently there are only two)
     num_datapoints = [] # list containing number of time steps within each continuous trajectory
@@ -60,8 +61,9 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
         last_s_val = 0
 
         wait_ind = False # while true, must wait until the end of the fault period
-        with open(file_name, "r") as f:
-            row_num = len(pd.read_csv(file_name))
+        with open("data/"+file_name, "r") as f:
+            print(file_name)
+            row_num = len(pd.read_csv("data/"+file_name))
             for i, line in enumerate(f.readlines()):
                 if i == 0:
                     continue  # drop the header
@@ -112,6 +114,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
         actual_data_num_seq[run_ind].append(k_overall) # store number of actual datapoints in the current run
         run_ind += 1 # update the run number
 
+  
     common_data_num = np.min(actual_data_num_seq, axis = 0) # minimum number of data points among all runs
     q_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of jobs in the queue
     o_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of retried jobs
@@ -156,7 +159,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
 
 
 def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration, qsize, osize):
-    current_folder = os.getcwd()
+    current_folder = os.getcwd()+"/data/"
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
     # qsize and osize are fixed...
     q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, qsize, osize)
@@ -171,21 +174,23 @@ def convert_csv_to_pkl(max_t: float, runs: int, mean_t: float, rho: float, step_
     q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
                                                        rho_fault, fault_start, fault_duration, qsize, osize)
 
-    
+    directory = os.path.dirname("data")
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
     # Save
-    with open("q_seq.pkl", "wb") as f:
+    with open("data/q_seq.pkl", "wb") as f:
         pickle.dump(q_seq, f)
-    with open("o_seq.pkl", "wb") as f:
+    with open("data/o_seq.pkl", "wb") as f:
         pickle.dump(o_seq, f)
-    with open("l_seq.pkl", "wb") as f:
+    with open("data/l_seq.pkl", "wb") as f:
         pickle.dump(l_seq, f)
-    with open("d_seq.pkl", "wb") as f:
+    with open("data/d_seq.pkl", "wb") as f:
         pickle.dump(d_seq, f)
-    with open("r_seq.pkl", "wb") as f:
+    with open("data/r_seq.pkl", "wb") as f:
         pickle.dump(r_seq, f)
-    with open("s_seq.pkl", "wb") as f:
+    with open("data/s_seq.pkl", "wb") as f:
         pickle.dump(s_seq, f)
-    with open("pi_seq.pkl", "wb") as f:
+    with open("data/pi_seq.pkl", "wb") as f:
         pickle.dump(pi_seq, f)
 
 
@@ -205,10 +210,10 @@ if __name__ == '__main__':
     rho = 9.7/10 # server's utilization rate
     runs = 100 # how many times should the simulation be run
     step_time = .5 # sampling time
-    sim_time = 1000 # maximum simulation time for an individual simulation
-    rho_fault = np.random.uniform(rho,rho*200) # utilization rate during a fault
+    sim_time = 10000 # maximum simulation time for an individual simulation
+    rho_fault = rho*10 # utilization rate during a fault
     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
-    fault_duration = sim_time * .1  # fault duration
+    fault_duration = sim_time * .01  # fault duration
     qsize = 100  # maximum size of the arrivals queue
     osize = 30  # bound over the orbit size
     convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration, qsize, osize)

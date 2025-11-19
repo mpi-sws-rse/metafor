@@ -111,13 +111,16 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         # print(siml.contexts[0].result[0:5])
         # print(siml.contexts[1].result[0:5])
         
+        directory = os.path.dirname(f"data/{i + 1}_{fn}")
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
         for server in servers:
             # print(server,"   ",server.id,"      ",server.downstream_server)
             # print(server.context.result[0:5])
             # print(server.downstream_server.context.result[0:5])
             # #exit() 
             df = pd.DataFrame(server.context.result, columns=['server', 'timestamp', 'latency', 'queue_length', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time'])
-            df.to_csv(f"{i + 1}_{fn}",  header=False,  mode='a', index=False)
+            df.to_csv(f"data/{i + 1}_{fn}",  header=False,  mode='a', index=False)
             # if server.downstream_server:
             #     df = pd.DataFrame(server.downstream_server.context.result, columns=['server', 'timestamp', 'queue_length', 'latency', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time'])
             #     df.to_csv(f"{i + 1}_{fn}", header=False, mode='a', index=False)
@@ -133,7 +136,10 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
     for i in range(1,num_servers+1):
         latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t,i)
         plot_results(step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, "discrete_results_multi_"+str(i)+".pdf")
-        with open("discrete_results_multi_"+str(i)+".pkl", "wb") as f:
+        directory = os.path.dirname("data/sim_data_multi_"+str(i)+".pkl")
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+        with open("data/sim_data_multi_"+str(i)+".pkl", "wb") as f:
             pickle.dump((step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, rho), f)
 
 
@@ -148,8 +154,8 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
     run_ind = 0
     for file_name in file_names:
         step_ind = 0
-        with open(file_name, "r") as f:
-            row_num = len(pd.read_csv(file_name))
+        with open("data/"+file_name, "r") as f:
+            row_num = len(pd.read_csv("data/"+file_name))
             for i, line in enumerate(f.readlines()):
                 if i == 0:
                     continue  # drop the header

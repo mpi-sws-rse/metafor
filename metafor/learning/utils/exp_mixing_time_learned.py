@@ -9,7 +9,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import random, copy
-import os 
+import argparse
+import os
+
 
 class AutoEncoderModel(nn.Module):
     def __init__(self, input_dim, latent_dim, output_dim):
@@ -85,41 +87,6 @@ class AutoEncoderModel(nn.Module):
             W.mul_(.99 / (sigma + eps))
 
 
-
-
-file =  'files/learned_model.pkl'
-
-with open(file, "rb") as f:
-        model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)
-
-traj_num = len(trajectory_list)
-
-# file =  'model.pkl'
-
-# with open(file, "rb") as f:
-#         model = pickle.load(f)
-
-# print(len(Z_trajs))
-# print(Z_trajs[0].shape)
-# print(Z_trajs[1].shape)
-# exit()
-X_traj = []
-for i in range(2):
-    t1 = []
-    for x in trajectory_list[i]:
-        l = [l[0] for l in x]
-        t1.append(l)
-    X_traj.append(np.array(t1))
-
-
-# print(len(X_traj),"  ",X_traj[0].shape)
-
-
-# print(len(trajectory_list),"  ",len(trajectory_list[0][0]),"  ",len(trajectory_list[0][0][0]))
-
-
-
-
 def estimate_P(K, kmax=500):
     return np.linalg.matrix_power(K, kmax)
 
@@ -139,31 +106,71 @@ def empirical_T_delta(K, P, Z0_list, delta, Tmax=2000):
 
 
 
-deltas = [0.01,0.05,0.1,0.2,0.3,0.5,0.8,1]
-data = []
-data1 = []
-for d in deltas:
-    P = estimate_P(K_matrix, kmax=100000)
-    times = empirical_T_delta(K_matrix, P, [Z for Z in Z_trajs[0]], delta=d, Tmax=50000)
-    print("empirical mean T_delta:", np.mean(times)*10,"  ",np.std(times)*10)
-    data.append(times.mean()*10)
-    data1.append(times.std()*10)
 
-data = np.array(data)
-data1 = np.array(data1)
+def main():
+    """ 
+    Main function 
+    """
 
-plt.plot(deltas, data, color="tab:green",label='Mean')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_path", help="files", type=str, default="models/learned_model.pkl")
+    args = parser.parse_args()
+    file =  args.model_path
 
-# Plot shaded standard deviation
-plt.fill_between(deltas, data - data1, data + data1, color='blue', alpha=0.2, label='±1 std. dev.')
-# Label and show
-#plt.title("$\delta$-settling times")
-plt.xlabel("$\hat{\delta}$",fontsize=22)
-plt.ylabel("Time",fontsize=22)
-plt.xticks(fontsize=16)
-plt.yticks(fontsize=16)
-plt.legend(fontsize=22)
-plt.grid(True)
-plt.tight_layout()
-plt.savefig("Mixing_times_learned.pdf")
-plt.close()
+
+    with open(file, "rb") as f:
+            model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)
+
+    traj_num = len(trajectory_list)
+
+    # file =  'model.pkl'
+
+    # with open(file, "rb") as f:
+    #         model = pickle.load(f)
+
+    # print(len(Z_trajs))
+    # print(Z_trajs[0].shape)
+    # print(Z_trajs[1].shape)
+    # exit()
+    X_traj = []
+    for i in range(2):
+        t1 = []
+        for x in trajectory_list[i]:
+            l = [l[0] for l in x]
+            t1.append(l)
+        X_traj.append(np.array(t1))
+
+
+    deltas = [0.01,0.05,0.1,0.2,0.3,0.5,0.8,1]
+    data = []
+    data1 = []
+    for d in deltas:
+        P = estimate_P(K_matrix, kmax=100000)
+        times = empirical_T_delta(K_matrix, P, [Z for Z in Z_trajs[0]], delta=d, Tmax=50000)
+        print("empirical mean T_delta:", np.mean(times)*10,"  ",np.std(times)*10)
+        data.append(times.mean()*10)
+        data1.append(times.std()*10)
+
+    data = np.array(data)
+    data1 = np.array(data1)
+
+    plt.plot(deltas, data, color="tab:green",label='Mean')
+
+    # Plot shaded standard deviation
+    plt.fill_between(deltas, data - data1, data + data1, color='blue', alpha=0.2, label='±1 std. dev.')
+    # Label and show
+    #plt.title("$\delta$-settling times")
+    plt.xlabel("$\hat{\delta}$",fontsize=22)
+    plt.ylabel("Time",fontsize=22)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.legend(fontsize=22)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("Mixing_times_learned.pdf")
+    plt.close()
+
+
+
+if __name__ == '__main__':
+    main()

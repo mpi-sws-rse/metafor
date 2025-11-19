@@ -26,6 +26,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
     result = []
     server_id = None
     global done
+    
     for sid in range(1,num_servers+1):
        
         ss_size = qsize * osize * 2 # this is used to create the two-dimensional state space for computing empirical dist pi_seq
@@ -64,8 +65,8 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
             last_s_val = 0
 
             wait_ind = False # while true, must wait until the end of the fault period
-            with open(file_name, "r") as f:
-                row_num = len(pd.read_csv(file_name))
+            with open("data/"+file_name, "r") as f:
+                row_num = len(pd.read_csv("data/"+file_name))
                 for i, line in enumerate(f.readlines()):
                     if i == 0:
                         continue  # drop the header
@@ -110,7 +111,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                             last_r_val = float(split_line[7])
                             last_s_val = float(split_line[8])
                             # update the content of datasets
-                            print(" traj_idx ",traj_idx," run ind ",run_ind,"  k_overall ",k_overall)
+                            #print(" traj_idx ",traj_idx," run ind ",run_ind,"  k_overall ",k_overall)
 
                             qlen_dataset[traj_idx][run_ind, k_overall] = last_q_val
                             olen_dataset[traj_idx][run_ind, k_overall] = last_o_val
@@ -123,7 +124,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
             actual_data_num_seq[run_ind].append(k_overall) # store number of actual datapoints in the current run
             run_ind += 1 # update the run number
 
-        #print("actual_data_num_seq  ",actual_data_num_seq)
+        print("actual_data_num_seq  ",actual_data_num_seq)
         common_data_num = np.min(actual_data_num_seq, axis = 0) # minimum number of data points among all runs
         q_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of jobs in the queue
         o_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of retried jobs
@@ -171,7 +172,10 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
 
 
 def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration, num_servers, qsize, osize):
-    current_folder = os.getcwd()
+    current_folder = os.getcwd()+"/data/"
+    directory = os.path.dirname(current_folder)
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
     # qsize and osize are fixed...
     result = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, num_servers, qsize, osize)
@@ -189,19 +193,22 @@ def convert_csv_to_pkl(max_t: float, runs: int, mean_t: float, rho: float, step_
     for i in range(1,num_servers+1):
         q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = result[i-1]    
         # Save
-        with open("q_seq_"+str(i)+".pkl", "wb") as f:
+        directory = os.path.dirname("data/server"+str(i)+"/q_seq.pkl")
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+        with open("data/server"+str(i)+"/q_seq.pkl", "wb") as f:
             pickle.dump(q_seq, f)
-        with open("o_seq_"+str(i)+".pkl", "wb") as f:
+        with open("data/server"+str(i)+"/o_seq.pkl", "wb") as f:
             pickle.dump(o_seq, f)
-        with open("l_seq_"+str(i)+".pkl", "wb") as f:
+        with open("data/server"+str(i)+"/l_seq.pkl", "wb") as f:
             pickle.dump(l_seq, f)
-        with open("d_seq_"+str(i)+".pkl", "wb") as f:
+        with open("data/server"+str(i)+"/d_seq.pkl", "wb") as f:
             pickle.dump(d_seq, f)
-        with open("r_seq_"+str(i)+".pkl", "wb") as f:
+        with open("data/server"+str(i)+"/r_seq.pkl", "wb") as f:
             pickle.dump(r_seq, f)
-        with open("s_seq_"+str(i)+".pkl", "wb") as f:
+        with open("data/server"+str(i)+"/s_seq.pkl", "wb") as f:
             pickle.dump(s_seq, f)
-        with open("pi_seq_"+str(i)+".pkl", "wb") as f:
+        with open("data/server"+str(i)+"/pi_seq.pkl", "wb") as f:
             pickle.dump(pi_seq, f)
 
 

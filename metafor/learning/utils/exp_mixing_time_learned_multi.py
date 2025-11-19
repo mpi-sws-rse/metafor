@@ -10,6 +10,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random, copy
 import os 
+import argparse
+
 
 class AutoEncoderModel(nn.Module):
     def __init__(self, input_dim, latent_dim, output_dim):
@@ -86,10 +88,6 @@ class AutoEncoderModel(nn.Module):
 
 
 
-# print(len(X_traj),"  ",X_traj[0].shape)
-
-
-# print(len(trajectory_list),"  ",len(trajectory_list[0][0]),"  ",len(trajectory_list[0][0][0]))
 
 def estimate_P(K, kmax=500):
     return np.linalg.matrix_power(K, kmax)
@@ -110,73 +108,87 @@ def empirical_T_delta(K, P, Z0_list, delta, Tmax=2000):
 
 
 
-file =  'files/learned_model_multi_1.pkl'
-
-with open(file, "rb") as f:
-        model1,K_matrix1,X,Y,trajectory_list1,trajectory_length_list,Z_trajs1 = pickle.load(f)
-traj_num = len(trajectory_list1)
-# X_traj1 = []
-# for i in range(2):
-#     t1 = []
-#     for x in trajectory_list1[i]:
-#         l = [l[0] for l in x]
-#         t1.append(l)
-#     X_traj1.append(np.array(t1))
 
 
-deltas = [0.0001,0.005,0.001,0.05,0.1,0.2,0.3,0.5,0.8,1]
-data = []
-data1 = []
-for d in deltas:
-    P = estimate_P(K_matrix1, kmax=100000)
-    times = empirical_T_delta(K_matrix1, P, [Z for Z in Z_trajs1[0]], delta=d, Tmax=50000)
-    print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
-    data.append(times.mean())
-    data1.append(times.std())
+def main():
+    """ 
+    Main function 
+    """
 
-data = np.array(data)
-data1 = np.array(data1)
-plt.plot(deltas, data, color="tab:green",label='1')
-# Plot shaded standard deviation
-plt.fill_between(deltas, data - data1, data + data1, color='green', alpha=0.2)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model1_path", help="files", type=str, default="models/learned_model_multi_1.pkl")
+    parser.add_argument("--model2_path", help="files", type=str, default="models/learned_model_multi_2.pkl")
+
+    args = parser.parse_args()
+    file1 =  args.model1_path
+    file2 =  args.model2_path
 
 
 
-
-file2 =  'files/learned_model_multi_2.pkl'
-
-with open(file2, "rb") as f:
-        model2,K_matrix2,X,Y,trajectory_list2,trajectory_length_list,Z_trajs2 = pickle.load(f)
-traj_num = len(trajectory_list2)
-
-data2 = []
-data3 = []
-for d in deltas:
-    P = estimate_P(K_matrix2, kmax=100000)
-    times = empirical_T_delta(K_matrix2, P, [Z for Z in Z_trajs2[0]], delta=d, Tmax=50000)
-    print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
-    data2.append(times.mean())
-    data3.append(times.std())
+    with open(file1, "rb") as f:
+            model1,K_matrix1,X,Y,trajectory_list1,trajectory_length_list,Z_trajs1 = pickle.load(f)
+    traj_num = len(trajectory_list1)
+    # X_traj1 = []
+    # for i in range(2):
+    #     t1 = []
+    #     for x in trajectory_list1[i]:
+    #         l = [l[0] for l in x]
+    #         t1.append(l)
+    #     X_traj1.append(np.array(t1))
 
 
+    deltas = [0.0001,0.005,0.001,0.05,0.1,0.2,0.3,0.5,0.8,1]
+    data = []
+    data1 = []
+    for d in deltas:
+        P = estimate_P(K_matrix1, kmax=100000)
+        times = empirical_T_delta(K_matrix1, P, [Z for Z in Z_trajs1[0]], delta=d, Tmax=50000)
+        print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
+        data.append(times.mean())
+        data1.append(times.std())
 
-data2 = np.array(data2)
-data3 = np.array(data3)
-
-plt.plot(deltas, data2, color="tab:blue",label='2')
-
-# Plot shaded standard deviation
-plt.fill_between(deltas, data2 - data3, data2 + data3, color='blue', alpha=0.2)
+    data = np.array(data)
+    data1 = np.array(data1)
+    plt.plot(deltas, data, color="tab:green",label='1')
+    # Plot shaded standard deviation
+    plt.fill_between(deltas, data - data1, data + data1, color='green', alpha=0.2)
 
 
-# Label and show
-#plt.title("$\delta$-settling times")
-plt.xlabel("$\hat{\delta}$",fontsize=22)
-plt.ylabel("Time",fontsize=22)
-plt.xticks(fontsize=16)
-plt.yticks(fontsize=16)
-plt.legend(fontsize=22)
-plt.grid(True)
-plt.tight_layout()
-plt.savefig("Mixing_times_multi.pdf")
-plt.close()
+
+
+
+    with open(file2, "rb") as f:
+            model2,K_matrix2,X,Y,trajectory_list2,trajectory_length_list,Z_trajs2 = pickle.load(f)
+    traj_num = len(trajectory_list2)
+
+    data2 = []
+    data3 = []
+    for d in deltas:
+        P = estimate_P(K_matrix2, kmax=100000)
+        times = empirical_T_delta(K_matrix2, P, [Z for Z in Z_trajs2[0]], delta=d, Tmax=50000)
+        print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
+        data2.append(times.mean())
+        data3.append(times.std())
+
+
+
+    data2 = np.array(data2)
+    data3 = np.array(data3)
+
+    plt.plot(deltas, data2, color="tab:blue",label='2')
+
+    # Plot shaded standard deviation
+    plt.fill_between(deltas, data2 - data3, data2 + data3, color='blue', alpha=0.2)
+
+
+    # Label and show
+    #plt.title("$\delta$-settling times")
+    plt.xlabel("$\hat{\delta}$",fontsize=22)
+    plt.ylabel("Time",fontsize=22)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.legend(fontsize=22)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("Mixing_times_multi.pdf")
+    plt.close()

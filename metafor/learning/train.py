@@ -11,14 +11,14 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import random, copy
-
+import argparse
 import pickle
 import matplotlib.pyplot as plt
 from numpy.linalg import lstsq
 
 os.makedirs("results", exist_ok=True)
 
-
+depth = 1 # History length, also known as depth in system identification
 def set_seed(seed: int):
 
     os.environ["PYTHONHASHSEED"] = str(seed)   # hash-based ops
@@ -29,7 +29,7 @@ def set_seed(seed: int):
         torch.cuda.manual_seed_all(seed)
 
 
-def prepare_training_data(q_seq, o_seq): #, l_seq, d_seq, r_seq, s_seq, depth):
+def prepare_training_data(q_seq, o_seq, depth): #, l_seq, d_seq, r_seq, s_seq, depth):
     """ Preparing input-output training datasets"""
     X = []
     Y = []
@@ -184,7 +184,7 @@ class autoencoder():
             total_idx += num_steps + 1
         return trajectory_list, trajectory_length_list
 
-    def autoencoder_training(input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list,
+    def autoencoder_training(input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list, traj_num,
                              seed = None):
         """Training the AE model"""
         # hyperparams
@@ -272,7 +272,7 @@ class autoencoder():
 
         return model
 
-    def simulate_and_plot_from_initial_state(model, trajectory_list, true_q_seq, save_dir="./results/", prefix="traj"):
+    def simulate_and_plot_from_initial_state(model, trajectory_list, trajectory_length_list, true_q_seq, save_dir="./results/", prefix="traj"):
         """
         Args:
             model: a callable model such that model(x0, [i]) → prediction at time i
@@ -438,107 +438,126 @@ class AutoEncoderModel(nn.Module):
         if sigma > .99:
             W.mul_(.99 / (sigma + eps))
 
- 
-# Loading the trajectories...
-with open("data_generation/q_seq.pkl", "rb") as f:
-    q_seq = pickle.load(f)
-
-# with open("data_generation/o_seq.pkl", "rb") as f:
-#     o_seq = pickle.load(f)
-with open("data_generation/l_seq.pkl", "rb") as f:
-    l_seq = pickle.load(f)
-
-#scaling factor  - sampling data every 10 steps
-q_seq[0] = q_seq[0][0::10]
-q_seq[1] = q_seq[1][0::10]
-l_seq[0] = l_seq[0][0::10]
-l_seq[1] = l_seq[1][0::10]
-
-# with open("data_generation/d_seq.pkl", "rb") as f:
-#     d_seq = pickle.load(f)
-# with open("data_generation/r_seq.pkl", "rb") as f:
-#     r_seq = pickle.load(f)
-# with open("data_generation/s_seq.pkl", "rb") as f:
-#     s_seq = pickle.load(f)
-
-traj_num = len(q_seq) # Number of trajectories within the dataset
-depth = 1 # History length, also known as depth in system identification
-
-# print(len(q_seq[0]))
-# exit()
-# T=len(q_seq[0])
-#T=100
-X, Y = prepare_training_data(q_seq, l_seq) #, l_seq, d_seq, r_seq, s_seq, depth)
-
-# q_seq[0] = q_seq[0][0:100]
-# #q_seq[1] = q_seq[1][0:100] 
-# q_seq[1] = q_seq[0][0:100] #this basically enforces only the intital traj 
-#print(len(q_seq),"  ",len(q_seq[0]))
-
-# Evaluating the performance of least-squares optimizer
-
-# Compute the LS gain
-#theta = np.matmul(np.linalg.inv(np.matmul(X.T, X)), np.matmul(X.T, Y))
-"""theta = linear_model.train_linear_least_squares(X, Y)
-
-# Compute the model predictions
-model_preds = linear_model.simulate_linear_model(theta, q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth=depth)
-
-# Plot and compare the output of model and true trajectories
-linear_model.plot_predictions_vs_true(q_seq, model_preds)
-
-# Construct the linear dynamics associated with theta
-A_theta = linear_model.build_effective_transition_matrix(theta, depth=depth)
-
-# Printing sorted eigenvalues
-eigvals = np.linalg.eigvals(A_theta)
-eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
-print("Eigenvalues of the system:", eigvals_sorted)"""
-
-set_seed(858257303)
-input_dim = 2 * depth  # Input space dimension
-output_dim = 2
-latent_dim = 20  # Latent space dimension
-num_epochs = 1000
 
 
+def main():
+    """ 
+    Main function 
+    """
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data_dir", help="files", type=str, default="data")
+    parser.add_argument("--epochs", help="number of epochs", type=int, default=1000)
 
-# Get trajectories within X
-trajectory_list, trajectory_length_list = autoencoder.get_trajectories(traj_num, X, Y, q_seq)
+    args = parser.parse_args()
+    data_dir =  args.data_dir
+    epochs = args.epochs
 
+    
+    # Loading the trajectories...
+    with open(data_dir+"/q_seq.pkl", "rb") as f:
+        q_seq = pickle.load(f)
 
-model = autoencoder.autoencoder_training(
-    input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list, seed = 858257303)
+    # with open("data_generation/o_seq.pkl", "rb") as f:
+    #     o_seq = pickle.load(f)
+    with open(data_dir+"/l_seq.pkl", "rb") as f:
+        l_seq = pickle.load(f)
 
+    #scaling factor  - sampling data every 10 steps
 
-autoencoder.simulate_and_plot_from_initial_state(
-    model=model,
-    trajectory_list=trajectory_list,
-    true_q_seq=q_seq,
-    save_dir="./results/",
-    prefix="q_model_vs_true"
-)
+    if len(q_seq[0])>5000:
+        q_seq[0] = q_seq[0][0::10]
+        q_seq[1] = q_seq[1][0::10]
+        l_seq[0] = l_seq[0][0::10]
+        l_seq[1] = l_seq[1][0::10]
 
-latent_trajs = autoencoder.simulate_latent_trajectories(
-    model=model,
-    trajectory_list=trajectory_list,
-    traj_num=traj_num,
-    save_dir="./results/",
-    prefix="latent_traj"
-)
+    # with open("data_generation/d_seq.pkl", "rb") as f:
+    #     d_seq = pickle.load(f)
+    # with open("data_generation/r_seq.pkl", "rb") as f:
+    #     r_seq = pickle.load(f)
+    # with open("data_generation/s_seq.pkl", "rb") as f:
+    #     s_seq = pickle.load(f)
 
-# Analyzing the linear mapping
-K_matrix = model.K.detach().cpu().numpy()
+    traj_num = len(q_seq) # Number of trajectories within the dataset
+
+    depth=1
+    X, Y = prepare_training_data(q_seq, l_seq, depth) #, l_seq, d_seq, r_seq, s_seq, depth)
+
+    # q_seq[0] = q_seq[0][0:100]
+    # #q_seq[1] = q_seq[1][0:100] 
+    # q_seq[1] = q_seq[0][0:100] #this basically enforces only the intital traj 
+    #print(len(q_seq),"  ",len(q_seq[0]))
+
+    # Evaluating the performance of least-squares optimizer
+
+    # Compute the LS gain
+    #theta = np.matmul(np.linalg.inv(np.matmul(X.T, X)), np.matmul(X.T, Y))
+    """theta = linear_model.train_linear_least_squares(X, Y)
+
+    # Compute the model predictions
+    model_preds = linear_model.simulate_linear_model(theta, q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, depth=depth)
+
+    # Plot and compare the output of model and true trajectories
+    linear_model.plot_predictions_vs_true(q_seq, model_preds)
+
+    # Construct the linear dynamics associated with theta
+    A_theta = linear_model.build_effective_transition_matrix(theta, depth=depth)
+
+    # Printing sorted eigenvalues
+    eigvals = np.linalg.eigvals(A_theta)
+    eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
+    print("Eigenvalues of the system:", eigvals_sorted)"""
+
+    set_seed(858257303)
+    input_dim = 2 * depth  # Input space dimension
+    output_dim = 2
+    latent_dim = 20  # Latent space dimension
+    num_epochs = epochs
 
 
 
-with open("files/learned_model.pkl", "wb") as f:
-        pickle.dump((model,K_matrix,X,Y,trajectory_list,trajectory_length_list,latent_trajs),f)
 
-print("K_matrix ",K_matrix)
+    # Get trajectories within X
+    trajectory_list, trajectory_length_list = autoencoder.get_trajectories(traj_num, X, Y, q_seq)
 
-eigvals = np.linalg.eigvals(K_matrix)
-# Printing sortd eigenvalues
-eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
-print("Eigenvalues for K_matrix:", eigvals_sorted)
+
+    model = autoencoder.autoencoder_training(
+        input_dim, latent_dim, output_dim, num_epochs, trajectory_list, trajectory_length_list, traj_num, seed = 858257303)
+
+
+    autoencoder.simulate_and_plot_from_initial_state(
+        model=model,
+        trajectory_list=trajectory_list,
+        trajectory_length_list=trajectory_length_list,
+        true_q_seq=q_seq,
+        save_dir="./results/",
+        prefix="q_model_vs_true"
+    )
+
+    latent_trajs = autoencoder.simulate_latent_trajectories(
+        model=model,
+        trajectory_list=trajectory_list,
+        traj_num=traj_num,
+        save_dir="./results/",
+        prefix="latent_traj"
+    )
+
+    # Analyzing the linear mapping
+    K_matrix = model.K.detach().cpu().numpy()
+
+
+
+    with open("models/learned_model.pkl", "wb") as f:
+            pickle.dump((model,K_matrix,X,Y,trajectory_list,trajectory_length_list,latent_trajs),f)
+
+    print("K_matrix ",K_matrix)
+
+    eigvals = np.linalg.eigvals(K_matrix)
+    # Printing sortd eigenvalues
+    eigvals_sorted = eigvals[np.argsort(-eigvals.real)]
+    print("Eigenvalues for K_matrix:", eigvals_sorted)
+
+
+
+if __name__ == '__main__':
+    main()
