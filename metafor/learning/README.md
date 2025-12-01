@@ -76,3 +76,21 @@ python utils/compare_simulations.py --data_dir="data/"
 ```
 
 
+## Throttling strategy   
+To generate data from simulator while using throttling strategy:     
+
+```bash
+python data_generation/data_generator.py --throttle=True --ts=0.9 --ap=0.5
+
+```
+This specifies that the throttling strategy comes info effect when current queue length is 90% of the maximum size (ts=0.9) 
+with an admission probability of 0.5 (ap=0.5), i.e., we drop 50%  of the jobs entering the system.     
+
+
+## LIFO based servers   
+To generate data from simulator wherein servers use stack (LIFO) instead of queues (FIFO):     
+
+```bash
+python data_generation/data_generator.py --queue_type="lifo" 
+
+```

@@ -119,7 +119,8 @@ class Server:
 
     def __init__(self, name: str, queue_size: int, thread_pool: int,
                  service_time_distribution: dict[str, Distribution],
-                 retry_queue_size: int, client: OpenLoopClientWithTimeout, throttle:bool, queue_type:str):
+                 retry_queue_size: int, client: OpenLoopClientWithTimeout, 
+                 throttle:bool, ts:float, ap:float, queue_type:str):
         self.start_time = 0  # to be set by each simulation
         self.busy: int = 0
 
@@ -146,6 +147,8 @@ class Server:
         self.retries: int = 0
         self.dropped: int = 0  # cumulative number
         self.throttle: bool = throttle
+        self.ts: float = ts
+        self.ap: float = ap
         self.queue_type=queue_type
         self.completed_jobs: int = 0
 
@@ -280,27 +283,48 @@ class Server:
                 return None
             
             else:
-                # Throttling strategy kicks in  as soon as queuue is 70% full
-                # The server is busy, so try to enqueue the job, if there is enough space in the queue
-                if self.queue.len() < 0.9*self.queue_size:
-                    job.status = JobStatus.ENQUEUED
-                    logger.info("Enqueueing %s at %f" % (job.name, t))
-                    self.queue.append(job)        
-                elif self.queue.len() < self.queue_size:
-                    admission_prob = 0.5 
-                    if np.random.random() < admission_prob:
-                        job.status = JobStatus.ENQUEUED
-                        logger.info("Enqueueing %s at %f" % (job.name, t))
-                        self.queue.append(job)
-                    else:
-                        job.status = JobStatus.DROPPED
-                        logger.info("Dropped %s at %f" % (job.name, t))
-                        self.dropped += 1
-                        return t, self.client.on_timeout, job
+                self.throttle(job,t,self.ts,self.ap)
+    
+
+    def throttle(self, job: Job, t: float, ts: float, admission_prob: float):
+        """
+        This function gets invoked when a job has to be processed.
+        If the server is available, the job is processed otherwise it is added
+        to the queue (waiting). If the queue is full, the job is dropped. The retries
+        mechanism is implemented by the timeout() in client.py  
+
+        Args:
+            job: the current job to be processed
+            ts : threshold as a fraction of queue length to determine the point when 
+                throttling kicks in, i.e. a value of 0.9 indicates 90% of the queue length
+            ap : admission probability representing the fraction of jobs to admit and drop remaining
+                i.e, a value of 0.3 represents admitting 30% of the jobs and dropping the rest 70%.
                 
-                else:
-                    job.status = JobStatus.DROPPED
-                    logger.info("Dropped %s at %f" % (job.name, t))
-                    self.dropped += 1
-                    return t + self.client.timeout, self.client.on_timeout, job
-                return None
+        Returns:
+            If the job is processed, it returns the completed job else None.
+        """
+
+        # Throttling strategy kicks in  as soon as queuue is 70% full
+        # The server is busy, so try to enqueue the job, if there is enough space in the queue
+        if self.queue.len() < ts*self.queue_size:
+            job.status = JobStatus.ENQUEUED
+            logger.info("Enqueueing %s at %f" % (job.name, t))
+            self.queue.append(job)        
+        elif self.queue.len() < self.queue_size:
+            #admission_prob = 0.5 
+            if np.random.random() < admission_prob:
+                job.status = JobStatus.ENQUEUED
+                logger.info("Enqueueing %s at %f" % (job.name, t))
+                self.queue.append(job)
+            else:
+                job.status = JobStatus.DROPPED
+                logger.info("Dropped %s at %f" % (job.name, t))
+                self.dropped += 1
+                return t, self.client.on_timeout, job
+        
+        else:
+            job.status = JobStatus.DROPPED
+            logger.info("Dropped %s at %f" % (job.name, t))
+            self.dropped += 1
+            return t + self.client.timeout, self.client.on_timeout, job
+        return None
