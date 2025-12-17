@@ -167,7 +167,19 @@ class MultiServerCTMC():
             var = 0
             sub_tree = self.sub_tree_list[node_id]
             for downstream_node_id in sub_tree:
-                mu = min(q_list[downstream_node_id], num_threads[downstream_node_id]) * mu0_ps[downstream_node_id]
+
+                # FIX 1: use thread_pools instead of num_threads
+                effective_servers = min(
+                    q_list[downstream_node_id],
+                    thread_pools[downstream_node_id],
+                )
+                mu = effective_servers * mu0_ps[downstream_node_id]
+
+                # FIX 2: mu == 0
+                if mu <= 0:
+                    ave = float("inf")
+                    var = float("inf")
+                    break
                 ave += q_list[downstream_node_id] / mu
                 var += (
                     q_list[downstream_node_id]
