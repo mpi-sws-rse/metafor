@@ -12,6 +12,9 @@ import numpy as np
 import pandas as pd
 import random
 from metafor.simulator.server import Context, Server
+from metafor.simulator.server_with_throttling import ServerWithThrottling
+from metafor.simulator.server_with_LIFO import ServerWithLIFO
+
 from metafor.simulator.statistics import StatData
 from metafor.simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
 
@@ -201,27 +204,15 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
                                    fault_duration))
     ]:
         service_time_distribution = {"request":distribution(1/job_type.mean())}
-        server = Server(name, queue_size, 1, service_time_distribution, retry_queue_size, client,throttle, ts,ap, queue_type)
+        if throttle==False:
+            server = Server(name, queue_size, 1, service_time_distribution, retry_queue_size, client)
+        else:    
+            server = ServerWithThrottling(name, queue_size, 1, service_time_distribution, retry_queue_size, client,throttle, ts,ap)
+        
+        if queue_type=="lifo":
+            server = ServerWithLIFO(name, queue_size, 1, service_time_distribution, retry_queue_size, client)
+        
         server.set_context(Context(52))
-        client.server = server
-        clients.append(client)
-    return clients
-
-
-# Simulation with bimodal service time, without and with timeout
-def make_sim_bimod(mean_t: float, mean_t_2: float, bimod_p: float, rho: float, queue_size: int, retry_queue_size: int,
-                   timeout_t: float, max_retries: int) -> List[Client]:
-    clients = []
-    job_name = "bimod"
-    job_type = bimod_job(mean_t, mean_t_2, bimod_p)
-
-    for name, client in [
-        ("%s" % job_name, OpenLoopClient(rho, job_type)),
-        ("%s_timeout_%d" % (job_name, int(timeout_t)), OpenLoopClientWithTimeout(rho, rho_fault, rho_reset, job_type,
-                                                                                 timeout, max_retries, fault_start,
-                                                                                 fault_duration))
-    ]:
-        server = Server(1, name, client, rho, queue_size, retry_queue_size, client)
         client.server = server
         clients.append(client)
     return clients

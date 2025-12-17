@@ -5,8 +5,8 @@ import argparse
 import numpy as np
 from metafor.simulator.simulate import run_discrete_experiment
 
-import logging
-logging.disable(logging.CRITICAL)
+# import logging
+# logging.disable(logging.CRITICAL)
 
 def delete_files(folder: str, extension: str):
     for file in os.listdir(folder):

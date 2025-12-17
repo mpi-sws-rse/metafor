@@ -10,7 +10,6 @@ from typing import List, TextIO
 from metafor.simulator.client import Client, OpenLoopClientWithTimeout
 from metafor.simulator.job import Distribution, Job, JobStatus
 
-
 import logging
 logger = logging.getLogger(__name__)
 
@@ -89,27 +88,6 @@ class FCFSQueue:
 
 
 
-class LIFOStack:
-    def __init__(self):
-        self.deque = deque()
-
-    def append(self, job):
-        """Add a job to the top of the stack."""
-        self.deque.append(job)
-
-    def pop(self):
-        """Remove and return the job from the top of the stack."""
-        return self.deque.pop()
-
-    def len(self) -> int:
-        """Return the number of jobs in the stack."""
-        return len(self.deque)
-
-    @staticmethod
-    def name() -> str:
-        """Return the name of this scheduling discipline."""
-        return "LIFO"
-
 
 
 class Server:
@@ -120,14 +98,13 @@ class Server:
     def __init__(self, name: str, queue_size: int, thread_pool: int,
                  service_time_distribution: dict[str, Distribution],
                  retry_queue_size: int, client: OpenLoopClientWithTimeout, 
-                 throttle:bool, ts:float, ap:float, queue_type:str):
+                ):
         self.start_time = 0  # to be set by each simulation
         self.busy: int = 0
 
-        if queue_type=="fifo":
-            self.queue: FCFSQueue = FCFSQueue()
-        else:
-            self.queue: LIFOStack = LIFOStack()
+        
+        self.queue: FCFSQueue = FCFSQueue()
+        
         self.queue_size: int = queue_size
 
         self.service_time_distribution = service_time_distribution
@@ -146,10 +123,10 @@ class Server:
         # statistics
         self.retries: int = 0
         self.dropped: int = 0  # cumulative number
-        self.throttle: bool = throttle
-        self.ts: float = ts
-        self.ap: float = ap
-        self.queue_type=queue_type
+        # self.throttle: bool = throttle
+        # self.ts: float = ts
+        # self.ap: float = ap
+        # self.queue_type=queue_type
         self.completed_jobs: int = 0
 
     def set_context(self, c: Context):
@@ -269,50 +246,8 @@ class Server:
             assert False
         else:
             
-            if self.throttle is False  or t<self.client.fault_start[0]:    
-                # The server is busy, so try to enqueue the job, if there is enough space in the queue
-                if self.queue.len() < self.queue_size:
-                    job.status = JobStatus.ENQUEUED
-                    logger.info("Enqueueing %s at %f" % (job.name, t))
-                    self.queue.append(job)
-                else:
-                    job.status = JobStatus.DROPPED
-                    logger.info("Dropped %s at %f" % (job.name, t))
-                    self.dropped += 1
-                    return t + self.client.timeout, self.client.on_timeout, job
-                return None
             
-            else:
-                self.throttle(job,t,self.ts,self.ap)
-    
-
-    def throttle(self, job: Job, t: float, ts: float, admission_prob: float):
-        """
-        This function gets invoked when a job has to be processed.
-        If the server is available, the job is processed otherwise it is added
-        to the queue (waiting). If the queue is full, the job is dropped. The retries
-        mechanism is implemented by the timeout() in client.py  
-
-        Args:
-            job: the current job to be processed
-            ts : threshold as a fraction of queue length to determine the point when 
-                throttling kicks in, i.e. a value of 0.9 indicates 90% of the queue length
-            ap : admission probability representing the fraction of jobs to admit and drop remaining
-                i.e, a value of 0.3 represents admitting 30% of the jobs and dropping the rest 70%.
-                
-        Returns:
-            If the job is processed, it returns the completed job else None.
-        """
-
-        # Throttling strategy kicks in  as soon as queuue is 70% full
-        # The server is busy, so try to enqueue the job, if there is enough space in the queue
-        if self.queue.len() < ts*self.queue_size:
-            job.status = JobStatus.ENQUEUED
-            logger.info("Enqueueing %s at %f" % (job.name, t))
-            self.queue.append(job)        
-        elif self.queue.len() < self.queue_size:
-            #admission_prob = 0.5 
-            if np.random.random() < admission_prob:
+            if self.queue.len() < self.queue_size:
                 job.status = JobStatus.ENQUEUED
                 logger.info("Enqueueing %s at %f" % (job.name, t))
                 self.queue.append(job)
@@ -320,11 +255,9 @@ class Server:
                 job.status = JobStatus.DROPPED
                 logger.info("Dropped %s at %f" % (job.name, t))
                 self.dropped += 1
-                return t, self.client.on_timeout, job
+                return t + self.client.timeout, self.client.on_timeout, job
+            return None
         
-        else:
-            job.status = JobStatus.DROPPED
-            logger.info("Dropped %s at %f" % (job.name, t))
-            self.dropped += 1
-            return t + self.client.timeout, self.client.on_timeout, job
-        return None
+        
+        
+        
