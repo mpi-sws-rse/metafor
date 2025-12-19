@@ -134,7 +134,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
         s_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average service time
         pi_emp_seq = [[]*num_traj for l in range(num_traj)] # seq of empirical distributions
 
-        #print("common_data_num  ",common_data_num)
+        print("common_data_num  ",common_data_num)
         for traj_idx in range(num_traj):
             for step in range(common_data_num[traj_idx]):
                     q_step = 0 # initialization for average number of jobs in the queue
@@ -153,6 +153,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                         r_step += rlen_dataset[traj_idx][run_ind, step] / num_runs
                         s_step += slen_dataset[traj_idx][run_ind, step] / num_runs
                         pi_diff = np.zeros(ss_size)
+                        print("qlen_dataset[traj_idx][run_ind, step],  ",qlen_dataset[traj_idx][run_ind, step], " olen_dataset[traj_idx][run_ind, step],  ",olen_dataset[traj_idx][run_ind, step])
                         state = min(ss_size - 1,
                                     index_composer(qlen_dataset[traj_idx][run_ind, step], olen_dataset[traj_idx][run_ind, step], qsize, osize))
                         pi_diff[int(state)] = 1 / num_runs
@@ -220,6 +221,7 @@ def index_composer(n_main_queue, n_retry_queue, qsize, osize):
     # note that n_main_queue can become equal to qsize (strictly greater than qsie - 1)
     total_ind = min(osize - 1, n_retry_queue) * main_queue_size + min(n_main_queue, main_queue_size - 1)
     # total_ind = n_retry_queue * main_queue_size + n_main_queue
+    #print("total_ind ",total_ind,"   min(osize - 1, n_retry_queue) ",min(osize - 1, n_retry_queue))
     return total_ind
 
 

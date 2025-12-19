@@ -5,8 +5,8 @@ import argparse
 import numpy as np
 from metafor.simulator.simulate_multi import run_discrete_experiment
 
-import logging
-logging.disable(logging.CRITICAL)
+# import logging
+# logging.disable(logging.CRITICAL)
 
 def delete_files(folder: str, extension: str):
     for file in os.listdir(folder):
@@ -15,7 +15,8 @@ def delete_files(folder: str, extension: str):
 
 
 def delete_results(extensions: List[str]):
-    current_folder = os.getcwd()
+    current_folder = os.getcwd()+"/data"
+
     for extension in extensions:
         delete_files(current_folder, extension)
 
@@ -33,7 +34,7 @@ def main():
     main_queue_size = 100 # maximum size of the arrivals queue
     retry_queue_size = 20 # only used when learning in the space of prob distributions is desired.
     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
-    rho = 9.5/10 # server's utilization rate
+    rho = 9.7/10 # server's utilization rate
     
     
     timeout_t = 9 # timeout after which the client retries, if the job is not done
@@ -61,7 +62,8 @@ def main():
     parser.add_argument("--genpkl", help="Generate the pkl files from csv", default=False, type=bool, required=False)
     parser.add_argument("--fault_duration", help="Duration of fault rate injection as a fraction of simulation time", default=0.01*sim_time, type=float, required=False)
     parser.add_argument("--verbose", help="Verbosity", default=True, type=bool, required=False)
-  
+    parser.add_argument("--num_servers", help="Verbosity", default=2, type=int, required=False)
+   
   
     args = parser.parse_args()
 
@@ -73,7 +75,8 @@ def main():
     fault_duration = args.fault_duration * sim_time
     verbose = args.verbose
     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
-    
+    num_servers = args.num_servers
+
     if verbose==False:
         logging.disable(logging.CRITICAL)
 

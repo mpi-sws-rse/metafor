@@ -30,10 +30,9 @@ class Simulator:
 
         self.servers = servers
 
-        self.contexts = [Context(sim_id+1, i+1) for i,s in enumerate(servers)] 
-        #[Context(sim_id + i, f"sim_{sim_id}_server_{s.sim_name}.csv") for i, s in enumerate(servers)]
-        for i,server in enumerate(servers):
-            server.set_context(Context(sim_id+1,i+1))
+        self.contexts = [Context(sim_id + 1, i + 1) for i in range(len(servers))]
+        for server, ctx in zip(servers, self.contexts):
+            server.set_context(ctx)
         self.clients = clients
 
         self.reset()
@@ -76,7 +75,8 @@ class Simulator:
                 heapq.heapify(self.q)   
 
     def analyze(self):
-        self.context.analyze()
+        for ctx in self.contexts:
+            ctx.analyze()
 
 
 def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_t: float, rho,

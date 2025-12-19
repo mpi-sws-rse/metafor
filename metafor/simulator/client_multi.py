@@ -161,24 +161,31 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         # Modifying on_timeout to check all servers in the chain for the 
         # job’s status, as jobs may be in the queue or processing in
         # downstream servers.
+        # DESIGN : We use a single, fixed retry budget per job (end-to-end), 
+        # not independent retries per server (from the client’s perspective, 
+        # there is one request.)
         
         retried_jobs = []
         current = self.server
-        while current:
-            if job.status != JobStatus.COMPLETED:
-                if job.retries_left > 0:
-                    logger.info(f"Job {job.created_t} timeout, retrying {job.max_retries - job.retries_left} at {t} on {current.sim_name}")
-                    job.retries_left -= 1
-                    service_time = current.service_time_distribution[job.name].sample()
+
+        # if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED}:
+        #     return None
+        #while current: 
+        # DESIGN : A retry is schedules only at the first server
+        if job.status != JobStatus.COMPLETED:
+            if job.retries_left > 0:
+                logger.info(f"Job {job.created_t} timeout, retrying {job.max_retries - job.retries_left} at {t} on {current.sim_name}")
+                job.retries_left -= 1
+                #service_time = current.service_time_distribution[job.name].sample()
+            
+                offered = current.offer(job, t)  # Retry at first server immediately
+                if offered is not None:
+                    retried_jobs.append(offered)
                 
-                    offered = current.offer(job, t + service_time)  # Retry at first server
-                    if offered is not None:
-                        retried_jobs.append(offered)
-                    
-                    retried_jobs.append((t + self.timeout, self.on_timeout, job))
-                    #return retried_jobs
-                    t = t + service_time
-            current = current.downstream_server  # Check downstream serve
+                retried_jobs.append((t + self.timeout, self.on_timeout, job))
+                #return retried_jobs
+                #t = t + service_time
+        #current = current.downstream_server  # Check downstream serve
         #logger.info(f"Job {job.created_t} not found in any server at {t}")
         return retried_jobs
     

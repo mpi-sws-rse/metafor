@@ -159,6 +159,11 @@ class Server:
 
             if completed.max_retries > completed.retries_left:  # a retried job is completed
                 self.retries -= 1
+                current=self.downstream_server
+                while current is not None:
+                    current.retries -= 1
+                    current=current.downstream_server
+                
             logger.info("Completing %s at %f on server %d" % (completed.name, t,self.id))
 
             end_time = time.time()
@@ -186,9 +191,10 @@ class Server:
         
         # In job_done, forward completed jobs to downstream_server.offer if downstream_server exists.
         if self.downstream_server is not None:
-            service_time = self.service_time_distribution[self.jobs[n].name].sample()
+            #service_time = self.service_time_distribution[self.jobs[n].name].sample()
             # self.jobs[n].size = service_time
-            offered = self.downstream_server.offer(completed, t +service_time)
+            offered = self.downstream_server.offer(completed, t)
+            # we do not add service time to t as it is already being done at l:258
             if offered is not None:
                 events.append(offered)
         #     #events.append((t + service_time, self.downstream_server.job_done, n))
@@ -230,6 +236,11 @@ class Server:
         if job.max_retries > job.retries_left: 
             # this is a retried job
             self.retries += 1
+            current=self.downstream_server
+            while current is not None:
+                current.retries += 1
+                current=current.downstream_server
+                
            
         ##########################################################
         # Ensure dropped jobs or retries are handled consistently, 

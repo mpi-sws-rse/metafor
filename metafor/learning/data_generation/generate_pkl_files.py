@@ -62,7 +62,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
 
         wait_ind = False # while true, must wait until the end of the fault period
         with open("data/"+file_name, "r") as f:
-            print(file_name)
+            #print(file_name)
             row_num = len(pd.read_csv("data/"+file_name))
             for i, line in enumerate(f.readlines()):
                 if i == 0:
