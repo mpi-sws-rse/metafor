@@ -3,6 +3,10 @@ import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+
+os.makedirs("results", exist_ok=True)
+os.makedirs("models", exist_ok=True)
 
 class AutoEncoderModel(nn.Module):
     def __init__(self, input_dim, latent_dim, output_dim):
@@ -56,7 +60,7 @@ class AutoEncoderModel(nn.Module):
 
 def predict_next_state(q,r):
     # Loading the trained autoencoder model
-    with open("models/learned_model.pkl", "rb") as f:
+    with open("../../koopman_AE_model/models/learned_model.pkl", "rb") as f:
         (model, K_matrix, X, Y,
          trajectory_list, trajectory_length_list, latent_trajs) = pickle.load(f)
     # Constructing the input
