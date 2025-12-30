@@ -15,7 +15,7 @@ def delete_files(folder: str, extension: str):
 
 
 def delete_results(extensions: List[str]):
-    current_folder = os.getcwd()
+    current_folder = os.getcwd() +"/data"
     for extension in extensions:
         delete_files(current_folder, extension)
 
