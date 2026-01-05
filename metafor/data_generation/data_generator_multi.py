@@ -9,6 +9,8 @@ from metafor.simulator.simulate_multi import run_discrete_experiment
 # logging.disable(logging.CRITICAL)
 
 def delete_files(folder: str, extension: str):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
     for file in os.listdir(folder):
         if file.endswith(extension):
             os.remove(os.path.join(folder, file))

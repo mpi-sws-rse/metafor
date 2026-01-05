@@ -5,10 +5,13 @@ import argparse
 import numpy as np
 from metafor.simulator.simulate import run_discrete_experiment
 
-# import logging
-# logging.disable(logging.CRITICAL)
+import logging
+logging.disable(logging.CRITICAL)
 
 def delete_files(folder: str, extension: str):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
     for file in os.listdir(folder):
         if file.endswith(extension):
             os.remove(os.path.join(folder, file))
@@ -61,12 +64,12 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--sim_time", help="maximum simulation time for an individual simulation", type=int, default=1000)
+    parser.add_argument("--sim_time", help="maximum simulation time for an individual simulation", type=int, default=10000)
     parser.add_argument("--runs", help="how many times should the simulation be run", default=30, type=int, required=False)
     parser.add_argument("--qsize", help="maximum size of the arrivals queue", default=100, type=int, required=False)
     parser.add_argument("--rsize", help="maximum size of the retries queue", default=20, type=int, required=False)
     parser.add_argument("--genpkl", help="Generate the pkl files from csv", default=True, type=bool, required=False)
-    parser.add_argument("--fault_duration", help="Duration of fault rate injection as a fraction of simulation time", default=0.1*parser.parse_args().sim_time, type=float, required=False)
+    parser.add_argument("--fault_duration", help="Duration of fault rate injection as a fraction of simulation time", default=0.01*sim_time, type=float, required=False)
     parser.add_argument("--throttle", help="Apply throttling strategy", default=False, type=bool, required=False)
     parser.add_argument("--ts", help="Fraction of queue length used to activate throttling", default=1, type=float, required=False)
     parser.add_argument("--ap", help="Admission probability for throthling", default=1, type=float, required=False)
@@ -81,7 +84,7 @@ def main():
     main_queue_size = args.qsize
     retry_queue_size = args.rsize
     genpkl = args.genpkl
-    fault_duration = args.fault_duration
+    fault_duration = args.fault_duration * sim_time
     throttle = args.throttle
     ts = args.ts
     ap = args.ap
