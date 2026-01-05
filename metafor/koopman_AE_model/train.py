@@ -563,7 +563,8 @@ def main():
     K_matrix = model.K.detach().cpu().numpy()
 
 
-
+    if not os.path.exists("models"):
+        os.makedirs("models")
     with open("models/learned_model.pkl", "wb") as f:
             pickle.dump((model,K_matrix,X,Y,trajectory_list,trajectory_length_list,latent_trajs),f)
 
