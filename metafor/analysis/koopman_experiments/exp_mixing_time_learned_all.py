@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import random, copy
 import os 
 import argparse
-
+import matplotlib.cm as cm
 
 class AutoEncoderModel(nn.Module):
     def __init__(self, input_dim, latent_dim, output_dim):
@@ -116,69 +116,47 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model1_path", help="files", type=str, default="models/learned_model_multi_1.pkl")
-    parser.add_argument("--model2_path", help="files", type=str, default="models/learned_model_multi_2.pkl")
-
+    parser.add_argument("--model_dir", help="files", type=str, default="models/")
+    
     args = parser.parse_args()
-    file1 =  args.model1_path
-    file2 =  args.model2_path
+    
+    mdir =  args.model_dir
+    current_folder = os.getcwd()+"/"+mdir
+    files = os.listdir(current_folder)
 
-
-
-    with open(file1, "rb") as f:
-            model1,K_matrix1,X,Y,trajectory_list1,trajectory_length_list,Z_trajs1 = pickle.load(f)
-    traj_num = len(trajectory_list1)
-    # X_traj1 = []
-    # for i in range(2):
-    #     t1 = []
-    #     for x in trajectory_list1[i]:
-    #         l = [l[0] for l in x]
-    #         t1.append(l)
-    #     X_traj1.append(np.array(t1))
-
+    # Print the files
+    paths = []
+    for file in files:
+        # Check if item is a file, not a directory
+        if not os.path.isdir(os.path.join(current_folder, file)):
+            paths.append(file)
 
     deltas = [0.0001,0.005,0.001,0.05,0.1,0.2,0.3,0.5,0.8,1]
-    data = []
-    data1 = []
-    for d in deltas:
-        P = estimate_P(K_matrix1, kmax=100000)
-        times = empirical_T_delta(K_matrix1, P, [Z for Z in Z_trajs1[0]], delta=d, Tmax=50000)
-        print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
-        data.append(times.mean())
-        data1.append(times.std())
+    colors = cm.rainbow(np.linspace(0, 1, len(paths)))
 
-    data = np.array(data)
-    data1 = np.array(data1)
-    plt.plot(deltas, data, color="tab:green",label='1')
-    # Plot shaded standard deviation
-    plt.fill_between(deltas, data - data1, data + data1, color='green', alpha=0.2)
+    k=0
+    for path, c in zip(paths, colors):
+        k = k + 1
+        with open(current_folder+"/"+path, "rb") as f:
+                model1,K_matrix1,X,Y,trajectory_list1,trajectory_length_list,Z_trajs1 = pickle.load(f)
+        traj_num = len(trajectory_list1)
 
 
+        
+        data = []
+        data1 = []
+        for d in deltas:
+            P = estimate_P(K_matrix1, kmax=100000)
+            times = empirical_T_delta(K_matrix1, P, [Z for Z in Z_trajs1[0]], delta=d, Tmax=50000)
+            print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
+            data.append(times.mean())
+            data1.append(times.std())
 
-
-
-    with open(file2, "rb") as f:
-            model2,K_matrix2,X,Y,trajectory_list2,trajectory_length_list,Z_trajs2 = pickle.load(f)
-    traj_num = len(trajectory_list2)
-
-    data2 = []
-    data3 = []
-    for d in deltas:
-        P = estimate_P(K_matrix2, kmax=100000)
-        times = empirical_T_delta(K_matrix2, P, [Z for Z in Z_trajs2[0]], delta=d, Tmax=50000)
-        print("empirical mean T_delta:", np.mean(times),"  ",np.std(times))
-        data2.append(times.mean())
-        data3.append(times.std())
-
-
-
-    data2 = np.array(data2)
-    data3 = np.array(data3)
-
-    plt.plot(deltas, data2, color="tab:blue",label='2')
-
-    # Plot shaded standard deviation
-    plt.fill_between(deltas, data2 - data3, data2 + data3, color='blue', alpha=0.2)
+        data = np.array(data)
+        data1 = np.array(data1)
+        plt.plot(deltas, data, color=c,label=str(k))
+        # Plot shaded standard deviation
+        plt.fill_between(deltas, data - data1, data + data1, color=c, alpha=0.2)
 
 
     # Label and show
@@ -190,5 +168,11 @@ def main():
     plt.legend(fontsize=22)
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("Mixing_times_multi.pdf")
+    plt.savefig("results/Mixing_times_all.pdf")
+    #print("file saved at results/Mixing_times_all.pdf")
     plt.close()
+
+
+
+if __name__ == '__main__':
+    main()

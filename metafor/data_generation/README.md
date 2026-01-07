@@ -1,23 +1,17 @@
 
 ## 📦 Data Generation    
 
-To generate data:    
-
-```bash
-python data_generation/data_generator.py --runs=100 --sim_time=10000 --fault_duration=0.01  --genpkl=True
-
-```
-This generates data files inside the "data/" folder. Additionally, it also    
-generates a file "discrete_results.pdf" which shows the average queue length    
-and latency for the simulations. 
-
-To generate data in multiserver setting:    
+To generate data:     
 
 ```bash 
-python data_generation/data_generator_multi.py --runs=100 --sim_time=10000 --fault_duration=0.01  --genpkl=True --num_server=2
+python data_generation/data_generator.py --runs=100 --sim_time=10000 --fault_duration=0.01  --genpkl=True --num_server=2
 ```
-Note that this command generates individual files for each server inside the data folder.
-Files for server $k$ can be found in "data/serverk/" folder.
+
+This generates data files inside the "data/" folder. Additionally, it also    
+generates a file "discrete_results.pdf" which shows the average queue length    
+and latency for the simulations. Note that this command generates individual     
+files for each server inside the data folder. Files for server $k$ can be    
+found in "data/serverk/" folder.   
 
 
 

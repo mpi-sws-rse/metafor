@@ -1,28 +1,21 @@
 
 ## 🚀 Analysing the model       
 
-To compute the settling time from the simulation and the theoretical upper bound:      
+To compute the settling time from the simulation and the theoretical upper bound for server1, run:      
 
 ```bash 
-python analysis/koopman_experiments/exp_mixing_time_simulation.py --model_path="models/learned_model.pkl" --data_path="data/sim_data.pkl"   
+python analysis/koopman_experiments/exp_mixing_time_simulation.py --model_path="models/learned_model_server1.pkl" --data_path="data/server1/sim_data.pkl"   
 ```
 
-To compute the settling time from the learned Koopman matrix:      
+To compute the settling time from the learned Koopman matrix for server2, run:      
 
 ```bash 
-python analysis/koopman_experiments/exp_mixing_time_learned.py --model_path="models/learned_model.pkl"
+python analysis/koopman_experiments/exp_mixing_time_learned.py --model_path="models/learned_model_server2.pkl"
 ```
 
-To compute the settling time from the learned Koopman matrix in the multiserver setting:      
+To compute the settling time from the learned Koopman matrix across all the servers:      
 
 ```bash 
-python analysis/koopman_experiments/exp_mixing_time_learned_multi.py --model1_path="models/learned_model_multi_1.pkl"   
-       --model2_path="models/learned_model_multi_2.pkl"
-```
-
-To compare multiple simulations runs:      
-
-```bash 
-python analysis/koopman_experiments/compare_simulations.py --data_dir="data/"
+ python analysis/koopman_experiments/exp_mixing_time_learned_all.py --model_dir="models/"   
 ```
 

@@ -92,7 +92,8 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         current_fn = str(i + 1) + '_' + fn
         file_names.append(current_fn)
         job_type = exp_job(mean_t)
-        clients = sim_fn(mean_t, "client", "request", rho, queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, fault_duration,throttle,ts,ap,queue_type)
+        clients = sim_fn(mean_t, "client", "request", rho, queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, 
+                         fault_duration,throttle,ts,ap,queue_type)
         for client in clients:
             client.server.file = current_fn
             client.server.start_time = time.time()

@@ -5,11 +5,11 @@ import numpy as np
 import pandas
 import time
 from collections import deque
-from typing import List, TextIO
+from typing import List, TextIO, Optional
 
-from metafor.simulator.client import Client, OpenLoopClientWithTimeout
+from metafor.simulator.client_multi import Client, OpenLoopClientWithTimeout
 from metafor.simulator.job import Distribution, Job, JobStatus
-from metafor.simulator.server import Server
+from metafor.simulator.server_multi import Server
 
 import logging
 logger = logging.getLogger(__name__)
@@ -22,6 +22,7 @@ class ServerWithThrottling(Server):
 
     def __init__(
             self, 
+            id : int,
             name: str, 
             queue_size: int, 
             thread_pool: int,
@@ -30,15 +31,18 @@ class ServerWithThrottling(Server):
             client: OpenLoopClientWithTimeout, 
             throttle:bool, 
             ts:float, 
-            ap:float
+            ap:float,
+            downstream_server: Optional['Server']
     ):
             super().__init__(
+                id,
                 name, 
                 queue_size, 
                 thread_pool,
                 service_time_distribution,
                 retry_queue_size, 
-                client
+                client,
+                downstream_server
             )
             self.throttle=throttle
             self.ts = ts
@@ -62,14 +66,14 @@ class ServerWithThrottling(Server):
             If the job is processed, it returns the completed job else None.
         """
 
-        if job.max_retries > job.retries_left: # this is a retried job
+        
+        if job.max_retries > job.retries_left: 
+            # this is a retried job
             self.retries += 1
-            # if self.retries < self.retry_queue_size:
-            #    self.retries += 1
-            #else:
-            #    self.retries += 1
-            #    #self.dropped += 1  # there is not enough space in the virtual retries queue
-            #    #return None
+            current=self.downstream_server
+            while current is not None:
+                current.retries += 1
+                current=current.downstream_server
 
         if self.busy < self.thread_pool:
             # The server isn't entirely busy, so we can start on the job immediately
@@ -77,13 +81,14 @@ class ServerWithThrottling(Server):
             #print("busy ",self.busy,"  ",self.thread_pool)
             for i in range(self.thread_pool):
                 if self.jobs[i] is None:
-                    logger.info("Processing %s at %f" % (job.name, t))
+                    logger.info("Processing %s at %f on server %d" % (job.name, t, self.id))
                     self.jobs[i] = job
                     job.status = JobStatus.PROCESSING
                     service_time = self.service_time_distribution[job.name].sample()
                     #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[job.name].mean,service_time))
                     job.size = service_time
-                    logger.info("Processing %s at %f" % (job.name, t))
+                    logger.info("Processing %s at %f on server %d" % (job.name, t, self.id))
+                    
                     return t + service_time, self.job_done, i
             # Should never get here because jobs slots should always be available if busy < thread_pool
             assert False
@@ -103,7 +108,7 @@ class ServerWithThrottling(Server):
                     job.status = JobStatus.DROPPED
                     logger.info("Dropped %s at %f" % (job.name, t))
                     self.dropped += 1
-                    return t, self.client.on_timeout, job
+                    return t + self.client.timeout, self.client.on_timeout, job
             
             else:
                 job.status = JobStatus.DROPPED

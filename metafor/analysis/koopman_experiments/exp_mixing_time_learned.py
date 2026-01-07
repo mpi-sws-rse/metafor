@@ -167,7 +167,7 @@ def main():
     plt.legend(fontsize=22)
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("Mixing_times_learned.pdf")
+    plt.savefig("results/Mixing_times_learned.pdf")
     plt.close()
 
 

@@ -5,11 +5,11 @@ import numpy as np
 import pandas
 import time
 from collections import deque
-from typing import List, TextIO
+from typing import List, TextIO, Optional
 
-from metafor.simulator.client import Client, OpenLoopClientWithTimeout
+from metafor.simulator.client_multi import Client, OpenLoopClientWithTimeout
 from metafor.simulator.job import Distribution, Job, JobStatus
-from metafor.simulator.server import Server
+from metafor.simulator.server_multi import Server
 
 import logging
 logger = logging.getLogger(__name__)
@@ -44,19 +44,23 @@ class ServerWithLIFO(Server):
 
     def __init__(
             self, 
+            id : int,
             name: str, 
             queue_size: int, 
             thread_pool: int,
             service_time_distribution: dict[str, Distribution],
             retry_queue_size: int, 
-            client: OpenLoopClientWithTimeout
+            client: OpenLoopClientWithTimeout,
+            downstream_server: Optional['Server']
     ):
             super().__init__(
+                id,
                 name, 
                 queue_size, 
                 thread_pool,
                 service_time_distribution,
                 retry_queue_size, 
-                client
+                client,
+                downstream_server
             )
             self.queue: LIFOStack = LIFOStack()

@@ -162,8 +162,6 @@ def main():
     file = args.model_path
     dfile = args.data_path
 
-
-
     with open(file, "rb") as f:
             model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)
 
@@ -230,7 +228,7 @@ def main():
     plt.legend(fontsize=12)
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig("Mixing_times_simulation.pdf")
+    plt.savefig("results/Mixing_times_simulation.pdf")
     plt.close()
 
 

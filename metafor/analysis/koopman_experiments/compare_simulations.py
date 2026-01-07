@@ -5,6 +5,7 @@ from metafor.utils.plot import plot_results
 import numpy as np
 import pandas as pd
 import csv 
+
 pickle_files = ["discrete_results_10.pkl","discrete_results_20.pkl","discrete_results_50.pkl","discrete_results_75.pkl","discrete_results_90.pkl","discrete_results_97.pkl"]  # can be one or multiple files
 
 
@@ -21,7 +22,7 @@ print(len(data))
 step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, rho = data
 
 
-figure_name = 'plot_latency.pdf'
+figure_name = 'results/plot_latency.pdf'
 time = [i * step_time for i in list(range(0, len(qlen_ave)))]
 # Create 4x1 sub plots
 #plt.rcParams["figure.figsize"] = [6, 10]
@@ -65,7 +66,7 @@ plt.close()
 # ax2.set_ylabel("Runtime (sec)", fontsize=8)
 # ax2.grid("on")
 # ax2.set_xlim(0, max(time))
-figure_name = 'plot_qlen.pdf'
+figure_name = 'results/plot_qlen.pdf'
 time = [i * step_time for i in list(range(0, len(qlen_ave)))]
 # Create 4x1 sub plots
 #plt.rcParams["figure.figsize"] = [6, 10]
