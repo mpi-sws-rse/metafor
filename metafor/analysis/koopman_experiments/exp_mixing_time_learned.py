@@ -113,7 +113,7 @@ def main():
     """
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", help="files", type=str, default="models/learned_model.pkl")
+    parser.add_argument("--model_path", help="files", type=str, default="models/learned_model_server1.pkl")
     args = parser.parse_args()
     file =  args.model_path
 

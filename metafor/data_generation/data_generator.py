@@ -3,7 +3,7 @@ import os
 from typing import List
 import argparse
 import numpy as np
-from metafor.simulator.simulate_multi import run_discrete_experiment
+from metafor.simulator.simulate import run_discrete_experiment
 
 import logging
 logging.disable(logging.CRITICAL)
@@ -71,12 +71,12 @@ def main():
     parser.add_argument("--fault_duration", help="Duration of fault rate injection as a fraction of simulation time", default=0.01*sim_time, type=float, required=False)
     parser.add_argument("--throttle", help="Apply throttling strategy", default=False, type=bool, required=False)
     parser.add_argument("--ts", help="Fraction of queue length used to activate throttling", default=1, type=float, required=False)
-    parser.add_argument("--ap", help="Admission probability for throthling", default=1, type=float, required=False)
+    parser.add_argument("--ap", help="Admission probability for throttling", default=1, type=float, required=False)
     parser.add_argument("--queue_type", help="Select fifo or lifo", default="fifo", type=str, required=False)
     
     
     parser.add_argument("--verbose", help="Verbosity", default=True, type=bool, required=False)
-    parser.add_argument("--num_servers", help="Verbosity", default=2, type=int, required=False)
+    parser.add_argument("--num_servers", help="number of servers", default=2, type=int, required=False)
    
   
     args = parser.parse_args()

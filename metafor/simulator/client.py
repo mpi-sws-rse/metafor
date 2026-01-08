@@ -104,7 +104,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         job = Job(name=self.apiname, timestamp=t, max_retries=self.max_retries, retries_left=self.max_retries)
         
         logger.info("Job %f %s" % (t, self.apiname))
-        #print(t, "  ",self.fault_start)
+
         if t < self.fault_start[0]: # must be modified when there are more instances of faults
             next_t = t + self.distribution(self.rate_tps).sample()
             #logger.info(" client rate %f   arrival   %f" % (self.rate_tps,self.distribution(self.rate_tps).sample()))
@@ -115,11 +115,21 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
 
 
         assert self.server is not None, "Server is not set for client " + self.name
+        
+        if self.server is None:
+            return
+        
+        # Get the Job to be processed
         offered = self.server.offer(job, t)
+        
         if offered is None:
-            return [(next_t, self.generate, None)]
+            # No Job is to be processed
+            return [(next_t, self.generate, payload)]
         else:
-            return [(next_t, self.generate, None), (t + self.timeout, self.on_timeout, job), offered]
+            if self.server.downstream_server is not None:
+                return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
+            else:
+                return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
 
     def on_timeout(self, t, job):
         """
@@ -133,20 +143,37 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
             A retry job is scheduled at timeout if job is still under processing else None.
         """
         logger.info("on timeout called at %f with job %s" % (t, job))
-        if job.status != JobStatus.COMPLETED:
-            # we have timed out: generate another instance, if retries left
+        
+        ####################################################
+        # Modifying on_timeout to check all servers in the chain for the 
+        # job’s status, as jobs may be in the queue or processing in
+        # downstream servers.
+        # DESIGN : We use a single, fixed retry budget per job (end-to-end), 
+        # not independent retries per server (from the client’s perspective, 
+        # there is one request.)
+        
+        retried_jobs = []
+        current = self.server
 
+        # if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED}:
+        #     return None
+        #while current: 
+        # DESIGN : A retry is schedules only at the first server
+        if job.status != JobStatus.COMPLETED:
             if job.retries_left > 0:
-                logger.info("Job %f timeout, retrying %d at %f " % (job.created_t, job.max_retries - job.retries_left, t))
+                logger.info(f"Job {job.created_t} timeout, retrying {job.max_retries - job.retries_left} at {t} on {current.sim_name}")
                 job.retries_left -= 1
-                offered = self.server.offer(job, t)
-                if offered is None:
-                    return []
-                else:
-                    return [(t + self.timeout, self.on_timeout, job), offered]
-        else:
-            # this job has been completed or dropped already
-            return []
+                #service_time = current.service_time_distribution[job.name].sample()
+            
+                offered = current.offer(job, t)  # Retry at first server immediately
+                if offered is not None:
+                    retried_jobs.append(offered)
+                
+                retried_jobs.append((t + self.timeout, self.on_timeout, job))
+                #return retried_jobs
+                #t = t + service_time
+        return retried_jobs
+    
         
     def done(self, t: float, event: Job):
         """
@@ -157,5 +184,6 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         #    # Offer another job as a replacement for the timed-out one
         #    return self.server.offer(self.job_type(t, self.max_retries, event.retries_left - 1), t)
         #else:
+        
         event.status = JobStatus.COMPLETED
         return None

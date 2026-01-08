@@ -7,9 +7,9 @@ import time
 from collections import deque
 from typing import List, TextIO, Optional
 
-from metafor.simulator.client_multi import Client, OpenLoopClientWithTimeout
+from metafor.simulator.client import Client, OpenLoopClientWithTimeout
 from metafor.simulator.job import Distribution, Job, JobStatus
-from metafor.simulator.server_multi import Server
+from metafor.simulator.server import Server
 
 import logging
 logger = logging.getLogger(__name__)
