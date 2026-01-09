@@ -457,18 +457,21 @@ class AutoEncoderModel(nn.Module):
 
 
 
-def main():
+def training(
+        data_dir,
+        epochs
+):
     """ 
     Main function 
     """
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", help="files", type=str, default="data")
-    parser.add_argument("--epochs", help="number of epochs", type=int, default=1000)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--data_dir", help="files", type=str, default="data")
+    # parser.add_argument("--epochs", help="number of epochs", type=int, default=1000)
 
-    args = parser.parse_args()
-    data_dir =  args.data_dir
-    epochs = args.epochs
+    # args = parser.parse_args()
+    # data_dir =  args.data_dir
+    # epochs = args.epochs
 
     current_folder = os.getcwd()+"/"+data_dir
     files = os.listdir(current_folder)
@@ -589,5 +592,3 @@ def main():
 
 
 
-if __name__ == '__main__':
-    main()

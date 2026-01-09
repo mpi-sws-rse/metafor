@@ -149,18 +149,21 @@ def koopman_settling_time(A, L_e, L_e_prime, D_S, delta, eps=1e-12):
 
 
 
-def main():
+def mixing_time_simulation(
+    file,
+    dfile
+):
     """ 
     Main function 
     """
 
     
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", help="model files", type=str, default="models/learned_model.pkl")
-    parser.add_argument("--data_path", help="data files", type=str, default="data/sim_data.pkl")
-    args = parser.parse_args()
-    file = args.model_path
-    dfile = args.data_path
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--model_path", help="model files", type=str, default="models/learned_model.pkl")
+    # parser.add_argument("--data_path", help="data files", type=str, default="data/sim_data.pkl")
+    # args = parser.parse_args()
+    # file = args.model_path
+    # dfile = args.data_path
 
     with open(file, "rb") as f:
             model,K_matrix,X,Y,trajectory_list,trajectory_length_list,Z_trajs = pickle.load(f)
@@ -231,7 +234,3 @@ def main():
     plt.savefig("results/Mixing_times_simulation.pdf")
     plt.close()
 
-
-
-if __name__ == '__main__':
-    main()

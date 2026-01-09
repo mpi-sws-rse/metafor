@@ -107,15 +107,17 @@ def empirical_T_delta(K, P, Z0_list, delta, Tmax=2000):
 
 
 
-def main():
+def mixing_time_learned(
+    file
+):
     """ 
     Main function 
     """
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", help="files", type=str, default="models/learned_model_server1.pkl")
-    args = parser.parse_args()
-    file =  args.model_path
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--model_path", help="files", type=str, default="models/learned_model_server1.pkl")
+    # args = parser.parse_args()
+    # file =  args.model_path
 
 
     with open(file, "rb") as f:
@@ -170,7 +172,3 @@ def main():
     plt.savefig("results/Mixing_times_learned.pdf")
     plt.close()
 
-
-
-if __name__ == '__main__':
-    main()

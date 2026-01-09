@@ -110,17 +110,17 @@ def empirical_T_delta(K, P, Z0_list, delta, Tmax=2000):
 
 
 
-def main():
-    """ 
-    Main function 
-    """
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_dir", help="files", type=str, default="models/")
+def mixing_time_learned_all(
+    mdir
+):
+  
+  
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--model_dir", help="files", type=str, default="models/")
     
-    args = parser.parse_args()
+    # args = parser.parse_args()
     
-    mdir =  args.model_dir
+    # mdir =  args.model_dir
     current_folder = os.getcwd()+"/"+mdir
     files = os.listdir(current_folder)
 
@@ -173,6 +173,3 @@ def main():
     plt.close()
 
 
-
-if __name__ == '__main__':
-    main()
