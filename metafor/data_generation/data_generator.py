@@ -4,7 +4,7 @@ from typing import List
 import argparse
 import numpy as np
 from metafor.simulator.simulate import run_discrete_experiment
-from generate_pkl_files import convert_csv_to_pkl
+from metafor.data_generation.generate_pkl_files import convert_csv_to_pkl
 
 import logging
 logging.disable(logging.CRITICAL)
