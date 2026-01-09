@@ -19,7 +19,7 @@ export PYTHONPATH=/path/to/metafor:/path/to/metafor/metafor
 
 Replace `/path/to/metafor` with the actual path to your local clone of the Metafor repository.
 
-### 🚀 Example 1 : Modelling Using CTMCs
+# 🚀 Example 1 : Modelling Using CTMCs
 
 Below is an example where a single-threaded server handles requests at an average rate of \( \mu = 10 \) requests per second (RPS). A client sends requests at \( \lambda = 9.5 \) RPS, each with a timeout of 3 seconds and a maximum of 4 retries.
 
@@ -43,7 +43,7 @@ p.add_source(src)
 p.connect("client", "52")
 ```
 
-# 📊 Running Basic Analysis
+### 📊 Running Basic Analysis
 
 To compute key system metrics such as the average steady-state queue size, sorted eigenvalues of the CTMC, mixing time, and expected hitting time from full to empty queue:
 
@@ -51,7 +51,7 @@ To compute key system metrics such as the average steady-state queue size, sorte
 basic_stats(p)
 ```
 
-# 🧭 Visualizing the CTMC
+### 🧭 Visualizing the CTMC
 
 To visualize the underlying CTMC and identify potential metastable behavior:
 
@@ -62,7 +62,7 @@ v.visualize(show_equilibrium=True)
 
 
 
-### 🚀 Example 2 : Modelling Using Koopman Autoencoders
+# 🚀 Example 2 : Modelling Using Koopman Autoencoders
 The below example shows how to generate data from simulator, use the data to    
 train a koopman autoencoder model and then perform analysis using the model.   
 
