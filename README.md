@@ -67,19 +67,11 @@ The below example shows how to generate data from simulator, use the data to
 train a koopman autoencoder model and then perform analysis using the model.   
 
 
+
+## 🧭 Data generation
+
 ```python
 from metafor.data_generation.data_generator import data_generation
-from metafor.koopman_AE_model.train import training
-from metafor.analysis.koopman_experiments.exp_mixing_time_simulation import mixing_time_simulation
-from metafor.analysis.koopman_experiments.exp_mixing_time_learned import mixing_time_learned
-from metafor.analysis.koopman_experiments.exp_mixing_time_learned_all import mixing_time_learned_all
-
-
-
-"""
-Part 1 : Data generation
-
-"""
 
 # Configuration
 total_time = 1000000 # maximum simulation time (in s) for all the simulations
@@ -111,20 +103,43 @@ data_generation(
     ts, ap, queue_type, dist, num_servers, verbose       
 )
 
+```
 
-"""
-Part 2 : Training
-"""
+This generates data files inside the "data/" folder. Additionally, it also    
+generates a file "discrete_results.pdf" which shows the average queue length    
+and latency for the simulations. Note that this command generates individual     
+files for each server inside the data folder. Files for server $k$ can be    
+found in "data/serverk/" folder.   
+
+
+
+## :fish: Training   
+
+```python
+from metafor.koopman_AE_model.train import training
 
 data_dir="data/" #directory containing the pkl files
 epochs=1000 # number of epochs 
 
 training(data_dir, epochs)
 
+```
 
-"""
-Part 3. Analysis
-"""
+This generates a file "learned_model_serverk.pkl" insider "models/serverk/" for       
+each server k=1..n . The pkl file stores the all the variables associated     
+with the learned model. For instance, for k=2, the training is perfomed two times     
+resulting into two models, each using the data for the corresponding server. The   
+two files can be found at "models/learned_model_server1.pkl" and    
+""models/learned_model_server2.pkl".        
+
+
+
+### 📊 Analysis
+
+```python
+from metafor.analysis.koopman_experiments.exp_mixing_time_simulation import mixing_time_simulation
+from metafor.analysis.koopman_experiments.exp_mixing_time_learned import mixing_time_learned
+from metafor.analysis.koopman_experiments.exp_mixing_time_learned_all import mixing_time_learned_all
 
 # 3.1 : Empirical Mixing time using Simulation 
 
@@ -144,6 +159,10 @@ model_dir="models/"
 mixing_time_learned_all(model_dir)
 
 ```
+
+
+
+
 
 ---
 
