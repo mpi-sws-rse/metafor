@@ -82,7 +82,7 @@ class Simulator:
 
 
 def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_t: float, rho,
-             queue_size, retry_queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, 
+             queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, 
              fault_duration, throttle, ts, ap, queue_type, dist, num_servers):
     """
     Run a simulation `run_nums` times, outputting the results to `x_fn`, where x in [1, num_runs].
@@ -100,7 +100,7 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         current_fn = str(i + 1) + '_' + fn
         file_names.append(current_fn)
         job_type = exp_job(mean_t)
-        servers, clients = sim_fn(mean_t, "client", "request", rho, queue_size, retry_queue_size, 
+        servers, clients = sim_fn(mean_t, "client", "request", rho, queue_size,
                                   timeout_t, max_retries, rho_fault, rho_reset, fault_start, 
                                   fault_duration, throttle, ts, ap, queue_type, dist, num_servers, i)
         
@@ -217,7 +217,7 @@ def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, n
 
 
 # Simulation with unimodal exponential service time and timeout
-def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size: int, retry_queue_size: int, timeout_t: float,
+def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size: int, timeout_t: float,
                  max_retries: int, rho_fault: float, rho_reset: float, fault_start: float,
                  fault_duration: float, throttle:bool, ts:float, ap:float, queue_type:str,
                  dist: str, num_servers :int, sim_id: int) -> List[Client]:
@@ -251,12 +251,12 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
             service_time_distribution = {"request":distribution(1/job_type.mean())}
         
         if throttle==False:
-            server = Server(i, server_name, queue_size, 1, service_time_distribution, retry_queue_size, client, downstream_server=prev_server)
+            server = Server(i, server_name, queue_size, 1, service_time_distribution, client, downstream_server=prev_server)
         else:    
-            server = ServerWithThrottling(i, server_name, queue_size, 1, service_time_distribution, retry_queue_size, client, throttle, ts,ap, downstream_server=prev_server)
+            server = ServerWithThrottling(i, server_name, queue_size, 1, service_time_distribution, client, throttle, ts,ap, downstream_server=prev_server)
         
         if queue_type=="lifo":
-            server = ServerWithLIFO(i, server_name, queue_size, 1, service_time_distribution, retry_queue_size, client,  downstream_server=prev_server)
+            server = ServerWithLIFO(i, server_name, queue_size, 1, service_time_distribution, client,  downstream_server=prev_server)
         
         #downstream = servers[-1] if servers else None
         #server = Server(i,server_name, queue_size, 1, service_time_distribution, retry_queue_size, client, downstream_server=prev_server)
@@ -281,36 +281,21 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
     return servers, clients
 
 
-# Simulation with bimodal service time, without and with timeout
-def make_sim_bimod(mean_t: float, mean_t_2: float, bimod_p: float, rho: float, queue_size: int, retry_queue_size: int,
-                   timeout_t: float, max_retries: int) -> List[Client]:
-    clients = []
-    job_name = "bimod"
-    job_type = bimod_job(mean_t, mean_t_2, bimod_p)
 
-    for name, client in [
-        ("%s" % job_name, OpenLoopClient(rho, job_type)),
-        ("%s_timeout_%d" % (job_name, int(timeout_t)), OpenLoopClientWithTimeout(rho, rho_fault, rho_reset, job_type,
-                                                                                 timeout, max_retries, fault_start,
-                                                                                 fault_duration))
-    ]:
-        server = Server(1, name, client, rho, queue_size, retry_queue_size,client)
-        client.server = server
-        clients.append(client)
-    return clients
-
-
-def run_discrete_experiment(max_t: float, runs: int, mean_t: float, rho: float, queue_size: int, retry_queue_size: int,
-                            timeout_t: float, max_retries: int, total_time: float, step_time: int,
-                            rho_fault: float, rho_reset: float, fault_start: float, fault_duration: float,
-                            throttle : bool, ts : float, ap : float, queue_type : str, dist: str, num_servers : int):
+def run_discrete_experiment(
+        max_t: float, runs: int, mean_t: float, rho: float, queue_size: int,
+        timeout_t: float, max_retries: int, total_time: float, step_time: int,
+        rho_fault: float, rho_reset: float, fault_start: float, fault_duration: float,
+        throttle : bool, ts : float, ap : float, queue_type : str, dist: str, 
+        num_servers : int
+):
    
     results_file_name = "exp_results.csv"
     start_time = time.time()
     process = multiprocessing.Process(target=run_sims, args=(max_t, results_file_name, runs, step_time, make_sim_exp,
-                                                             mean_t, rho, queue_size, retry_queue_size,
-                                                             timeout_t, max_retries, rho_fault, rho_reset, fault_start,
-                                                             fault_duration, throttle, ts, ap, queue_type, dist, num_servers))
+                                                             mean_t, rho, queue_size, timeout_t, max_retries, rho_fault, 
+                                                             rho_reset, fault_start, fault_duration, throttle, ts, ap, 
+                                                             queue_type, dist, num_servers))
     process.start()
     process.join(total_time)
     if process.is_alive():

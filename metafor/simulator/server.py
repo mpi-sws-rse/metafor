@@ -91,7 +91,7 @@ class Server:
 
     def __init__(self, id:int, name: str, queue_size: int, thread_pool: int,
                  service_time_distribution: dict[str, Distribution],
-                 retry_queue_size: int, client: OpenLoopClientWithTimeout,
+                 client: OpenLoopClientWithTimeout,
                  downstream_server: Optional['Server'] = None):
         self.id = id
         self.start_time = 0  # to be set by each simulation
@@ -105,7 +105,6 @@ class Server:
         self.sim_name: str = name
 
         self.thread_pool: int = thread_pool
-        self.retry_queue_size: int = retry_queue_size
 
         self.jobs: List[Job | None] = [None for _ in range(thread_pool)]
         self.client: Client = client

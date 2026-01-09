@@ -224,7 +224,7 @@ def index_composer(n_main_queue, n_retry_queue, qsize, osize):
 if __name__ == '__main__':
     total_time = 1000000 # maximum simulation time (in s) for all the simulations
     main_queue_size = 100 # maximum size of the arrivals queue
-    retry_queue_size = 30 # only used when learning in the space of prob distributions is desired.
+    retry_queue_size = 50 # only used when learning in the space of prob distributions is desired.
     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
     rho = 9.5/10 # server's utilization rate
     

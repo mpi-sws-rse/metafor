@@ -162,6 +162,10 @@ mixing_time_learned_all(model_dir)
 
 
 
+### :beer: TODOs:
+
+1. Add more topologies for multi-server setting (refer simulator/simulate/make_sim_exp).    
+2. Add retry+timeout per server (currently retry handled by job and timeout by client objects).     
 
 
 ---
