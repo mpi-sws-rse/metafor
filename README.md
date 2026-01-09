@@ -134,7 +134,7 @@ two files can be found at "models/learned_model_server1.pkl" and
 
 
 
-### 📊 Analysis
+## 📊 Analysis
 
 ```python
 from metafor.analysis.koopman_experiments.exp_mixing_time_simulation import mixing_time_simulation
