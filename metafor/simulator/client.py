@@ -101,9 +101,16 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
             If a job is already being processed by the server, then a retry 
             job is also scheduled at timeout.
         """
-        job = Job(name=self.apiname, timestamp=t, max_retries=self.max_retries, retries_left=self.max_retries)
+        job = Job(
+            name=self.apiname, 
+            timestamp=t, 
+            max_retries=self.max_retries, 
+            retries_left=self.max_retries,
+            request_id=None,      # auto-generated
+            attempt_id=0,
+            )
         
-        logger.info("Job %f %s" % (t, self.apiname))
+        logger.info(" New Job %s with id %s created at %f" % (self.apiname, job.request_id, t ))
 
         if t < self.fault_start[0]: # must be modified when there are more instances of faults
             next_t = t + self.distribution(self.rate_tps).sample()
@@ -126,10 +133,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
             # No Job is to be processed
             return [(next_t, self.generate, payload)]
         else:
-            if self.server.downstream_server is not None:
-                return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
-            else:
-                return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
+            return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
 
     def on_timeout(self, t, job):
         """
@@ -142,7 +146,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         Returns:
             A retry job is scheduled at timeout if job is still under processing else None.
         """
-        logger.info("on timeout called at %f with job %s" % (t, job))
+        logger.info("on timeout called at %f with job %s with id %s" % (t, job.name, job.request_id))
         
         ####################################################
         # Modifying on_timeout to check all servers in the chain for the 
@@ -153,25 +157,38 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         # there is one request.)
         
         retried_jobs = []
-        current = self.server
+       
 
-        # if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED}:
-        #     return None
-        #while current: 
-        # DESIGN : A retry is schedules only at the first server
-        if job.status != JobStatus.COMPLETED:
-            if job.retries_left > 0:
-                logger.info(f"Job {job.created_t} timeout, retrying {job.max_retries - job.retries_left} at {t} on {current.sim_name}")
-                job.retries_left -= 1
-                #service_time = current.service_time_distribution[job.name].sample()
+        if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED}:
+            return None
+        
+        if job.retries_left <= 0:
+            job.status = JobStatus.DROPPED
+            return None
+        
+        # DESIGN : A retry is schedules only at the current server and the downstream servers
+        #if job.status != JobStatus.COMPLETED:
+        if job.retries_left > 0:
+            logger.info(f"Job {job.created_t} with id {job.request_id} timeout, retrying {job.max_retries - job.retries_left} with attempt {job.attempt_id} at {t} on server {self.server.id}")
+            job.retries_left -= 1
+            job.attempt_id += 1
+            job.status = JobStatus.CREATED
             
-                offered = current.offer(job, t)  # Retry at first server immediately
-                if offered is not None:
-                    retried_jobs.append(offered)
+            job_copy = job.clone_for_branch(t)
+            offered = self.server.offer(job_copy, t)  # Retry at first server immediately
+            if offered is not None:
+                retried_jobs.append(offered)
+                retried_jobs.append((t + self.timeout, self.on_timeout, job_copy))
+                # below downstreaming jobs are handled in job_done in server
+                # for ds in self.server.downstream_server:
+                #     offered = ds.offer(job, t)  # Retry at downstream servers
+                #     if offered is not None:
+                #         retried_jobs.append(offered)
                 
-                retried_jobs.append((t + self.timeout, self.on_timeout, job))
-                #return retried_jobs
-                #t = t + service_time
+                    
+           
+            #return retried_jobs
+            #t = t + service_time
         return retried_jobs
     
         

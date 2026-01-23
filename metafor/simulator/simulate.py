@@ -16,7 +16,7 @@ from metafor.simulator.server_with_throttling import ServerWithThrottling
 from metafor.simulator.server_with_LIFO import ServerWithLIFO
 from metafor.simulator.statistics import StatData
 from metafor.simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
-
+from metafor.simulator.preprocessing import mean_variance_std_dev, compute_mean_variance_std_deviation
 from metafor.utils.plot import plot_results
 from metafor.simulator.job import exp_job, bimod_job, wei_job, ExponentialDistribution, WeibullDistribution
 
@@ -25,6 +25,13 @@ logger = logging.getLogger(__name__)
 
 import pickle
 
+# DAG representing server connections
+dag = {
+    1: [2, 3],
+    2: [4],
+    3: [4],
+    4: []
+}
 
 class Simulator:
     def __init__(self, servers: List['Server'], clients: List['Client'], sim_id: int):
@@ -32,23 +39,23 @@ class Simulator:
 
         self.servers = servers
 
-        self.contexts = [Context(sim_id + 1, i + 1) for i in range(len(servers))]
-        for server, ctx in zip(servers, self.contexts):
-            server.set_context(ctx)
+        # self.contexts = [Context(sim_id + 1, i + 1) for i in range(len(servers))]
+        # for server, ctx in zip(servers, self.contexts):
+        #     server.set_context(ctx)
+        
+        for server_id, server in self.servers.items():
+            server.set_context(Context(sim_id, server_id))
         self.clients = clients
+        self.dag = dag
 
         self.reset()
 
-        for server in self.servers:
+        for server in self.servers.values():
             server.print()
         for client in self.clients:
             client.print()
         logger.setLevel(logging.INFO)
     
-    def __del__(self):
-        for c in self.contexts:
-            c.close()
-
     # to start a simulator from the beginning, reset the state
     def reset(self):
         self.t = 0.0
@@ -56,8 +63,6 @@ class Simulator:
         self.q = [(self.t, client.generate, None) for client in self.clients]
         heapq.heapify(self.q)
 
-    def close(self):
-        self.fp.close()
 
     def sim(self, max_t: float = 60.0):
         # This is the core simulation loop. Until we've reached the maximum simulation time, pull the next event off
@@ -117,13 +122,13 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         directory = os.path.dirname(f"data/{i + 1}_{fn}")
         if directory and not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
-        for server in servers:
+        for sid in servers.keys():
             # print(server,"   ",server.id,"      ",server.downstream_server)
             # print(server.context.result[0:5])
             # print(server.downstream_server.context.result[0:5])
             # #exit() 
-            df = pd.DataFrame(server.context.result, columns=['server', 'timestamp', 'latency', 'queue_length', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time'])
-            df.to_csv(f"data/{i + 1}_{fn}",  header=False,  mode='a', index=False)
+            df = pd.DataFrame(servers[sid].context.result, columns=['server', 'timestamp', 'latency', 'queue_length', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time', 'request_id', 'attempt_id'])
+            df.to_csv(f"data/{i+1}_{fn}",  header=False,  mode='a', index=False)
             # if server.downstream_server:
             #     df = pd.DataFrame(server.downstream_server.context.result, columns=['server', 'timestamp', 'queue_length', 'latency', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time'])
             #     df.to_csv(f"{i + 1}_{fn}", header=False, mode='a', index=False)
@@ -136,7 +141,7 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         # df.to_csv(current_fn, index=False)
 
     #exit()
-    for i in range(1,num_servers+1):
+    for i in range(1,len(servers)+1):
         latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std = mean_variance_std_dev(file_names, max_t, num_runs, step_time, mean_t,i)
         plot_results(step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, "results/discrete_results_server"+str(i)+".pdf")
         directory = os.path.dirname("data/server"+str(i)+"/sim_data.pkl")
@@ -144,77 +149,6 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
             os.makedirs(directory, exist_ok=True)
         with open("data/server"+str(i)+"/sim_data.pkl", "wb") as f:
             pickle.dump((step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, rho), f)
-
-
-def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int, mean_t: float, sid:int):
-    """
-    Print the mean value, the variance, and the standard deviation at each stat point in each second
-    """
-    num_datapoints = math.ceil(max_t / step_time)
-    latency_dateset = np.zeros((num_runs, num_datapoints))
-    runtime_dateset = np.zeros((num_runs, num_datapoints))
-    qlen_dateset = np.zeros((num_runs, num_datapoints))
-    run_ind = 0
-    for file_name in file_names:
-        step_ind = 0
-        with open("data/"+file_name, "r") as f:
-            row_num = len(pd.read_csv("data/"+file_name))
-            for i, line in enumerate(f.readlines()):
-                if i == 0:
-                    continue  # drop the header
-                split_line: List[str] = line.split(',')
-                #print(split_line)
-                server_id = int(split_line[0])
-                if server_id==sid:
-                    if float(split_line[1]) > (step_ind + 1) * step_time:
-                        #latency = float(split_line[2]) * 1
-                        latency = float(split_line[2]) * 1
-                        runtime = float(split_line[6])
-                        qlen = float(split_line[3])
-                        latency_dateset[run_ind, step_ind] = latency
-                        runtime_dateset[run_ind, step_ind] = runtime
-                        qlen_dateset[run_ind, step_ind] = qlen
-                        step_ind += 1
-                    elif i == row_num - 1 and step_ind < num_datapoints:
-                        # latency = float(split_line[2]) * 1
-                        latency = float(split_line[2]) * 1
-                        runtime = float(split_line[6])
-                        qlen = float(split_line[3])
-                        latency_dateset[run_ind, step_ind] = latency
-                        runtime_dateset[run_ind, step_ind] = runtime
-                        qlen_dateset[run_ind, step_ind] = qlen
-        run_ind += 1
-    latency_ave = [0]
-    latency_var = [0]
-    latency_std = [0]
-    runtime = [0]
-    qlen_ave = [0]
-    qlen_var = [0]
-    qlen_std = [0]
-    for step in range(num_datapoints):
-        latency_ave.append(np.mean(latency_dateset[:, step]))
-        latency_var.append(np.var(latency_dateset[:, step]))
-        latency_std.append(np.std(latency_dateset[:, step]))
-        runtime.append(np.sum(runtime_dateset[:, step]))
-        qlen_ave.append(np.mean(qlen_dateset[:, step]))
-        qlen_var.append(np.var(qlen_dateset[:, step]))
-        qlen_std.append(np.std(qlen_dateset[:, step]))
-    return latency_ave,  latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std
-
-
-def write_to_file(fn: str, stats_data: List[StatData], stat_fn, first: bool):
-    with open(fn, "a") as f:
-        if first:
-            f.write(stats_data[0].header() + '\n')
-        result: StatData = stat_fn(stats_data)
-        f.write(result.as_csv() + '\n')
-
-
-def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float):
-    current_folder = os.getcwd()
-    file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
-    mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t)
-
 
 # Simulation with unimodal exponential service time and timeout
 def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size: int, timeout_t: float,
@@ -234,21 +168,18 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
     else:
         raise ValueError(f"Unsupported distribution: {dist}")
 
-
-    servers = []
-    prev_server = None
+    # 1. Create servers 
+    servers: dict[str, Server] = {}
+    prev_server = []
     
-    for i in range(num_servers,0,-1):
+    for i in dag.keys():
         server_name = f"server_{i}"
 
         
         client = OpenLoopClientWithTimeout(name, apiname, distribution, rho, job_type, timeout_t, max_retries, rho_fault, rho_reset, fault_start,
                                     fault_duration)
     
-        if dist =="exp":
-            service_time_distribution = {"request":distribution(1/job_type.mean())}
-        elif dist=="wei":
-            service_time_distribution = {"request":distribution(1/job_type.mean())}
+        service_time_distribution = {"request":distribution(1/job_type.mean())}
         
         if throttle==False:
             server = Server(i, server_name, queue_size, 1, service_time_distribution, client, downstream_server=prev_server)
@@ -258,24 +189,27 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
         if queue_type=="lifo":
             server = ServerWithLIFO(i, server_name, queue_size, 1, service_time_distribution, client,  downstream_server=prev_server)
         
-        #downstream = servers[-1] if servers else None
-        #server = Server(i,server_name, queue_size, 1, service_time_distribution, retry_queue_size, client, downstream_server=prev_server)
+        
         server.set_context(Context(sim_id,i))  #check
         client.server = server
-        #clients.append(client)
-        servers.append(server)
-        prev_server = server
+        
+        servers[i] = server
+        
+    # 2. Connect servers
+    for src, dsts in dag.items():
+        servers[src].downstream_server = [servers[d] for d in dsts]
 
-        if i == 1:  # Only the first server gets a client generating jobs
-            clients.append(client)
-    
-    # Reverse the downstream links (Server1 -> Server2 -> ... -> ServerN)
-    servers = servers[::-1]
-    # for i in range(len(servers) - 1):
-    #     servers[i].downstream_server = servers[i + 1]
+    # 3. Identify entry servers (roots) 
+    all_nodes = set(dag.keys())
+    downstream_nodes = {d for dsts in dag.values() for d in dsts}
+    entry_nodes = list(all_nodes - downstream_nodes)
 
-    #print("inside make_sim_exp ",servers[0].id,"  ")
-    #print("  ",servers[1].id)
+    # 4. Attach clients only to entry nodes
+    clients = []
+    for name in entry_nodes:
+        clients.append(servers[name].client)
+   
+        
     
     #print("  ",servers[0].downstream_server.id)
     return servers, clients

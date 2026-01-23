@@ -6,7 +6,7 @@ from typing import Type, List
 
 import logging
 logger = logging.getLogger(__name__)
-
+import uuid
 
 class Distribution(ABC):
     def __init__(self):
@@ -30,23 +30,6 @@ class WeibullDistribution(Distribution):
     def sample(self) -> float:
         return random.weibullvariate(1.0/self.mean,1.0)
 
-# class HyperexponentialDistribution:
-#     def __init__(self, rates: List[float], probabilities: List[float]):
-#         assert len(rates) == len(probabilities), "Rates and probabilities must have the same length"
-#         assert abs(sum(probabilities) - 1.0) < 1e-6, "Probabilities must sum to 1"
-#         self.rates = rates  # List of rate parameters for each exponential component
-#         self.probabilities = probabilities  # Weights for each component
-
-#     def sample(self):
-#         # Choose a component based on probabilities
-#         component = random.choices(range(len(self.rates)), weights=self.probabilities, k=1)[0]
-#         # Sample from the selected exponential distribution
-#         return random.expovariate(self.rates[component])
-
-#     def mean(self):
-#         # Mean of hyperexponential is the weighted sum of individual means
-#         return sum(p / r for p, r in zip(self.probabilities, self.rates))
-
 
 class JobStatus:
     CREATED = 0
@@ -67,7 +50,8 @@ class JobStatus:
 
 
 class Job(ABC):
-    def __init__(self, name: str, timestamp: float, max_retries: int = 0, retries_left: int = 0):
+    def __init__(self, name: str, timestamp: float, max_retries: int = 0, retries_left: int = 0,
+                 request_id: str | None = None, attempt_id: int = 0):
         self.created_t: float = timestamp
         self.completed_t: float = 0.0
         self.name = name
@@ -75,6 +59,8 @@ class Job(ABC):
         self.max_retries: int = max_retries
         self.retries_left: int = retries_left
         self.size: float = 0
+        self.request_id = request_id or str(uuid.uuid4())
+        self.attempt_id = attempt_id
 
     def __str__(self):
         return "[%s: created %f, status: %s]" % (self.name, self.created_t, JobStatus.__str__(self.status))
@@ -82,6 +68,32 @@ class Job(ABC):
     @staticmethod
     def mean() -> float:
         pass
+    
+
+    def clone_for_branch(self, t:float) -> "Job":
+        """
+        Create a new Job instance for a DAG branch.
+        Shares request identity, but has independent execution state.
+        """
+        new_job = self.__class__(
+            name=self.name,
+            timestamp=self.created_t,
+            max_retries=self.max_retries,
+            retries_left=self.retries_left,
+        )
+
+        # Reset execution-specific fields
+        new_job.status = JobStatus.CREATED
+        new_job.created_t = self.created_t
+        new_job.size = 0.0  # must be resampled by server
+
+        # Logical request identity
+        new_job.request_id = self.request_id
+
+        # New attempt for branch
+        new_job.attempt_id = self.attempt_id + 1
+
+        return new_job
 
 
 

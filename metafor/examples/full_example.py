@@ -5,7 +5,8 @@ from metafor.analysis.koopman_experiments.exp_mixing_time_simulation import mixi
 from metafor.analysis.koopman_experiments.exp_mixing_time_learned import mixing_time_learned
 from metafor.analysis.koopman_experiments.exp_mixing_time_learned_all import mixing_time_learned_all
 
-
+# import logging
+# logging.disable(logging.CRITICAL)
 
 """
 Part 1 : Data generation
@@ -19,21 +20,21 @@ mean_t = 0.1 # mean of the exponential distribution (in ms) related to processin
 rho = 9.7/10 # server's utilization rate
 timeout_t = 9 # timeout after which the client retries, if the job is not done
 max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
-runs = 10 # how many times should the simulation be run
+runs = 5 # how many times should the simulation be run
 step_time = 0.5 # sampling time
-sim_time = 10000 # maximum simulation time for an individual simulation
+sim_time = 1000 # maximum simulation time for an individual simulation
 #rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
-rho_fault = rho*10 # utilization rate during a fault
+rho_fault = rho # utilization rate during a fault
 fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
 rho_reset = rho * 5 / 5 # utilization rate after removing the fault
-fault_duration = sim_time * .01  # fault duration
+fault_duration = sim_time * .1  # fault duration
 dist = "exp"
 throttle=False
 ts = 0.9
 ap = 0.5
 queue_type="fifo"
 verbose = True
-num_servers = 1
+num_servers = 4
 
 data_generation(
     sim_time, runs, mean_t, rho, queue_size, timeout_t, 

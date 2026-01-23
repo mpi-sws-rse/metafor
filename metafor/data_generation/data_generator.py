@@ -6,8 +6,6 @@ import numpy as np
 from metafor.simulator.simulate import run_discrete_experiment
 from metafor.data_generation.generate_pkl_files import convert_csv_to_pkl
 
-import logging
-logging.disable(logging.CRITICAL)
 
 def delete_files(folder: str, extension: str):
     if not os.path.exists(folder):
@@ -55,9 +53,6 @@ def data_generation(
 
     delete_results([".csv", ".png"])
 
-
-    if verbose==False:
-        logging.disable(logging.CRITICAL)
 
     run_discrete_experiment(sim_time, runs, mean_t, rho, queue_size, timeout_t, max_retries,
                             total_time, step_time, rho_fault, rho_reset, fault_start, fault_duration,  throttle, 

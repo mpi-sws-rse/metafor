@@ -84,6 +84,9 @@ class FCFSQueue:
         return "FCFS"
 
 
+
+
+
 class Server:
     """
     Server that consumes a queue of tasks of a fixed size (`queue_size`), with a fixed concurrency (MPL)    
@@ -163,7 +166,7 @@ class Server:
                     current.retries -= 1
                     current=current.downstream_server
                 
-            logger.info("Completing %s at %f on server %d" % (completed.name, t,self.id))
+            logger.info("Completing %s with id %s at %f on server %d" % (completed.name, completed.request_id, t,self.id))
 
             end_time = time.time()
             runtime = end_time - self.start_time
@@ -182,6 +185,8 @@ class Server:
             'runtime' : time.time() - self.start_time,
             'retries_left' : self.jobs[n].retries_left,
             'service_time' : self.jobs[n].size,
+            'request_id' : self.jobs[n].request_id,
+            'attempt_id' : self.jobs[n].attempt_id,
             })
             #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
         # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
@@ -189,21 +194,22 @@ class Server:
         events = []
         
         # In job_done, forward completed jobs to downstream_server.offer if downstream_server exists.
-        if self.downstream_server is not None:
-            #service_time = self.service_time_distribution[self.jobs[n].name].sample()
-            # self.jobs[n].size = service_time
-            offered = self.downstream_server.offer(completed, t)
-            # we do not add service time to t as it is already being done at l:258
-            if offered is not None:
-                events.append(offered)
-        #     #events.append((t + service_time, self.downstream_server.job_done, n))
-            
-            
+        # if self.downstream_server is not None:
+        #     offered = self.downstream_server.offer(completed, t)
+        #     if offered is not None:
+        #         events.append(offered)
+        if self.downstream_server:
+            for ds in self.downstream_server:
+                job_copy = completed.clone_for_branch(t)
+                offered = ds.offer(job_copy, t)
+                if offered:
+                    events.append(offered)
+
         
         if self.queue.len() > 0:
             next_job = self.queue.pop()
             next_job.status = JobStatus.PROCESSING
-            logger.info("Dequeueing %s created %f at %f" % (next_job.name, next_job.created_t, t))
+            logger.info("Dequeueing %s with id %s created %f at %f on server %d" % (next_job.name, next_job.request_id, next_job.created_t, t,self.id))
 
             self.jobs[n] = next_job
             service_time = self.service_time_distribution[next_job.name].sample()
@@ -232,14 +238,16 @@ class Server:
             If the job is processed, it returns the completed job else None.
         """
 
+        events = []
+
         if job.max_retries > job.retries_left: 
             # this is a retried job
             self.retries += 1
-            current=self.downstream_server
-            while current is not None:
-                current.retries += 1
-                current=current.downstream_server
-                
+            for ds in self.downstream_server:
+                ds.retries += 1
+            
+
+                    
            
         ##########################################################
         # Ensure dropped jobs or retries are handled consistently, 
@@ -249,15 +257,17 @@ class Server:
         if self.busy < self.thread_pool:
             # The server isn't entirely busy, so we can start on the job immediately
             self.busy += 1
+            #print("busy $$$$$  ")
             for i in range(self.thread_pool):
                 if self.jobs[i] is None:
-                    logger.info("Processing %s at %f on server %d" % (job.name, t, self.id))
+                    #print("processing $$$$$  ")
+                    #logger.info("Processing %s with id %s at %f on server %d" % (job.name, job.request_id, t, self.id))
                     self.jobs[i] = job
                     job.status = JobStatus.PROCESSING
                     service_time = self.service_time_distribution[job.name].sample()
                     #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[job.name].mean,service_time))
                     job.size = service_time
-                    logger.info("Processing %s at %f on server %d" % (job.name, t, self.id))
+                    logger.info("Processing %s with id %s at %f on server %d" % (job.name, job.request_id, t, self.id))
                     #print("job  offered at server",self.id,"  ",self.downstream_server)
                     # if self.downstream_server is not None:
                     #     offered = self.downstream_server.offer(job, t)
@@ -273,11 +283,11 @@ class Server:
             # The server is busy, so try to enqueue the job, if there is enough space in the queue
             if self.queue.len() < self.queue_size:
                 job.status = JobStatus.ENQUEUED
-                logger.info("Enqueueing %s at %f" % (job.name, t))
+                logger.info("Enqueueing %s with id %s at %f on server %d" % (job.name, job.request_id, t, self.id))
                 self.queue.append(job)
             else:
                 job.status = JobStatus.DROPPED
-                logger.info("Dropped %s at %f" % (job.name, t))
+                logger.info("Dropped %s with id %s at %f  on server %d" % (job.name, job.request_id, t, self.id))
                 self.dropped += 1
-                return t + self.client.timeout, self.client.on_timeout, job
+                #return t + self.client.timeout, self.client.on_timeout, job
             return None
