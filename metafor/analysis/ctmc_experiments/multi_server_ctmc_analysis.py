@@ -7,8 +7,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.sparse.linalg import eigs
 
-from model.multi_server.generator_matrix import GeneratorMatrix
-from model.multi_server.ctmc import MultiServerCTMC
+from metafor.ctmc_model.multi_server.generator_matrix import GeneratorMatrix
+from metafor.ctmc_model.multi_server.ctmc import MultiServerCTMC
 
 def analysis(ctmc: MultiServerCTMC,
              step_time,

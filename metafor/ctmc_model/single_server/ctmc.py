@@ -10,7 +10,7 @@ import scipy
 import time
 import itertools
 
-from model.ctmc import CTMC, CTMCRepresentation, Matrix
+from metafor.ctmc_model.ctmc import CTMC, CTMCRepresentation, Matrix
 
 
 class SingleServerCTMC(CTMC):

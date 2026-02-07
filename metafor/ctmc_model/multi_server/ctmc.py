@@ -8,7 +8,7 @@ import copy
 import scipy
 
 #from model.ctmc import CTMC
-from model.multi_server.generator_matrix import GeneratorMatrix
+from metafor.ctmc_model.multi_server.generator_matrix import GeneratorMatrix
 import time
 from scipy.sparse.linalg import gmres, eigs
 import itertools

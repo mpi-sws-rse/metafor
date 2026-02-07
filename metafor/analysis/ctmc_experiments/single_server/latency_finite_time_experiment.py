@@ -1,10 +1,10 @@
 from typing import Any, Dict
 
-from analysis.experiment import Experiment
-from dsl.dsl import Source, Server, Work, Program
+from metafor.analysis.ctmc_experiments.experiment import Experiment
+from metafor.dsl.dsl import Source, Server, Work, Program
 
-from model.single_server.ctmc import SingleServerCTMC
-from utils.plot import plot_results
+from metafor.ctmc_model.single_server.ctmc import SingleServerCTMC
+from metafor.utils.plot import plot_results
 
 
 class TestLatencyFiniteTime(Experiment):

@@ -1,8 +1,8 @@
 import math
 from typing import Any, Callable
 import unittest
-from analysis.experiment import Experiment, Parameter, ParameterList, extract_name_val
-from dsl.dsl import Source, Server, Work, Program
+from metafor.analysis.ctmc_experiments.experiment import Experiment, Parameter, ParameterList, extract_name_val
+from metafor.dsl.dsl import Source, Server, Work, Program
 
 from numpy import linspace
 import pandas
@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 
-from model.single_server.ctmc import SingleServerCTMC
+from metafor.ctmc_model.single_server.ctmc import SingleServerCTMC
 import numpy as np
 from scipy.optimize import differential_evolution
 

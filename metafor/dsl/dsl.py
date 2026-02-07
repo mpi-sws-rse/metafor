@@ -6,9 +6,9 @@ import numpy.typing as npt
 from numpy import float64
 
 from metafor.utils.graph import Graph
-from metafor.model.ctmc import CTMC, CTMCRepresentation
-from metafor.model.multi_server.ctmc import MultiServerCTMC
-from metafor.model.single_server.ctmc import SingleServerCTMC
+from metafor.ctmc_model.ctmc import CTMC, CTMCRepresentation
+from metafor.ctmc_model.multi_server.ctmc import MultiServerCTMC
+from metafor.ctmc_model.single_server.ctmc import SingleServerCTMC
 
 from metafor.simulator import Server as DESServer
 from metafor.simulator import OpenLoopClientWithTimeout as DESOpenLoopClientWithTimeout

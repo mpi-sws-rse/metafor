@@ -4,7 +4,7 @@ from abc import abstractmethod
 import time
 from typing import Any, Iterable
 
-from dsl.dsl import Program
+from metafor.dsl.dsl import Program
 
 
 # A parameter name is a tuple of strings, starting with "server" or "source"

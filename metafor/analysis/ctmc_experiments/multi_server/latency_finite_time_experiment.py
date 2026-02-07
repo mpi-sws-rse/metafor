@@ -2,11 +2,11 @@ from typing import Any, Dict
 
 import numpy as np
 
-from analysis.experiment import Experiment
-from dsl.dsl import Source, Server, Work, Program, DependentCall, Constants
-from model.multi_server.ctmc import MultiServerCTMC
+from metafor.analysis.ctmc_experiments.experiment import Experiment
+from metafor.dsl.dsl import Source, Server, Work, Program, DependentCall, Constants
+from metafor.ctmc_model.multi_server.ctmc import MultiServerCTMC
 
-from utils.plot import plot_results
+from metafor.utils.plot import plot_results
 
 
 class TestLatencyFiniteTime(Experiment):

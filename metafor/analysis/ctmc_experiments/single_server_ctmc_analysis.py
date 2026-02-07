@@ -4,15 +4,15 @@ from typing import List
 import numpy as np
 import scipy
 
-from model.single_server.ctmc import SingleServerCTMC, CTMCRepresentation
-from utils.plot import (
+from metafor.ctmc_model.single_server.ctmc import SingleServerCTMC, CTMCRepresentation
+from metafor.utils.plot import (
     trigger_plot_generator,
     plot_bar_data,
     plot_results_latency,
     plot_results_reset,
 )
 from matplotlib import pyplot as plt
-from dsl.dsl import Source, Server, Work, Program
+from metafor.dsl.dsl import Source, Server, Work, Program
 
 def fault_scenario_plot_generator(
     variable1: str,

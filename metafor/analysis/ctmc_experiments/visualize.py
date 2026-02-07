@@ -1,7 +1,7 @@
 
 from itertools import dropwhile, takewhile
 from typing import Dict, Optional
-from metafor.analysis.experiment import Experiment, Parameter, ParameterList
+from metafor.analysis.ctmc_experiments.experiment import Experiment, Parameter, ParameterList
 from metafor.dsl.dsl import Constants, DependentCall, Program, Server, Source, Work
 import math
 from matplotlib import pyplot as plt
@@ -100,26 +100,61 @@ class Visualizer:
         return rate
 
     def _compute_retries_and_timeout(self, p: Program, all_servers: list[Server], s: Server):
+        
         if s.name == p.get_root_server().name:
             # for the root, the retry/timeouts are driven by the exogenous source
             sources = p.get_sources(s)
             assert len(sources) == 1
             return sources[0].retries, sources[0].timeout
-        else:
-            # for the other servers, the retry/timeouts are given by the dependent calls from the upstream server
-            # find the caller
-            caller = p.get_root_server()
-            for server in all_servers[1:]:
-                if server.name == s.name:
-                    break
-                else:
-                    caller = server
-            assert (len(caller.apis) == 1), "Server %s has more than one API call" % server.name
-            print("Caller: ", caller)
-            apiname = list(server.apis)[0]
-            downstream = caller.get_work(apiname).downstream
-            assert (len(downstream) == 1)
-            return (downstream[0].retry, downstream[0].timeout)
+            
+        idx = next(i for i, srv in enumerate(all_servers) if srv.name == s.name)
+        assert idx > 0, f"Server {s.name} has no upstream caller"
+
+        caller = all_servers[idx - 1]
+
+        # Caller must have exactly one API (enforced elsewhere)
+        assert len(caller.apis) == 1, (
+            f"Server {caller.name} has more than one API call"
+        )
+
+        apiname = next(iter(caller.apis))
+        work: Work = caller.get_work(apiname)
+
+        # Find the dependent call that targets `s`
+        for dep in work.downstream:
+            # Most common patterns
+            if (
+                getattr(dep, "callee", None) == s.name or
+                getattr(dep, "target", None) == s.name or
+                getattr(dep, "server_name", None) == s.name or
+                getattr(dep, "dst", None) == s.name or
+                getattr(getattr(dep, "work", None), "server", None) == s.name
+            ):
+                return dep.retry, dep.timeout
+
+        raise AssertionError(
+            f"No dependent call from {caller.name} to {s.name}"
+        )
+
+
+
+        # else:
+        #     # for the other servers, the retry/timeouts are given by the dependent calls from the upstream server
+        #     # find the caller
+
+        # caller = p.get_root_server()
+        # for server in all_servers[1:]:
+        #     if server.name == s.name:
+        #         break
+        #     else:
+        #         caller = server
+        # assert (len(caller.apis) == 1), "Server %s has more than one API call" % server.name
+        # print("Caller: ", caller)
+        # apiname = list(server.apis)[0]
+        # downstream = caller.get_work(apiname).downstream
+        # assert (len(downstream) == 1)
+        # return (downstream[0].retry, downstream[0].timeout)
+
 
     # Multi server
     def _compute_params_general(self, p: Program, server: Server, qsizes: Dict[str, int], osizes: Dict[str, int]):

@@ -173,7 +173,7 @@ Feel free to modify this example or plug in more complex workloads and topologie
 
 ## ✉️ Contact
 
-For questions, feedback, or collaboration inquiries, feel free to reach out to **msalamati@mpi-sws.org**.
+For questions, feedback, or collaboration inquiries, feel free to reach out to **niksingh@mpi-sws.org**.
 
 
 

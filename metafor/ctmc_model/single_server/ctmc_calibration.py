@@ -23,9 +23,6 @@ from scipy.optimize import curve_fit
 from scipy.optimize import least_squares
 from scipy.optimize import minimize
 
-sys.path.append("/Users/mahmoud/Documents/GITHUB")
-sys.path.append("/Users/mahmoud/Documents/GITHUB/metafor")
-sys.path.append("/Users/mahmoud/Documents/GITHUB/metafor/metafor")
 
 from metafor.dsl.dsl import Server, Work, Source, Program
 

@@ -7,25 +7,27 @@ name = "metafor"
 version = "0.1.0"
 dependencies = [
   "numpy==1.26.4",
-  "scipy==1.15.3",
+  "scipy",
   "pandas==2.2.3",
-  "matplotlib==3.10.3",
-  "fiddle",
-  "scikit-learn==1.6.1",
+  "matplotlib",
+  "torch==1.13.0",
+  "scikit-learn",
 ]
 
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 authors = [
   {name = "Alexandra Bugariu", email = "bugariua@mpi-sws.org"},
   {name = "Rupak Majumdar", email = "rupak@mpi-sws.org"},
   {name = "Mahmoud Salamati", email="msalamati@mpi-sws.org"},
+  {name = "Nikhil Singh", email = "niksingh@mpi-sws.org"},
   {name = "Sadegh Soudjani", email = "sadegh@mpi-sws.org"},
 ]
 maintainers = [
   {name = "Mahmoud Salamati", email = "msalamati@mpi-sws.org"}
+  {name = "Nikhil Singh", email = "niksingh@mpi-sws.org"}
 ]
 
-description = "A CTMC-based analysis tool for software systems"
+description = "A tool for metastability analysis"
 readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["CTMC", "queueing systems", "metastability" ]
