@@ -21,8 +21,22 @@ def delete_results(extensions: List[str]):
     for extension in extensions:
         delete_files(current_folder, extension)
 
+delete_results([".csv", ".png"])
+# DAG representing server connections
+# dag = {
+#     1: [2, 3],
+#     2: [4],
+#     3: [4],
+#     4: []
+# }
 
-
+dag = {
+    1: [2],        # Auth → Gateway
+    2: [3,4],    # Gateway fan-out
+    3: [5],        # Rec → DB
+    4: [5],        # Order → DB
+    5: []          # DB leaf
+}
 
 def data_generation(
         sim_time, 
@@ -43,7 +57,7 @@ def data_generation(
         ap=0.5, 
         queue_type="fifo", 
         dist="exp", 
-        num_servers=1,
+        dag=dag,
         verbose=True,
         
 ):
@@ -51,15 +65,42 @@ def data_generation(
     Main function that generates simulation data (.csv files) based on values of different parameters.
     """
 
-    delete_results([".csv", ".png"])
+   
 
 
-    run_discrete_experiment(sim_time, runs, mean_t, rho, queue_size, timeout_t, max_retries,
-                            total_time, step_time, rho_fault, rho_reset, fault_start, fault_duration,  throttle, 
-                            ts, ap, queue_type, dist, num_servers)
+    run_discrete_experiment(
+        sim_time, 
+        runs, 
+        mean_t, 
+        rho, 
+        queue_size, 
+        timeout_t, 
+        max_retries,
+        total_time, 
+        step_time, 
+        rho_fault, 
+        rho_reset, 
+        fault_start, 
+        fault_duration,  
+        throttle, 
+        ts, 
+        ap, 
+        queue_type, 
+        dist, 
+        dag
+    )
 
 
-       
-    convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration, num_servers)
+    convert_csv_to_pkl(
+        sim_time, 
+        runs, 
+        mean_t, 
+        rho, 
+        step_time, 
+        rho_fault, 
+        fault_start, 
+        fault_duration, 
+        dag
+    )
 
 

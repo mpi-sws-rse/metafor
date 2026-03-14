@@ -7,6 +7,8 @@ from typing import Type, List
 import logging
 logger = logging.getLogger(__name__)
 import uuid
+from collections import defaultdict
+import copy
 
 class Distribution(ABC):
     def __init__(self):
@@ -31,6 +33,26 @@ class WeibullDistribution(Distribution):
         return random.weibullvariate(1.0/self.mean,1.0)
 
 
+
+
+class NormalDisttribution(Distribution):
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def sample(self):
+        return max(0, random.gauss(self.mean, self.std))
+
+
+class LogNormalDistribution(Distribution):
+    def __init__(self, mu, sigma):
+        self.mu = mu
+        self.sigma = sigma
+
+    def sample(self):
+        return random.lognormvariate(self.mu, self.sigma)
+
+
 class JobStatus:
     CREATED = 0
     ENQUEUED = 1
@@ -50,8 +72,15 @@ class JobStatus:
 
 
 class Job(ABC):
-    def __init__(self, name: str, timestamp: float, max_retries: int = 0, retries_left: int = 0,
-                 request_id: str | None = None, attempt_id: int = 0):
+    def __init__(
+            self, 
+            name: str, 
+            timestamp: float, 
+            max_retries: int = 0, 
+            retries_left: int = 0,
+            request_id: str | None = None, 
+            attempt_id: int = 0
+    ):
         self.created_t: float = timestamp
         self.completed_t: float = 0.0
         self.name = name
@@ -61,6 +90,10 @@ class Job(ABC):
         self.size: float = 0
         self.request_id = request_id or str(uuid.uuid4())
         self.attempt_id = attempt_id
+        self.client = None
+
+        # retry attempts per server
+        self.server_attempts = defaultdict(int)
 
     def __str__(self):
         return "[%s: created %f, status: %s]" % (self.name, self.created_t, JobStatus.__str__(self.status))
@@ -69,31 +102,60 @@ class Job(ABC):
     def mean() -> float:
         pass
     
-
+    
     def clone_for_branch(self, t:float) -> "Job":
-        """
-        Create a new Job instance for a DAG branch.
-        Shares request identity, but has independent execution state.
-        """
-        new_job = self.__class__(
-            name=self.name,
-            timestamp=self.created_t,
-            max_retries=self.max_retries,
-            retries_left=self.retries_left,
-        )
 
-        # Reset execution-specific fields
-        new_job.status = JobStatus.CREATED
-        new_job.created_t = self.created_t
-        new_job.size = 0.0  # must be resampled by server
+        new = copy.copy(self)
+        # we do NOT reset created_t (keeps end-to-end latency)
+        new.completed_t = 0
+        new.status = JobStatus.CREATED
 
-        # Logical request identity
-        new_job.request_id = self.request_id
+        # ensures retry tracking is independent
+        new.server_attempts = self.server_attempts.copy()
 
-        # New attempt for branch
-        new_job.attempt_id = self.attempt_id + 1
+        return new
+    
+    def clone_for_retry(self, t: float) -> "Job":
 
-        return new_job
+        new = copy.copy(self)
+
+        new.completed_t = 0
+        new.status = JobStatus.CREATED
+
+        new.server_attempts = self.server_attempts.copy()
+
+        new.attempt_id += 1
+
+        return new
+
+    def is_retry(self):
+        return self.attempt_id > 0
+
+
+    # def clone_for_branch(self, t:float) -> "Job":
+    #     """
+    #     Create a new Job instance for a DAG branch.
+    #     Shares request identity, but has independent execution state.
+    #     """
+    #     new_job = self.__class__(
+    #         name=self.name,
+    #         timestamp=self.created_t,
+    #         max_retries=self.max_retries,
+    #         retries_left=self.retries_left,
+    #     )
+
+    #     # Reset execution-specific fields
+    #     new_job.status = JobStatus.CREATED
+    #     new_job.created_t = self.created_t
+    #     new_job.size = 0.0  # must be resampled by server
+
+    #     # Logical request identity
+    #     new_job.request_id = self.request_id
+
+    #     # New attempt for branch
+    #     new_job.attempt_id = self.attempt_id + 1
+
+    #     return new_job
 
 
 

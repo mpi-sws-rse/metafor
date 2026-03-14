@@ -18,12 +18,13 @@ import pickle
 # Print the mean value, the variance, and the standard deviation at each stat point in each second
 def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, step_time: int,
                           mean_t: float, rho: float, rho_fault: float, fault_start: float, fault_duration: float,
-                          num_servers: int, qsize: int, osize: int):
+                          dag: dict, qsize: int, osize: int):
     result = []
     server_id = None
     global done
     
-    for sid in range(1,num_servers+1):
+    for sid in dag.keys():
+        print("sid ",type(sid))
        
         ss_size = qsize * osize * 2 # this is used to create the two-dimensional state space for computing empirical dist pi_seq
         num_traj = len(fault_start)  # number of continuous trajectories (currently there are only two)
@@ -48,6 +49,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
             slen_dataset.append(np.zeros((num_runs, num_datapoints[l])))
         run_ind = 0
         actual_data_num_seq = [[]*i for i in range(len(file_names))] # list of the "actual" number of datapoints per run
+        
         for file_name in file_names:
             k_overall = 1 # this index is used to track number of datapoints in the run
             traj_idx = 0 # this index keeps track of the trajectory id
@@ -61,6 +63,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
             last_s_val = 0
 
             wait_ind = False # while true, must wait until the end of the fault period
+            
             with open("data/"+file_name, "r") as f:
                 row_num = len(pd.read_csv("data/"+file_name))
                 for i, line in enumerate(f.readlines()):
@@ -68,9 +71,10 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                         continue  # drop the header
                     split_line: List[str] = line.split(',')
                     server_id = int(split_line[0])
+                    print("serverid ",server_id,"  ",server_id==sid )
                     
                     if server_id==sid:
-                        #print(server_id,"  ",sid)
+                        print(server_id,"  ",sid)
 
                         current_cont_time = float(split_line[1])
                         # checking if the current traj is over (and simulation isn't over)
@@ -107,7 +111,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                             last_r_val = float(split_line[7])
                             last_s_val = float(split_line[8])
                             # update the content of datasets
-                            #print(" traj_idx ",traj_idx," run ind ",run_ind,"  k_overall ",k_overall)
+                            print(" traj_idx ",traj_idx," run ind ",run_ind,"  k_overall ",k_overall)
 
                             qlen_dataset[traj_idx][run_ind, k_overall] = last_q_val
                             olen_dataset[traj_idx][run_ind, k_overall] = last_o_val
@@ -149,7 +153,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                         r_step += rlen_dataset[traj_idx][run_ind, step] / num_runs
                         s_step += slen_dataset[traj_idx][run_ind, step] / num_runs
                         pi_diff = np.zeros(ss_size)
-                        print("qlen_dataset[traj_idx][run_ind, step],  ",qlen_dataset[traj_idx][run_ind, step], " olen_dataset[traj_idx][run_ind, step],  ",olen_dataset[traj_idx][run_ind, step])
+                        #print("qlen_dataset[traj_idx][run_ind, step],  ",qlen_dataset[traj_idx][run_ind, step], " olen_dataset[traj_idx][run_ind, step],  ",olen_dataset[traj_idx][run_ind, step])
                         state = min(ss_size - 1,
                                     index_composer(qlen_dataset[traj_idx][run_ind, step], olen_dataset[traj_idx][run_ind, step], qsize, osize))
                         pi_diff[int(state)] = 1 / num_runs
@@ -168,26 +172,27 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
 
 
 
-def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration, num_servers, qsize, osize):
+def compute_mean_variance_std_deviation(fn: str, max_t: float, step_time: int, num_runs: int, mean_t: float, rho, rho_fault, fault_start, fault_duration, dag, qsize, osize):
     current_folder = os.getcwd()+"/data/"
     directory = os.path.dirname(current_folder)
     if directory and not os.path.exists(directory):
         os.makedirs(directory, exist_ok=True)
     file_names = [file for file in os.listdir(current_folder) if file.endswith(fn)]
     # qsize and osize are fixed...
-    result = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, num_servers, qsize, osize)
+    print("filenames. ",file_names)
+    result = mean_variance_std_dev(file_names, max_t, step_time, num_runs, mean_t, rho, rho_fault, fault_start, fault_duration, dag, qsize, osize)
     return result
 
 
 
 def convert_csv_to_pkl(max_t: float, runs: int, mean_t: float, rho: float, step_time: int,
-                            rho_fault: float, fault_start: float, fault_duration: float, num_servers:int, qsize: int=100, osize: int=30):
+                            rho_fault: float, fault_start: float, fault_duration: float, dag:dict, qsize: int=100, osize: int=30):
     results_file_name = "exp_results.csv"
 
     result = compute_mean_variance_std_deviation(results_file_name, max_t, runs, step_time, mean_t, rho,
-                                                       rho_fault, fault_start, fault_duration, num_servers, qsize, osize)
+                                                       rho_fault, fault_start, fault_duration, dag, qsize, osize)
 
-    for i in range(1,num_servers+1):
+    for i in dag.keys():
         q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = result[i-1]    
         # Save
         directory = os.path.dirname("data/server"+str(i)+"/q_seq.pkl")
@@ -221,29 +226,29 @@ def index_composer(n_main_queue, n_retry_queue, qsize, osize):
     return total_ind
 
 
-if __name__ == '__main__':
-    total_time = 1000000 # maximum simulation time (in s) for all the simulations
-    main_queue_size = 100 # maximum size of the arrivals queue
-    retry_queue_size = 50 # only used when learning in the space of prob distributions is desired.
-    mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
-    rho = 9.5/10 # server's utilization rate
+# if __name__ == '__main__':
+#     total_time = 1000000 # maximum simulation time (in s) for all the simulations
+#     main_queue_size = 100 # maximum size of the arrivals queue
+#     retry_queue_size = 50 # only used when learning in the space of prob distributions is desired.
+#     mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
+#     rho = 9.5/10 # server's utilization rate
     
     
-    timeout_t = 9 # timeout after which the client retries, if the job is not done
-    max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
-    runs = 100 # how many times should the simulation be run
-    step_time = 0.5 # sampling time
-    sim_time = 10000 # maximum simulation time for an individual simulation
-    #rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
-    rho_fault = rho*10 # utilization rate during a fault
+#     timeout_t = 9 # timeout after which the client retries, if the job is not done
+#     max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
+#     runs = 100 # how many times should the simulation be run
+#     step_time = 0.5 # sampling time
+#     sim_time = 10000 # maximum simulation time for an individual simulation
+#     #rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
+#     rho_fault = rho*10 # utilization rate during a fault
     
     
-    rho_reset = rho * 5 / 5 # utilization rate after removing the fault
-    fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
-    fault_duration = sim_time * .01  # fault duration
-    dist = "exp" 
-    num_servers = 2
-    qsize = 100  # maximum size of the arrivals queue
-    osize = 30  # bound over the orbit size
+#     rho_reset = rho * 5 / 5 # utilization rate after removing the fault
+#     fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
+#     fault_duration = sim_time * .01  # fault duration
+#     dist = "exp" 
+#     num_servers = 2
+#     qsize = 100  # maximum size of the arrivals queue
+#     osize = 30  # bound over the orbit size
     
-    convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration, num_servers, qsize, osize)
+#     convert_csv_to_pkl(sim_time, runs, mean_t, rho, step_time, rho_fault, fault_start, fault_duration, dag, qsize, osize)

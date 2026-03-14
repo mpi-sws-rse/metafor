@@ -102,13 +102,14 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
             job is also scheduled at timeout.
         """
         job = Job(
-            name=self.apiname, 
-            timestamp=t, 
-            max_retries=self.max_retries, 
-            retries_left=self.max_retries,
-            request_id=None,      # auto-generated
-            attempt_id=0,
-            )
+            self.apiname,
+            t,
+            self.max_retries,
+            self.max_retries,
+            None,     
+            0,
+        )
+        job.client = self
         
         logger.info(" New Job %s with id %s created at %f" % (self.apiname, job.request_id, t ))
 
@@ -128,13 +129,19 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         
         # Get the Job to be processed
         offered = self.server.offer(job, t)
-        
-        if offered is None:
-            # No Job is to be processed
-            return [(next_t, self.generate, payload)]
-        else:
-            return [(next_t, self.generate, payload), (t + self.timeout, self.on_timeout, job), offered]
 
+        events = [(next_t, self.generate, payload),
+                (t + self.timeout, self.on_timeout, job)]
+
+        if offered:
+            if isinstance(offered, list):
+                events.extend(offered)
+            else:
+                events.append(offered)
+
+        return events
+        
+    
     def on_timeout(self, t, job):
         """
         This function is invoked when a job is under processing after timeout. 
@@ -146,17 +153,11 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         Returns:
             A retry job is scheduled at timeout if job is still under processing else None.
         """
-        logger.info("on timeout called at %f with job %s with id %s" % (t, job.name, job.request_id))
+        logger.info("Client timeout called at %f with job %s with id %s" % (t, job.name, job.request_id))
         
         ####################################################
-        # Modifying on_timeout to check all servers in the chain for the 
-        # job’s status, as jobs may be in the queue or processing in
-        # downstream servers.
-        # DESIGN : We use a single, fixed retry budget per job (end-to-end), 
-        # not independent retries per server (from the client’s perspective, 
+        # DESIGN : We use independent retries per server (from the client’s perspective, 
         # there is one request.)
-        
-        retried_jobs = []
        
 
         if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED}:
@@ -164,43 +165,47 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         
         if job.retries_left <= 0:
             job.status = JobStatus.DROPPED
+            logger.info(    
+                f"Client request {job.request_id} failed after retries"
+            )
             return None
         
-        # DESIGN : A retry is schedules only at the current server and the downstream servers
-        #if job.status != JobStatus.COMPLETED:
-        if job.retries_left > 0:
-            logger.info(f"Job {job.created_t} with id {job.request_id} timeout, retrying {job.max_retries - job.retries_left} with attempt {job.attempt_id} at {t} on server {self.server.id}")
-            job.retries_left -= 1
-            job.attempt_id += 1
-            job.status = JobStatus.CREATED
-            
-            job_copy = job.clone_for_branch(t)
-            offered = self.server.offer(job_copy, t)  # Retry at first server immediately
-            if offered is not None:
-                retried_jobs.append(offered)
-                retried_jobs.append((t + self.timeout, self.on_timeout, job_copy))
-                # below downstreaming jobs are handled in job_done in server
-                # for ds in self.server.downstream_server:
-                #     offered = ds.offer(job, t)  # Retry at downstream servers
-                #     if offered is not None:
-                #         retried_jobs.append(offered)
-                
-                    
-           
-            #return retried_jobs
-            #t = t + service_time
-        return retried_jobs
-    
+        job.retries_left -= 1
         
-    def done(self, t: float, event: Job):
-        """
-        This function is invoked when a job is completed.
-        """
-        # job completed
-        #if t - event.created_t > self.timeout and event.retries_left > 0:
-        #    # Offer another job as a replacement for the timed-out one
-        #    return self.server.offer(self.job_type(t, self.max_retries, event.retries_left - 1), t)
-        #else:
-        
-        event.status = JobStatus.COMPLETED
+        retry = job.clone_for_retry(t)
+        retry.client = self
+        logger.info(
+            f"Client retry {retry.request_id} attempt {retry.attempt_id}"
+        )
+
+        # retry.retries_left = job.retries_left - 1
+
+        offered = self.server.offer(retry, t)
+        events = []
+
+        # schedule next timeout
+        events.append((t + self.timeout, self.on_timeout, retry))
+
+        if offered:
+            if isinstance(offered, list):
+                events.extend(offered)
+            else:
+                events.append(offered)
+
+        return events
+
+
+    def on_complete(self, t, job):
+
+        job.status = JobStatus.COMPLETED
+        job.completed_t = t
+
+        latency = t - job.created_t
+
+        logger.info(
+            f"Client completed request {job.request_id} "
+            f"latency={latency:.4f}"
+        )
+
         return None
+

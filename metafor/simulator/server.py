@@ -92,33 +92,46 @@ class Server:
     Server that consumes a queue of tasks of a fixed size (`queue_size`), with a fixed concurrency (MPL)    
     """
 
-    def __init__(self, id:int, name: str, queue_size: int, thread_pool: int,
-                 service_time_distribution: dict[str, Distribution],
-                 client: OpenLoopClientWithTimeout,
-                 downstream_server: Optional['Server'] = None):
+    def __init__(
+        self, 
+        id:int, 
+        name: str, 
+        queue_size: int, 
+        thread_pool: int,
+        service_dist: Distribution,
+        client: OpenLoopClientWithTimeout,
+        downstream_server: Optional[List['Server']] = None,
+        timeout=None,
+        max_retries=0,
+        retry_delay=0.0
+    ):
         self.id = id
         self.start_time = 0  # to be set by each simulation
-        self.busy: int = 0
+        self.busy = 0
 
-        self.queue: FCFSQueue = FCFSQueue()
-        self.queue_size: int = queue_size
+        self.queue = FCFSQueue()
+        self.queue_size = queue_size
 
-        self.service_time_distribution = service_time_distribution
+        self.service_dist = service_dist
         
-        self.sim_name: str = name
+        self.sim_name = name
 
-        self.thread_pool: int = thread_pool
+        self.thread_pool = thread_pool
 
-        self.jobs: List[Job | None] = [None for _ in range(thread_pool)]
-        self.client: Client = client
+        self.jobs = [None for _ in range(thread_pool)]
+        self.client= client
         # self.rho: float = rho
         # self.file: TextIO | None = None
         self.context = None
 
         # statistics
-        self.retries: int = 0
-        self.dropped: int = 0  # cumulative number
-        self.downstream_server: Optional['Server'] = downstream_server
+        self.retries = 0
+        self.dropped = 0  # cumulative number
+        self.downstream_server = downstream_server
+
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
     
 
     def set_context(self, c: Context):
@@ -129,7 +142,7 @@ class Server:
 
     def print(self):
         print("DES Server: ", self.sim_name, "[q = ", self.queue_size, " threads=", self.thread_pool, "]")
-        print("Rates: ", self.service_time_distribution)
+        print("Rates: ", self.service_dist)
 
 
     def job_done(self, t: float, n: int) -> List:
@@ -153,24 +166,24 @@ class Server:
             return
         #assert completed is not None
 
-        if self.downstream_server is None:
-            # This ensures that a Job is completed when it has completed on the last 
-            # downstream server
-            completed.status = JobStatus.COMPLETED
-            completed.completed_t = t
+        #if self.downstream_server is None:
+        # This ensures that a Job is completed when it has completed on the last 
+        # downstream server
+        completed.status = JobStatus.COMPLETED
+        completed.completed_t = t
 
-            if completed.max_retries > completed.retries_left:  # a retried job is completed
-                self.retries -= 1
-                current=self.downstream_server
-                while current is not None:
-                    current.retries -= 1
-                    current=current.downstream_server
-                
-            logger.info("Completing %s with id %s at %f on server %d" % (completed.name, completed.request_id, t,self.id))
+        # if completed.max_retries > completed.retries_left:  # a retried job is completed
+        #     self.retries -= 1
+        #     current=self.downstream_server
+        #     while current is not None:
+        #         current.retries -= 1
+        #         current=current.downstream_server
+            
+        logger.info("Completing %s with id %s at %f on server %d" % (completed.name, completed.request_id, t,self.id))
 
-            end_time = time.time()
-            runtime = end_time - self.start_time
-            assert self.context is not None, "Context not set: cannot output results"
+        end_time = time.time()
+        runtime = end_time - self.start_time
+        assert self.context is not None, "Context not set: cannot output results"
 
         #################################################
         # Ensure metrics like latency account for the total time
@@ -198,12 +211,27 @@ class Server:
         #     offered = self.downstream_server.offer(completed, t)
         #     if offered is not None:
         #         events.append(offered)
+        print("Server", self.id, "completed job", completed.request_id)
+        print("Forwarding to:", [ds.id for ds in self.downstream_server])
         if self.downstream_server:
+            
             for ds in self.downstream_server:
-                job_copy = completed.clone_for_branch(t)
-                offered = ds.offer(job_copy, t)
+                branch_job = completed.clone_for_branch(t)
+                offered = ds.offer(branch_job, t)
                 if offered:
-                    events.append(offered)
+                    if isinstance(offered, list):
+                        events.extend(offered)
+                    else:
+                        events.append(offered)
+        
+        #Server notifies client on completion
+        if completed.client:
+            client_event = completed.client.on_complete(t, completed)
+            if client_event:
+                if isinstance(client_event, list):
+                    events.extend(client_event)
+                else:
+                    events.append(client_event)
 
         
         if self.queue.len() > 0:
@@ -212,7 +240,7 @@ class Server:
             logger.info("Dequeueing %s with id %s created %f at %f on server %d" % (next_job.name, next_job.request_id, next_job.created_t, t,self.id))
 
             self.jobs[n] = next_job
-            service_time = self.service_time_distribution[next_job.name].sample()
+            service_time = self.service_dist.sample()
             #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[next_job.name].mean,service_time))
             next_job.size = service_time
             events.append((t + service_time, self.job_done, n))
@@ -240,11 +268,11 @@ class Server:
 
         events = []
 
-        if job.max_retries > job.retries_left: 
-            # this is a retried job
-            self.retries += 1
-            for ds in self.downstream_server:
-                ds.retries += 1
+        # if job.max_retries > job.retries_left: 
+        #     # this is a retried job
+        #     self.retries += 1
+        #     for ds in self.downstream_server:
+        #         ds.retries += 1
             
 
                     
@@ -264,17 +292,19 @@ class Server:
                     #logger.info("Processing %s with id %s at %f on server %d" % (job.name, job.request_id, t, self.id))
                     self.jobs[i] = job
                     job.status = JobStatus.PROCESSING
-                    service_time = self.service_time_distribution[job.name].sample()
+                    #service_time = self.service_time_distribution[job.name].sample()
+                    service_time = self.service_dist.sample()
                     #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[job.name].mean,service_time))
                     job.size = service_time
                     logger.info("Processing %s with id %s at %f on server %d" % (job.name, job.request_id, t, self.id))
-                    #print("job  offered at server",self.id,"  ",self.downstream_server)
-                    # if self.downstream_server is not None:
-                    #     offered = self.downstream_server.offer(job, t)
-                    #     print("downstream offered ")
-                    #     return [t + service_time, self.downstream_server.job_done, i],  offered
-                    # else:
-                    return t + service_time, self.job_done, i
+                    
+                    events = [(t + service_time, self.job_done, i)]
+
+                    # schedule server-level timeout
+                    if self.timeout is not None:
+                        events.append((t + self.timeout, self.on_timeout, (job, i)))
+
+                    return events
                 
             # Should never get here because jobs slots should always be available if busy < thread_pool
             raise ValueError("No free job slots despite busy < thread_pool")
@@ -291,3 +321,42 @@ class Server:
                 self.dropped += 1
                 #return t + self.client.timeout, self.client.on_timeout, job
             return None
+
+
+
+    def on_timeout(self, t, payload):
+
+        job, thread_id = payload
+
+        # job finished or dropped
+        if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED}:
+            return None
+        
+        #Because the thread may now contain another job.
+        if self.jobs[thread_id] != job: 
+            return None
+
+        attempts = job.server_attempts[self.id]
+
+        if attempts >= self.max_retries:
+            return None
+
+        
+
+        job.server_attempts[self.id] += 1
+        self.retries += 1
+
+        retry_job = job.clone_for_retry(t)
+
+        logger.info(
+            f" Retry {attempts+1} for request {job.request_id} on Server {self.id}, "
+        )
+
+        offered = self.offer(retry_job, t + self.retry_delay)
+
+        if offered:
+            if isinstance(offered, list):
+                return offered
+            return [offered]
+
+        return None

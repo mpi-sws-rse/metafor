@@ -12,17 +12,25 @@ from metafor.analysis.koopman_experiments.exp_mixing_time_learned_all import mix
 Part 1 : Data generation
 
 """
+# DAG representing server connections
+dag = {
+    1: [2],        # Auth → Gateway
+    2: [3,4],    # Gateway fan-out
+    3: [5],        # Rec → DB
+    4: [5],        # Order → DB
+    5: []          # DB leaf
+}
 
 # Configuration
 total_time = 1000000 # maximum simulation time (in s) for all the simulations
 queue_size = 100 # maximum size of the arrivals queue
 mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
-rho = 9.7/10 # server's utilization rate
-timeout_t = 9 # timeout after which the client retries, if the job is not done
+rho = 0.8  # ideally (0.7-0.9) server's utilization rate
+timeout_t = 100 # timeout after which the client retries, if the job is not done
 max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
-runs = 5 # how many times should the simulation be run
+runs = 10 # how many times should the simulation be run
 step_time = 0.5 # sampling time
-sim_time = 1000 # maximum simulation time for an individual simulation
+sim_time = 10000 # maximum simulation time for an individual simulation
 #rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
 rho_fault = rho # utilization rate during a fault
 fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
@@ -34,15 +42,15 @@ ts = 0.9
 ap = 0.5
 queue_type="fifo"
 verbose = True
-num_servers = 4
 
 data_generation(
     sim_time, runs, mean_t, rho, queue_size, timeout_t, 
     max_retries, total_time, step_time, rho_fault, 
     rho_reset, fault_start, fault_duration, throttle, 
-    ts, ap, queue_type, dist, num_servers, verbose       
+    ts, ap, queue_type, dist, dag, verbose       
 )
 
+exit()
 
 """
 Part 2 : Training

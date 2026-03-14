@@ -7,7 +7,7 @@ import os
 import time
 from typing import List
 
-
+import itertools
 import numpy as np
 import pandas as pd
 import random
@@ -18,23 +18,23 @@ from metafor.simulator.statistics import StatData
 from metafor.simulator.client import Client, OpenLoopClient, OpenLoopClientWithTimeout
 from metafor.simulator.preprocessing import mean_variance_std_dev, compute_mean_variance_std_deviation
 from metafor.utils.plot import plot_results
-from metafor.simulator.job import exp_job, bimod_job, wei_job, ExponentialDistribution, WeibullDistribution
+from metafor.simulator.job import exp_job, bimod_job, wei_job, ExponentialDistribution, WeibullDistribution, NormalDisttribution, LogNormalDistribution
 
 import logging
 logger = logging.getLogger(__name__)
 
 import pickle
 
-# DAG representing server connections
-dag = {
-    1: [2, 3],
-    2: [4],
-    3: [4],
-    4: []
-}
+
 
 class Simulator:
-    def __init__(self, servers: List['Server'], clients: List['Client'], sim_id: int):
+    def __init__(
+        self, 
+        servers: dict[int, 'Server'],
+        clients: List['Client'], 
+        dag: dict,
+        sim_id: int
+    ):
         logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 
         self.servers = servers
@@ -47,6 +47,7 @@ class Simulator:
             server.set_context(Context(sim_id, server_id))
         self.clients = clients
         self.dag = dag
+        self.event_counter = itertools.count()
 
         self.reset()
 
@@ -60,7 +61,10 @@ class Simulator:
     def reset(self):
         self.t = 0.0
         # start the simulator by adding each client
-        self.q = [(self.t, client.generate, None) for client in self.clients]
+        self.q = [
+            (self.t, next(self.event_counter), client.generate, None)
+            for client in self.clients
+        ]
         heapq.heapify(self.q)
 
 
@@ -70,25 +74,31 @@ class Simulator:
         #  back to the heap.
         while len(self.q) > 0 and self.t < max_t:
             # Get the next event. Because `q` is a heap, we can just pop this off the front of the heap.
-            (t, call, payload) = heapq.heappop(self.q)
+            (t, _, call, payload) = heapq.heappop(self.q)
             self.t = t
             # Execute the callback associated with this event
             new_events = call(t, payload)
             # If the callback returned any follow-up events, add them to the event queue `q` and make sure it is still a
             # valid heap
-            if new_events is not None:
-                self.q.extend(new_events)
-                #print("new_events ",new_events)
-                heapq.heapify(self.q)   
+            if new_events:
+                # self.q.extend(new_events)
+                for ev in new_events:
+                    t2, call2, payload2 = ev
+                    heapq.heappush(self.q, (t2, next(self.event_counter), call2, payload2))
+                    # if isinstance(ev, list):
+                    #     self.q.extend(ev)
+                    # else:
+                    #     self.q.append(ev)
+                    # heapq.heapify(self.q)   
 
     def analyze(self):
-        for ctx in self.contexts:
-            ctx.analyze()
+        for server in self.servers.values():
+            server.context.analyze()
 
 
 def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_t: float, rho,
              queue_size, timeout_t, max_retries, rho_fault, rho_reset, fault_start, 
-             fault_duration, throttle, ts, ap, queue_type, dist, num_servers):
+             fault_duration, throttle, ts, ap, queue_type, dist, dag):
     """
     Run a simulation `run_nums` times, outputting the results to `x_fn`, where x in [1, num_runs].
     One simulation is run for each client in `clients`.
@@ -107,12 +117,12 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         job_type = exp_job(mean_t)
         servers, clients = sim_fn(mean_t, "client", "request", rho, queue_size,
                                   timeout_t, max_retries, rho_fault, rho_reset, fault_start, 
-                                  fault_duration, throttle, ts, ap, queue_type, dist, num_servers, i)
+                                  fault_duration, throttle, ts, ap, queue_type, dist, dag, i)
         
         # for client in clients:
         #     client.server.file = current_fn
         #     client.server.start_time = time.time()
-        siml = Simulator(servers, clients, i+1)
+        siml = Simulator(servers, clients, dag, i+1)
         siml.reset()
         siml.sim(max_t)
         print("LIST OF SERVERS ",servers)
@@ -154,7 +164,7 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
 def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size: int, timeout_t: float,
                  max_retries: int, rho_fault: float, rho_reset: float, fault_start: float,
                  fault_duration: float, throttle:bool, ts:float, ap:float, queue_type:str,
-                 dist: str, num_servers :int, sim_id: int) -> List[Client]:
+                 dist: str, dag :dict, sim_id: int) -> List[Client]:
     
     clients = []
     job_name = apiname
@@ -172,26 +182,48 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
     servers: dict[str, Server] = {}
     prev_server = []
     
+
+    retry_policy = {
+        1: (8, 2),     # Auth (cheap, retry once)
+        2: (12, 2),    # Gateway (retry once)
+        3: (70, 1),    # Recommendation (rare retry)
+        4: (80, 1),    # Order (no retry)
+        5: (150, 0)    # Database (never retry)
+    }
+
+    service_dists = {
+        1: ExponentialDistribution(1/1),     # Auth (mean 1)
+        2: ExponentialDistribution(1/1),     # Gateway (mean 1)
+        3: LogNormalDistribution(0.2,0.1),   # Recommendation (~ mean)
+        4: ExponentialDistribution(1/2),    # Order (mean 2)
+        5: LogNormalDistribution(0.3,0.2)    # Database (~ heavy tail)
+    }
+    
+    thread_pool = {
+        1: 2,   # Auth
+        2: 2,   # Gateway
+        3: 2,
+        4: 2,
+        5: 2
+    }
+
     for i in dag.keys():
+        timeout, retries = retry_policy[i]
         server_name = f"server_{i}"
 
         
-        client = OpenLoopClientWithTimeout(name, apiname, distribution, rho, job_type, timeout_t, max_retries, rho_fault, rho_reset, fault_start,
-                                    fault_duration)
-    
-        service_time_distribution = {"request":distribution(1/job_type.mean())}
+        
         
         if throttle==False:
-            server = Server(i, server_name, queue_size, 1, service_time_distribution, client, downstream_server=prev_server)
+            server = Server(i, server_name, queue_size, thread_pool[i], service_dists[i], None, downstream_server=prev_server, timeout=timeout, max_retries=retries)
         else:    
-            server = ServerWithThrottling(i, server_name, queue_size, 1, service_time_distribution, client, throttle, ts,ap, downstream_server=prev_server)
+            server = ServerWithThrottling(i, server_name, queue_size, thread_pool[i], service_dists[i], None, throttle, ts,ap, downstream_server=prev_server, timeout=timeout, max_retries=retries)
         
         if queue_type=="lifo":
-            server = ServerWithLIFO(i, server_name, queue_size, 1, service_time_distribution, client,  downstream_server=prev_server)
+            server = ServerWithLIFO(i, server_name, queue_size, thread_pool[i], service_dists[i], None,  downstream_server=prev_server, timeout=timeout, max_retries=retries)
         
         
         server.set_context(Context(sim_id,i))  #check
-        client.server = server
         
         servers[i] = server
         
@@ -206,9 +238,29 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
 
     # 4. Attach clients only to entry nodes
     clients = []
-    for name in entry_nodes:
-        clients.append(servers[name].client)
-   
+    
+    client_timeout = 36
+    client_retry = 3
+    
+    for entry in entry_nodes:
+        client = OpenLoopClientWithTimeout(
+            name, 
+            apiname, 
+            distribution, 
+            rho, 
+            job_type, 
+            client_timeout, 
+            client_retry, 
+            rho_fault, 
+            rho_reset, 
+            fault_start,
+            fault_duration
+        )
+
+        client.server = servers[entry]
+        servers[entry].client = client
+
+        clients.append(client)
         
     
     #print("  ",servers[0].downstream_server.id)
@@ -221,7 +273,7 @@ def run_discrete_experiment(
         timeout_t: float, max_retries: int, total_time: float, step_time: int,
         rho_fault: float, rho_reset: float, fault_start: float, fault_duration: float,
         throttle : bool, ts : float, ap : float, queue_type : str, dist: str, 
-        num_servers : int
+        dag : dict
 ):
    
     results_file_name = "exp_results.csv"
@@ -229,7 +281,7 @@ def run_discrete_experiment(
     process = multiprocessing.Process(target=run_sims, args=(max_t, results_file_name, runs, step_time, make_sim_exp,
                                                              mean_t, rho, queue_size, timeout_t, max_retries, rho_fault, 
                                                              rho_reset, fault_start, fault_duration, throttle, ts, ap, 
-                                                             queue_type, dist, num_servers))
+                                                             queue_type, dist, dag))
     process.start()
     process.join(total_time)
     if process.is_alive():
