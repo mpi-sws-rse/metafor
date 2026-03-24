@@ -145,7 +145,8 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
             # reorder columns explicitly if needed
             df = df[['server','timestamp','latency','queue_length','retries',
                     'dropped','runtime','retries_left','service_time',
-                    'throughput','request_id','attempt_id']]
+                    'throughput','request_id','attempt_id',
+                    'retry_origin','client_retries_used','server_retries_used']]
             df.to_csv(f"data/{i+1}_{fn}", header=False, mode='a', index=False)
          
          

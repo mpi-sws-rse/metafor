@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 import uuid
 from collections import defaultdict
 import copy
+from enum import Enum
 
 class Distribution(ABC):
     def __init__(self):
@@ -51,6 +52,12 @@ class LogNormalDistribution(Distribution):
 
     def sample(self):
         return random.lognormvariate(self.mu, self.sigma)
+
+
+class RetryOrigin(Enum):
+    NONE = "none"       # original attempt
+    CLIENT = "client"   # client timeout fired
+    SERVER = "server"   # server-level timeout fired
 
 
 class JobStatus:
@@ -96,12 +103,14 @@ class Job(ABC):
 
         # retry attempts per server
         self.server_attempts = defaultdict(int)
+        self.retry_origin: RetryOrigin = RetryOrigin.NONE
 
     def __str__(self):
         return "[%s: created %f, status: %s]" % (self.name, self.created_t, JobStatus.__str__(self.status))
     
     @staticmethod
     def mean() -> float:
+        """Return the mean service time for this job type."""
         pass
     
     

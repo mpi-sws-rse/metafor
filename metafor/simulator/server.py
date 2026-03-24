@@ -8,7 +8,7 @@ from collections import deque, defaultdict
 from typing import List, TextIO, Optional
 
 from metafor.simulator.client import Client, OpenLoopClientWithTimeout
-from metafor.simulator.job import Distribution, Job, JobStatus
+from metafor.simulator.job import Distribution, Job, JobStatus, RetryOrigin
 
 import logging
 logger = logging.getLogger(__name__)
@@ -191,6 +191,11 @@ class Server:
         if one exists. Returns any new events to add to the 
         simulator queue.
         """
+
+        # Always clear the slot first so the invariant holds before any
+        # new assignment — callers must not touch self.jobs[n] after this.
+        self.jobs[n] = None
+
         if self.queue.len() > 0:
             next_job = self.queue.pop()
             next_job.status = JobStatus.PROCESSING
@@ -199,12 +204,15 @@ class Server:
                 % (next_job.name, next_job.request_id, next_job.created_t, t, self.id)
             )
             self.jobs[n] = next_job
+            # busy is unchanged: one job left, one arrived — net zero
             service_time = self.service_dist.sample()
             next_job.size = service_time
             return [(t + service_time, self.job_done, n)]
         else:
+            # No work waiting — slot genuinely goes idle
+            # The key idea is: offer is the only writer of busy += 1, 
+            # and _drain_queue is the only writer of busy -= 1.
             self.busy -= 1
-            self.jobs[n] = None
             return []
 
 
@@ -273,6 +281,9 @@ class Server:
             'throughput' : completed.client.num_complete_jobs if self.downstream_server is None else 0.0,
             'request_id' : self.jobs[n].request_id,
             'attempt_id' : self.jobs[n].attempt_id,
+            'retry_origin': completed.retry_origin.value,
+            'client_retries_used': self.max_retries - completed.retries_left,
+            'server_retries_used': completed.server_attempts[self.id],
             })
             #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
         # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
@@ -394,7 +405,7 @@ class Server:
             return None
         
         #Because the thread may now contain another job.
-        if self.jobs[thread_id] != job: 
+        if self.jobs[thread_id] is None or self.jobs[thread_id].request_id != job.request_id:
             return None
 
         attempts = job.server_attempts[self.id]
@@ -408,6 +419,7 @@ class Server:
         self.retries += 1
 
         retry_job = job.clone_for_retry(t)
+        retry_job.retry_origin = RetryOrigin.SERVER
 
         logger.info(
             f" Retry {attempts+1} for request {job.request_id} on Server {self.id}, "

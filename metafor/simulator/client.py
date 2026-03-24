@@ -4,7 +4,7 @@ import random
 from abc import ABC, abstractmethod
 from typing import Type
 
-from metafor.simulator.job import Job, Distribution, JobStatus
+from metafor.simulator.job import Job, Distribution, JobStatus, RetryOrigin
 
 import logging
 logger = logging.getLogger(__name__)
@@ -82,6 +82,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         self.rho_reset : float = rho_reset
         self.rate_tps_fault : float = rho_fault / job_type.mean()
         self.rate_tps_reset : float = rho_reset / job_type.mean()
+        
         self.fault_start : float = fault_start
         self.fault_duration : float = fault_duration
         self.num_complete_jobs = 0
@@ -118,9 +119,9 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         if t < self.fault_start[0]: # must be modified when there are more instances of faults
             next_t = t + self.distribution(self.rate_tps).sample()
             #logger.info(" client rate %f   arrival   %f" % (self.rate_tps,self.distribution(self.rate_tps).sample()))
-        elif t >= self.fault_start[0] and t < self.fault_start[0] + self.fault_duration:
+        elif t < self.fault_start[0] + self.fault_duration:
             next_t = t + self.distribution(self.rate_tps_fault).sample()
-        elif t >= self.fault_start[0] + self.fault_duration:
+        else:
             next_t = t + self.distribution(self.rate_tps_reset).sample()
 
 
@@ -176,12 +177,13 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         self.retries += 1
         
         retry = job.clone_for_retry(t)
+        retry.retry_origin = RetryOrigin.CLIENT
         retry.client = self
         logger.info(
             f"Client retry {retry.request_id} attempt {retry.attempt_id}"
         )
 
-        # retry.retries_left = job.retries_left - 1
+
 
         offered = self.server.offer(retry, t)
         events = []
