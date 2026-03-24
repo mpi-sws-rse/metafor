@@ -77,12 +77,14 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         super().__init__(name, apiname, distribution, rho, job_type)
         self.timeout = timeout
         self.max_retries: int = max_retries
+        self.retries : int = 0
         self.rho_fault : float = rho_fault
         self.rho_reset : float = rho_reset
         self.rate_tps_fault : float = rho_fault / job_type.mean()
         self.rate_tps_reset : float = rho_reset / job_type.mean()
         self.fault_start : float = fault_start
         self.fault_duration : float = fault_duration
+        self.num_complete_jobs = 0
 
 
     def generate(self, t: float, payload=None):
@@ -160,7 +162,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         # there is one request.)
        
 
-        if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED}:
+        if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED, JobStatus.FORWARDED}:
             return None
         
         if job.retries_left <= 0:
@@ -171,6 +173,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
             return None
         
         job.retries_left -= 1
+        self.retries += 1
         
         retry = job.clone_for_retry(t)
         retry.client = self

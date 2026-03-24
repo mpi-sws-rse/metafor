@@ -59,6 +59,7 @@ class JobStatus:
     PROCESSING = 2
     COMPLETED = 3
     DROPPED = 4
+    FORWARDED = 5
 
     @staticmethod
     def __str__(status):
@@ -66,7 +67,8 @@ class JobStatus:
              JobStatus.ENQUEUED: 'enqueued',
              JobStatus.PROCESSING: 'processing',
              JobStatus.COMPLETED: 'completed',
-             JobStatus.DROPPED: 'dropped'
+             JobStatus.DROPPED: 'dropped',
+             JobStatus.FORWARDED: 'forwarded'
              }
         return m[status]
 
@@ -132,30 +134,6 @@ class Job(ABC):
         return self.attempt_id > 0
 
 
-    # def clone_for_branch(self, t:float) -> "Job":
-    #     """
-    #     Create a new Job instance for a DAG branch.
-    #     Shares request identity, but has independent execution state.
-    #     """
-    #     new_job = self.__class__(
-    #         name=self.name,
-    #         timestamp=self.created_t,
-    #         max_retries=self.max_retries,
-    #         retries_left=self.retries_left,
-    #     )
-
-    #     # Reset execution-specific fields
-    #     new_job.status = JobStatus.CREATED
-    #     new_job.created_t = self.created_t
-    #     new_job.size = 0.0  # must be resampled by server
-
-    #     # Logical request identity
-    #     new_job.request_id = self.request_id
-
-    #     # New attempt for branch
-    #     new_job.attempt_id = self.attempt_id + 1
-
-    #     return new_job
 
 
 

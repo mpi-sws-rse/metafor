@@ -35,6 +35,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
         dlen_dataset = [] # dataset containing dropped numbers per run
         rlen_dataset = [] # dataset containing retries left numbers per run
         slen_dataset = [] # dataset containing service time numbers per run
+        tlen_dataset = [] # dataset containing throughput numbers per run
         for l in range(num_traj):
             if l == 0:
                 traj_start = 0 # corresponding to the trajectory starting from zero
@@ -47,6 +48,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
             dlen_dataset.append(np.zeros((num_runs, num_datapoints[l])))
             rlen_dataset.append(np.zeros((num_runs, num_datapoints[l])))
             slen_dataset.append(np.zeros((num_runs, num_datapoints[l])))
+            tlen_dataset.append(np.zeros((num_runs, num_datapoints[l])))
         run_ind = 0
         actual_data_num_seq = [[]*i for i in range(len(file_names))] # list of the "actual" number of datapoints per run
         
@@ -61,6 +63,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
             last_d_val = 0
             last_r_val = 0
             last_s_val = 0
+            last_t_val = 0
 
             wait_ind = False # while true, must wait until the end of the fault period
             
@@ -102,14 +105,17 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                                 dlen_dataset[traj_idx][run_ind, k_overall] = last_d_val
                                 rlen_dataset[traj_idx][run_ind, k_overall] = last_r_val
                                 slen_dataset[traj_idx][run_ind, k_overall] = last_s_val
+                                tlen_dataset[traj_idx][run_ind, k_overall] = last_t_val
                                 k_overall += 1 #
                             # use data in csv files to update values
+                            print("split line ",split_line)
                             last_q_val = float(split_line[3])
                             last_o_val = float(split_line[4])
                             last_l_val = float(split_line[2])
                             last_d_val = float(split_line[5])
                             last_r_val = float(split_line[7])
                             last_s_val = float(split_line[8])
+                            last_t_val = float(split_line[9])
                             # update the content of datasets
                             print(" traj_idx ",traj_idx," run ind ",run_ind,"  k_overall ",k_overall)
 
@@ -119,6 +125,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                             dlen_dataset[traj_idx][run_ind, k_overall] = last_d_val
                             rlen_dataset[traj_idx][run_ind, k_overall] = last_r_val
                             slen_dataset[traj_idx][run_ind, k_overall] = last_s_val
+                            tlen_dataset[traj_idx][run_ind, k_overall] = last_t_val
                             k_overall += 1
                             discrete_time_point = (math.floor(current_cont_time/step_time)+1) * step_time
             actual_data_num_seq[run_ind].append(k_overall) # store number of actual datapoints in the current run
@@ -132,6 +139,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
         d_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of dropped jobs
         r_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average number of retries left
         s_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average service time
+        t_ave_seq = [[]*num_traj for l in range(num_traj)] # seq of average throughput
         pi_emp_seq = [[]*num_traj for l in range(num_traj)] # seq of empirical distributions
 
         print("common_data_num  ",common_data_num)
@@ -143,6 +151,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                     d_step = 0 
                     r_step = 0 
                     s_step = 0 
+                    t_step = 0 
                     pi_step = np.zeros(ss_size)  # initialization for empirical distribution
                     # compute empirical averages
                     for run_ind in range(num_runs):
@@ -152,6 +161,7 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                         d_step += dlen_dataset[traj_idx][run_ind, step] / num_runs
                         r_step += rlen_dataset[traj_idx][run_ind, step] / num_runs
                         s_step += slen_dataset[traj_idx][run_ind, step] / num_runs
+                        t_step += tlen_dataset[traj_idx][run_ind, step] / num_runs
                         pi_diff = np.zeros(ss_size)
                         #print("qlen_dataset[traj_idx][run_ind, step],  ",qlen_dataset[traj_idx][run_ind, step], " olen_dataset[traj_idx][run_ind, step],  ",olen_dataset[traj_idx][run_ind, step])
                         state = min(ss_size - 1,
@@ -164,10 +174,11 @@ def mean_variance_std_dev(file_names: List[str], max_t: float, num_runs: int, st
                     d_ave_seq[traj_idx].append(d_step)
                     r_ave_seq[traj_idx].append(r_step)
                     s_ave_seq[traj_idx].append(s_step)
+                    t_ave_seq[traj_idx].append(t_step)
                     pi_emp_seq[traj_idx].append(pi_step)
 
         #print("server id ",sid,"  ",q_ave_seq)
-        result.append((q_ave_seq, o_ave_seq, l_ave_seq, d_ave_seq, r_ave_seq, s_ave_seq, pi_emp_seq))
+        result.append((q_ave_seq, o_ave_seq, l_ave_seq, d_ave_seq, r_ave_seq, s_ave_seq, t_ave_seq, pi_emp_seq))
     return result
 
 
@@ -193,7 +204,7 @@ def convert_csv_to_pkl(max_t: float, runs: int, mean_t: float, rho: float, step_
                                                        rho_fault, fault_start, fault_duration, dag, qsize, osize)
 
     for i in dag.keys():
-        q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, pi_seq = result[i-1]    
+        q_seq, o_seq, l_seq, d_seq, r_seq, s_seq, t_seq, pi_seq = result[i-1]    
         # Save
         directory = os.path.dirname("data/server"+str(i)+"/q_seq.pkl")
         if directory and not os.path.exists(directory):
@@ -210,6 +221,8 @@ def convert_csv_to_pkl(max_t: float, runs: int, mean_t: float, rho: float, step_
             pickle.dump(r_seq, f)
         with open("data/server"+str(i)+"/s_seq.pkl", "wb") as f:
             pickle.dump(s_seq, f)
+        with open("data/server"+str(i)+"/t_seq.pkl", "wb") as f:
+            pickle.dump(t_seq, f)
         with open("data/server"+str(i)+"/pi_seq.pkl", "wb") as f:
             pickle.dump(pi_seq, f)
 

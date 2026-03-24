@@ -11,7 +11,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import random
-from metafor.simulator.server import Context, Server
+from metafor.simulator.server import Context, Server, JoinTracker
 from metafor.simulator.server_with_throttling import ServerWithThrottling
 from metafor.simulator.server_with_LIFO import ServerWithLIFO
 from metafor.simulator.statistics import StatData
@@ -24,6 +24,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 import pickle
+
 
 
 
@@ -43,8 +44,8 @@ class Simulator:
         # for server, ctx in zip(servers, self.contexts):
         #     server.set_context(ctx)
         
-        for server_id, server in self.servers.items():
-            server.set_context(Context(sim_id, server_id))
+        # for server_id, server in self.servers.items():
+        #     server.set_context(Context(sim_id, server_id, dag))
         self.clients = clients
         self.dag = dag
         self.event_counter = itertools.count()
@@ -60,7 +61,9 @@ class Simulator:
     # to start a simulator from the beginning, reset the state
     def reset(self):
         self.t = 0.0
-        # start the simulator by adding each client
+        for server in self.servers.values():
+            server.context.result = []   # clear between runs
+
         self.q = [
             (self.t, next(self.event_counter), client.generate, None)
             for client in self.clients
@@ -137,18 +140,15 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
             # print(server.context.result[0:5])
             # print(server.downstream_server.context.result[0:5])
             # #exit() 
-            df = pd.DataFrame(servers[sid].context.result, columns=['server', 'timestamp', 'latency', 'queue_length', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time', 'request_id', 'attempt_id'])
-            df.to_csv(f"data/{i+1}_{fn}",  header=False,  mode='a', index=False)
-            # if server.downstream_server:
-            #     df = pd.DataFrame(server.downstream_server.context.result, columns=['server', 'timestamp', 'queue_length', 'latency', 'retries', 'dropped', 'runtime', 'retries_left', 'service_time'])
-            #     df.to_csv(f"{i + 1}_{fn}", header=False, mode='a', index=False)
-            #exit()
-            #file_names.append(f"{i + 1}_{server.sim_name}_{fn}")
-        # sim_loop(max_t, client, rho_fault, rho_reset, fault_start, fault_duration)
-        # print(len(client.server.context.result))
-        #f.write(client.server.context.result)
-        # df = pd.DataFrame(client.server.context.result)
-        # df.to_csv(current_fn, index=False)
+
+            df = pd.DataFrame(servers[sid].context.result)
+            # reorder columns explicitly if needed
+            df = df[['server','timestamp','latency','queue_length','retries',
+                    'dropped','runtime','retries_left','service_time',
+                    'throughput','request_id','attempt_id']]
+            df.to_csv(f"data/{i+1}_{fn}", header=False, mode='a', index=False)
+         
+         
 
     #exit()
     for i in range(1,len(servers)+1):
@@ -183,30 +183,50 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
     prev_server = []
     
 
+    # retry_policy = {
+    #     1: (8, 2),     # Auth (cheap, retry twice)
+    #     2: (12, 2),    # Gateway (retry twice)
+    #     3: (20, 1),    # Recommendation (rare retry)
+    #     4: (30, 1),    # Order (rare/no retry)
+    #     5: (40, 0)    # Database (never retry)
+    # }
+
+    # service_dists = {
+    #     1: ExponentialDistribution(1/0.3),     # Auth (mean 1)
+    #     2: ExponentialDistribution(1/0.5),     # Gateway (mean 1)
+    #     3: LogNormalDistribution(0.1,0.5),   # Recommendation (~ mean)
+    #     4: ExponentialDistribution(1/0.8),    # Order (mean 2)
+    #     5: LogNormalDistribution(0.2,0.5)    # Database (~ heavy tail)
+    # }
+
     retry_policy = {
-        1: (8, 2),     # Auth (cheap, retry once)
-        2: (12, 2),    # Gateway (retry once)
-        3: (70, 1),    # Recommendation (rare retry)
-        4: (80, 1),    # Order (no retry)
-        5: (150, 0)    # Database (never retry)
+        1: (1, 3),
+        2: (2, 3),
+        3: (3, 2),     
+        4: (3, 2),
+        5: (5, 0),
+        
     }
 
     service_dists = {
-        1: ExponentialDistribution(1/1),     # Auth (mean 1)
-        2: ExponentialDistribution(1/1),     # Gateway (mean 1)
-        3: LogNormalDistribution(0.2,0.1),   # Recommendation (~ mean)
-        4: ExponentialDistribution(1/2),    # Order (mean 2)
-        5: LogNormalDistribution(0.3,0.2)    # Database (~ heavy tail)
-    }
-    
-    thread_pool = {
-        1: 2,   # Auth
-        2: 2,   # Gateway
-        3: 2,
-        4: 2,
-        5: 2
+        1: ExponentialDistribution(1/0.8),    
+        2: ExponentialDistribution(1/0.8),
+        3: ExponentialDistribution(1/0.5),
+        4: ExponentialDistribution(1/0.5),
+        5: ExponentialDistribution(1/0.5),
     }
 
+    thread_pool = {
+        1: 3,   # Auth
+        2: 1,   # Gateway
+        3: 1,
+        4: 1,
+        5: 1
+    }
+
+
+    shared_tracker = JoinTracker(dag)
+    
     for i in dag.keys():
         timeout, retries = retry_policy[i]
         server_name = f"server_{i}"
@@ -223,9 +243,10 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
             server = ServerWithLIFO(i, server_name, queue_size, thread_pool[i], service_dists[i], None,  downstream_server=prev_server, timeout=timeout, max_retries=retries)
         
         
-        server.set_context(Context(sim_id,i))  #check
+        server.set_context(Context(sim_id,i,shared_tracker))  #check
         
         servers[i] = server
+
         
     # 2. Connect servers
     for src, dsts in dag.items():

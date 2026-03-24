@@ -5,8 +5,8 @@ from metafor.analysis.koopman_experiments.exp_mixing_time_simulation import mixi
 from metafor.analysis.koopman_experiments.exp_mixing_time_learned import mixing_time_learned
 from metafor.analysis.koopman_experiments.exp_mixing_time_learned_all import mixing_time_learned_all
 
-# import logging
-# logging.disable(logging.CRITICAL)
+import logging
+logging.disable(logging.CRITICAL)
 
 """
 Part 1 : Data generation
@@ -25,8 +25,8 @@ dag = {
 total_time = 1000000 # maximum simulation time (in s) for all the simulations
 queue_size = 100 # maximum size of the arrivals queue
 mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
-rho = 0.8  # ideally (0.7-0.9) server's utilization rate
-timeout_t = 100 # timeout after which the client retries, if the job is not done
+rho = 0.9  # ideally (0.7-0.9) server's utilization rate
+timeout_t = 5 # timeout after which the client retries, if the job is not done
 max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
 runs = 10 # how many times should the simulation be run
 step_time = 0.5 # sampling time

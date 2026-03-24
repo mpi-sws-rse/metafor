@@ -4,16 +4,55 @@ import math
 import numpy as np
 import pandas
 import time
-from collections import deque
+from collections import deque, defaultdict
 from typing import List, TextIO, Optional
 
 from metafor.simulator.client import Client, OpenLoopClientWithTimeout
 from metafor.simulator.job import Distribution, Job, JobStatus
 
-
 import logging
 logger = logging.getLogger(__name__)
 
+
+class JoinTracker:
+    def __init__(self, dag: dict):
+        self.fan_in = defaultdict(int)
+        for src, dsts in dag.items():
+            for d in dsts:
+                self.fan_in[d] += 1
+
+        self.pending = {}
+        self.latencies = defaultdict(list)
+        self.representative_job = {}
+
+    def is_join_node(self, server_id: int) -> bool:
+        return self.fan_in[server_id] > 1
+
+    def record(self, request_id, server_id, latency, job) -> tuple[bool, Job]:
+        key = (request_id, server_id)
+        if key not in self.pending:
+            self.pending[key] = self.fan_in[server_id]
+            self.representative_job[key] = job
+        else:
+            # merge attempt history
+            for sid, count in job.server_attempts.items():
+                self.representative_job[key].server_attempts[sid] = max(
+                    self.representative_job[key].server_attempts[sid], count
+                )
+
+        self.latencies[key].append(latency)
+        self.pending[key] -= 1
+        done = self.pending[key] == 0
+        return done, self.representative_job[key]
+
+    def true_latency(self, request_id, server_id) -> float:
+        return max(self.latencies[(request_id, server_id)])
+
+    def cleanup(self, request_id, server_id):
+        key = (request_id, server_id)
+        del self.pending[key]
+        del self.latencies[key]
+        del self.representative_job[key]
 
 
 #########################################
@@ -26,9 +65,10 @@ class Context:
     """
     manage the output from the simulation
     """
-    def __init__(self, id: int,server_id: int):
+    def __init__(self, id: int,server_id: int, join_tracker: JoinTracker):
         self.id = id
         self.server_id = server_id
+        self.join_tracker = join_tracker
         self.result = []
     
     def write(self, l: List):
@@ -56,10 +96,10 @@ class Context:
         return df
 
     def analyze(self):
-        servers = set(r['server'] for r in self.result)
+        #servers = set(r['server'] for r in self.result)
         queue_dfs = []
         latency_dfs = []
-        print(f"\nAnalyzing {server}")
+        print(f"\nAnalyzing {self.server_id}")
         queue_dfs.append(self.queue_lengths())
         latency_dfs.append(self.latency())
         return queue_dfs, latency_dfs
@@ -132,6 +172,7 @@ class Server:
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        
     
 
     def set_context(self, c: Context):
@@ -143,6 +184,28 @@ class Server:
     def print(self):
         print("DES Server: ", self.sim_name, "[q = ", self.queue_size, " threads=", self.thread_pool, "]")
         print("Rates: ", self.service_dist)
+
+    def _drain_queue(self, t: float, n: int) -> list:
+        """
+        Free thread slot n and assign it to the next queued job
+        if one exists. Returns any new events to add to the 
+        simulator queue.
+        """
+        if self.queue.len() > 0:
+            next_job = self.queue.pop()
+            next_job.status = JobStatus.PROCESSING
+            logger.info(
+                "Dequeueing %s id %s created %f at %f on server %d"
+                % (next_job.name, next_job.request_id, next_job.created_t, t, self.id)
+            )
+            self.jobs[n] = next_job
+            service_time = self.service_dist.sample()
+            next_job.size = service_time
+            return [(t + service_time, self.job_done, n)]
+        else:
+            self.busy -= 1
+            self.jobs[n] = None
+            return []
 
 
     def job_done(self, t: float, n: int) -> List:
@@ -163,21 +226,30 @@ class Server:
         #assert (self.busy > 0)
         completed = self.jobs[n]
         if completed is None:
-            return
-        #assert completed is not None
-
-        #if self.downstream_server is None:
-        # This ensures that a Job is completed when it has completed on the last 
-        # downstream server
-        completed.status = JobStatus.COMPLETED
+            return []
         completed.completed_t = t
 
-        # if completed.max_retries > completed.retries_left:  # a retried job is completed
-        #     self.retries -= 1
-        #     current=self.downstream_server
-        #     while current is not None:
-        #         current.retries -= 1
-        #         current=current.downstream_server
+        
+        
+        tracker = self.context.join_tracker
+        
+        # ── Join gate (any node with fan-in > 1) ──────────────────
+        if tracker.is_join_node(self.id):
+            all_done, completed = tracker.record(
+                completed.request_id, self.id, t - completed.created_t, completed
+            )
+            if not all_done:
+                # Branch arrived but others still pending.
+                # Free this thread — do NOT forward downstream yet.
+                # self.busy -= 1
+                # self.jobs[n] = None
+                completed.status = JobStatus.FORWARDED  # branch waiting at gate
+                return self._drain_queue(t, n)  # still service queued jobs
+            true_lat = tracker.true_latency(completed.request_id, self.id)
+            tracker.cleanup(completed.request_id, self.id)
+        else:
+            true_lat = t - completed.created_t
+
             
         logger.info("Completing %s with id %s at %f on server %d" % (completed.name, completed.request_id, t,self.id))
 
@@ -191,19 +263,23 @@ class Server:
         self.context.write(
             {'server': self.id,
             'timestamp': t,
-            'latency' : t - completed.created_t,
+            'latency' : true_lat,
             'queue_length' : self.queue.len(),
             'retries' : self.retries,
             'dropped' : self.dropped,
             'runtime' : time.time() - self.start_time,
-            'retries_left' : self.jobs[n].retries_left,
+            'retries_left' : self.max_retries - completed.server_attempts[self.id],
             'service_time' : self.jobs[n].size,
+            'throughput' : completed.client.num_complete_jobs if self.downstream_server is None else 0.0,
             'request_id' : self.jobs[n].request_id,
             'attempt_id' : self.jobs[n].attempt_id,
             })
             #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
         # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
         #                                              self.queue.len(), self.retries, self.dropped, runtime))
+        
+        #assert completed is not None
+
         events = []
         
         # In job_done, forward completed jobs to downstream_server.offer if downstream_server exists.
@@ -212,9 +288,12 @@ class Server:
         #     if offered is not None:
         #         events.append(offered)
         print("Server", self.id, "completed job", completed.request_id)
-        print("Forwarding to:", [ds.id for ds in self.downstream_server])
+        
+        # ── Forward downstream ─────────────────────────────────────
         if self.downstream_server:
-            
+            completed.status = JobStatus.FORWARDED  # ← job moving to next server
+            print("Forwarding to:", [ds.id for ds in self.downstream_server])
+
             for ds in self.downstream_server:
                 branch_job = completed.clone_for_branch(t)
                 offered = ds.offer(branch_job, t)
@@ -224,8 +303,11 @@ class Server:
                     else:
                         events.append(offered)
         
-        #Server notifies client on completion
-        if completed.client:
+        # ── Notify client (leaf only) ──────────────────────────────
+        else:
+            print("Forwarding to:  [Client]")
+            completed.status = JobStatus.COMPLETED
+            completed.client.num_complete_jobs += 1
             client_event = completed.client.on_complete(t, completed)
             if client_event:
                 if isinstance(client_event, list):
@@ -234,20 +316,7 @@ class Server:
                     events.append(client_event)
 
         
-        if self.queue.len() > 0:
-            next_job = self.queue.pop()
-            next_job.status = JobStatus.PROCESSING
-            logger.info("Dequeueing %s with id %s created %f at %f on server %d" % (next_job.name, next_job.request_id, next_job.created_t, t,self.id))
-
-            self.jobs[n] = next_job
-            service_time = self.service_dist.sample()
-            #logger.info("server rate %f   service time  %f" % (self.service_time_distribution[next_job.name].mean,service_time))
-            next_job.size = service_time
-            events.append((t + service_time, self.job_done, n))
-
-        else:
-            self.busy -= 1
-            self.jobs[n] = None
+        events.extend(self._drain_queue(t, n))
 
         return events
 
@@ -267,14 +336,6 @@ class Server:
         """
 
         events = []
-
-        # if job.max_retries > job.retries_left: 
-        #     # this is a retried job
-        #     self.retries += 1
-        #     for ds in self.downstream_server:
-        #         ds.retries += 1
-            
-
                     
            
         ##########################################################
@@ -329,7 +390,7 @@ class Server:
         job, thread_id = payload
 
         # job finished or dropped
-        if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED}:
+        if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED, JobStatus.FORWARDED}:
             return None
         
         #Because the thread may now contain another job.
