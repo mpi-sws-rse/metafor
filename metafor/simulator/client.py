@@ -116,9 +116,9 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         
         logger.info(" New Job %s with id %s created at %f" % (self.apiname, job.request_id, t ))
 
+        # arrival rate — rate_tps = rho / mean_service_time, already a rate
         if t < self.fault_start[0]: # must be modified when there are more instances of faults
             next_t = t + self.distribution(self.rate_tps).sample()
-            #logger.info(" client rate %f   arrival   %f" % (self.rate_tps,self.distribution(self.rate_tps).sample()))
         elif t < self.fault_start[0] + self.fault_duration:
             next_t = t + self.distribution(self.rate_tps_fault).sample()
         else:

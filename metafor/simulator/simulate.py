@@ -11,7 +11,7 @@ import itertools
 import numpy as np
 import pandas as pd
 import random
-from metafor.simulator.server import Context, Server, JoinTracker
+from metafor.simulator.server import Context, Server, JoinTracker, TokenBucket
 from metafor.simulator.server_with_throttling import ServerWithThrottling
 from metafor.simulator.server_with_LIFO import ServerWithLIFO
 from metafor.simulator.statistics import StatData
@@ -146,7 +146,8 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
             df = df[['server','timestamp','latency','queue_length','retries',
                     'dropped','runtime','retries_left','service_time',
                     'throughput','request_id','attempt_id',
-                    'retry_origin','client_retries_used','server_retries_used']]
+                    'retry_origin','client_retries_used','server_retries_used',
+                    'dropped_queue_full', 'dropped_token_bucket']]
             df.to_csv(f"data/{i+1}_{fn}", header=False, mode='a', index=False)
          
          
@@ -209,6 +210,7 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
         
     }
 
+    # service distributions — pass rate = 1/mean_service_time
     service_dists = {
         1: ExponentialDistribution(1/0.8),    
         2: ExponentialDistribution(1/0.8),
@@ -225,23 +227,30 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
         5: 1
     }
 
+    bucket_config = {
+        1: TokenBucket(capacity=100, refill_rate=5.0),
+        2: TokenBucket(capacity=80,  refill_rate=3.0),
+        3: TokenBucket(capacity=150, refill_rate=8.0),
+        4: TokenBucket(capacity=150, refill_rate=8.0),
+        5: TokenBucket(capacity=200, refill_rate=10.0),
+    }
+
 
     shared_tracker = JoinTracker(dag)
     
     for i in dag.keys():
         timeout, retries = retry_policy[i]
+        bucket = bucket_config.get(i)   # None means no rate limiting
+
         server_name = f"server_{i}"
 
-        
-        
-        
         if throttle==False:
-            server = Server(i, server_name, queue_size, thread_pool[i], service_dists[i], None, downstream_server=prev_server, timeout=timeout, max_retries=retries)
+            server = Server(i, server_name, queue_size, thread_pool[i], service_dists[i], None, downstream_server=prev_server, timeout=timeout, max_retries=retries,token_bucket=bucket)
         else:    
-            server = ServerWithThrottling(i, server_name, queue_size, thread_pool[i], service_dists[i], None, throttle, ts,ap, downstream_server=prev_server, timeout=timeout, max_retries=retries)
+            server = ServerWithThrottling(i, server_name, queue_size, thread_pool[i], service_dists[i], None, throttle, ts,ap, downstream_server=prev_server, timeout=timeout, max_retries=retries, token_bucket=bucket)
         
         if queue_type=="lifo":
-            server = ServerWithLIFO(i, server_name, queue_size, thread_pool[i], service_dists[i], None,  downstream_server=prev_server, timeout=timeout, max_retries=retries)
+            server = ServerWithLIFO(i, server_name, queue_size, thread_pool[i], service_dists[i], None,  downstream_server=prev_server, timeout=timeout, max_retries=retries, token_bucket=bucket)
         
         
         server.set_context(Context(sim_id,i,shared_tracker))  #check

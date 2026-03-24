@@ -19,19 +19,27 @@ class Distribution(ABC):
         return 0
 
 class ExponentialDistribution(Distribution):
-    def __init__(self, mean: float):
-        self.mean = mean
+    def __init__(self, rate: float):
+        self.rate = rate            # λ — the expovariate parameter
+    
+    @property
+    def mean(self) -> float:
+        return 1.0 / self.rate      # true mean of the distribution
 
     def sample(self) -> float:
-        return random.expovariate(self.mean)
+        return random.expovariate(self.rate)
 
 
 class WeibullDistribution(Distribution):
-    def __init__(self, mean: float):
-        self.mean = mean
+    def __init__(self, rate: float):
+        self.rate = rate
+
+    @property
+    def mean(self) -> float:
+        return 1.0 / self.rate
 
     def sample(self) -> float:
-        return random.weibullvariate(1.0/self.mean,1.0)
+        return random.weibullvariate(self.mean, 1.0)  # scale=mean, shape=1
 
 
 
@@ -59,6 +67,10 @@ class RetryOrigin(Enum):
     CLIENT = "client"   # client timeout fired
     SERVER = "server"   # server-level timeout fired
 
+class DropReason(Enum):
+    NONE = "none"           # not dropped
+    QUEUE_FULL = "queue_full"
+    TOKEN_BUCKET = "token_bucket"
 
 class JobStatus:
     CREATED = 0

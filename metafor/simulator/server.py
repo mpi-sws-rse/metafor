@@ -8,7 +8,7 @@ from collections import deque, defaultdict
 from typing import List, TextIO, Optional
 
 from metafor.simulator.client import Client, OpenLoopClientWithTimeout
-from metafor.simulator.job import Distribution, Job, JobStatus, RetryOrigin
+from metafor.simulator.job import Distribution, Job, JobStatus, RetryOrigin, DropReason
 
 import logging
 logger = logging.getLogger(__name__)
@@ -125,6 +125,30 @@ class FCFSQueue:
 
 
 
+class TokenBucket:
+    def __init__(self, capacity: float, refill_rate: float):
+        """
+        capacity    : maximum tokens (burst size)
+        refill_rate : tokens added per unit simulation time
+        """
+        self.capacity = capacity
+        self.refill_rate = refill_rate
+        self.tokens = capacity      # start full
+        self._last_refill_t = 0.0
+
+    def refill(self, t: float):
+        elapsed = (t - self._last_refill_t)*10 # equivalent to dividing by .mean()
+        self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)
+        self._last_refill_t = t
+
+    def consume(self, t: float, n: float = 1.0) -> bool:
+        """Refill first, then try to consume n tokens. Returns True if admitted."""
+        self.refill(t)
+        if self.tokens >= n:
+            self.tokens -= n
+            return True
+        return False
+    
 
 
 class Server:
@@ -143,7 +167,8 @@ class Server:
         downstream_server: Optional[List['Server']] = None,
         timeout=None,
         max_retries=0,
-        retry_delay=0.0
+        retry_delay=0.0,
+        token_bucket: TokenBucket | None = None,
     ):
         self.id = id
         self.start_time = 0  # to be set by each simulation
@@ -166,14 +191,21 @@ class Server:
 
         # statistics
         self.retries = 0
-        self.dropped = 0  # cumulative number
+        #self.dropped = 0  # cumulative number
         self.downstream_server = downstream_server
 
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self.token_bucket = token_bucket
+
+        self.dropped_queue_full: int = 0
+        self.dropped_token_bucket: int = 0
         
     
+    @property
+    def dropped(self) -> int:
+        return self.dropped_queue_full + self.dropped_token_bucket
 
     def set_context(self, c: Context):
         self.context = c
@@ -282,8 +314,10 @@ class Server:
             'request_id' : self.jobs[n].request_id,
             'attempt_id' : self.jobs[n].attempt_id,
             'retry_origin': completed.retry_origin.value,
-            'client_retries_used': self.max_retries - completed.retries_left,
+            'client_retries_used': completed.client.max_retries - completed.retries_left,
             'server_retries_used': completed.server_attempts[self.id],
+            'dropped_queue_full':    self.dropped_queue_full,
+            'dropped_token_bucket':  self.dropped_token_bucket,
             })
             #[t, t - completed.created_t, self.queue.len(), self.retries, self.dropped])
         # self.file.write("%f,%f,%d,%d,%d,%f\n" % (t, t - completed.created_t,
@@ -346,8 +380,20 @@ class Server:
             If the job is processed, it returns the completed job else None.
         """
 
-        events = []
-                    
+        # Token bucket check — before queue or thread logic
+        if self.token_bucket is not None:
+            if not self.token_bucket.consume(t):
+                job.status = JobStatus.DROPPED
+                job.drop_reason = DropReason.TOKEN_BUCKET
+                self.dropped_token_bucket += 1
+                self.dropped += 1
+                logger.info("Token bucket dropped %s id %s at %f on server %d"
+                            % (job.name, job.request_id, t, self.id))
+                return None
+
+
+
+        events = []                    
            
         ##########################################################
         # Ensure dropped jobs or retries are handled consistently, 
@@ -389,8 +435,10 @@ class Server:
                 self.queue.append(job)
             else:
                 job.status = JobStatus.DROPPED
+                job.drop_reason = DropReason.QUEUE_FULL
+                self.dropped_queue_full += 1
                 logger.info("Dropped %s with id %s at %f  on server %d" % (job.name, job.request_id, t, self.id))
-                self.dropped += 1
+                #self.dropped += 1
                 #return t + self.client.timeout, self.client.on_timeout, job
             return None
 
