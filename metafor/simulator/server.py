@@ -290,8 +290,13 @@ class Server:
         else:
             true_lat = t - completed.created_t
 
-            
-        logger.info("Completing %s with id %s at %f on server %d" % (completed.name, completed.request_id, t,self.id))
+        if self.downstream_server is None:
+            true_lat = t - completed.created_t
+
+        # logger.info("Completing %s with id %s at %f on server %d" 
+        #             % (completed.name, completed.request_id, t,self.id))
+        logger.info("Completing %s id %s attempt %s at %f on server %d" 
+                    % (completed.name, completed.request_id, completed.attempt_id, t, self.id))
 
         end_time = time.time()
         runtime = end_time - self.start_time
@@ -386,12 +391,10 @@ class Server:
                 job.status = JobStatus.DROPPED
                 job.drop_reason = DropReason.TOKEN_BUCKET
                 self.dropped_token_bucket += 1
-                self.dropped += 1
+                #self.dropped += 1
                 logger.info("Token bucket dropped %s id %s at %f on server %d"
                             % (job.name, job.request_id, t, self.id))
                 return None
-
-
 
         events = []                    
            

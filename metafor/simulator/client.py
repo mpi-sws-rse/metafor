@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Type
 
 from metafor.simulator.job import Job, Distribution, JobStatus, RetryOrigin
+from collections import deque
 
 import logging
 logger = logging.getLogger(__name__)
@@ -87,6 +88,8 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         self.fault_duration : float = fault_duration
         self.num_complete_jobs = 0
 
+        self.completed_request_ids: deque[str] = deque(maxlen=1000)
+
 
     def generate(self, t: float, payload=None):
         """
@@ -162,7 +165,10 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         # DESIGN : We use independent retries per server (from the client’s perspective, 
         # there is one request.)
        
-
+        # check by request_id, not object status
+        if job.request_id in self.completed_request_ids:
+            return None
+        
         if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED, JobStatus.FORWARDED}:
             return None
         
@@ -206,6 +212,8 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         job.completed_t = t
 
         latency = t - job.created_t
+        self.completed_request_ids.add(job.request_id)
+        self.num_complete_jobs += 1
 
         logger.info(
             f"Client completed request {job.request_id} "
