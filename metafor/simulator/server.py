@@ -137,7 +137,7 @@ class TokenBucket:
         self._last_refill_t = 0.0
 
     def refill(self, t: float):
-        elapsed = (t - self._last_refill_t)*10 # equivalent to dividing by .mean()
+        elapsed = (t - self._last_refill_t)
         self.tokens = min(self.capacity, self.tokens + elapsed * self.refill_rate)
         self._last_refill_t = t
 
@@ -201,6 +201,7 @@ class Server:
 
         self.dropped_queue_full: int = 0
         self.dropped_token_bucket: int = 0
+        self.token_data = []
         
     
     @property
@@ -356,8 +357,8 @@ class Server:
         # ── Notify client (leaf only) ──────────────────────────────
         else:
             print("Forwarding to:  [Client]")
-            completed.status = JobStatus.COMPLETED
-            completed.client.num_complete_jobs += 1
+            #completed.status = JobStatus.COMPLETED
+            #completed.client.num_complete_jobs += 1
             client_event = completed.client.on_complete(t, completed)
             if client_event:
                 if isinstance(client_event, list):
@@ -384,7 +385,7 @@ class Server:
         Returns:
             If the job is processed, it returns the completed job else None.
         """
-
+        self.token_data.append(self.token_bucket.tokens)
         # Token bucket check — before queue or thread logic
         if self.token_bucket is not None:
             if not self.token_bucket.consume(t):

@@ -89,6 +89,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         self.num_complete_jobs = 0
 
         self.completed_request_ids: deque[str] = deque(maxlen=1000)
+        self.rho_data = []
 
 
     def generate(self, t: float, payload=None):
@@ -122,10 +123,13 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         # arrival rate — rate_tps = rho / mean_service_time, already a rate
         if t < self.fault_start[0]: # must be modified when there are more instances of faults
             next_t = t + self.distribution(self.rate_tps).sample()
+            self.rho_data.append((t,self.rate_tps))
         elif t < self.fault_start[0] + self.fault_duration:
             next_t = t + self.distribution(self.rate_tps_fault).sample()
+            self.rho_data.append((t,self.rate_tps_fault))
         else:
             next_t = t + self.distribution(self.rate_tps_reset).sample()
+            self.rho_data.append((t,self.rate_tps_reset))
 
 
         assert self.server is not None, "Server is not set for client " + self.name
@@ -136,10 +140,10 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         # Get the Job to be processed
         offered = self.server.offer(job, t)
 
-        events = [(next_t, self.generate, payload),
-                (t + self.timeout, self.on_timeout, job)]
+        events = [(next_t, self.generate, payload)]
 
         if offered:
+            events.append((t + self.timeout, self.on_timeout, job))
             if isinstance(offered, list):
                 events.extend(offered)
             else:
@@ -159,8 +163,6 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         Returns:
             A retry job is scheduled at timeout if job is still under processing else None.
         """
-        logger.info("Client timeout called at %f with job %s with id %s" % (t, job.name, job.request_id))
-        
         ####################################################
         # DESIGN : We use independent retries per server (from the client’s perspective, 
         # there is one request.)
@@ -168,6 +170,8 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         # check by request_id, not object status
         if job.request_id in self.completed_request_ids:
             return None
+        
+        logger.info("Client timeout called at %f with job %s with id %s" % (t, job.name, job.request_id))
         
         if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED, JobStatus.FORWARDED}:
             return None
@@ -212,7 +216,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         job.completed_t = t
 
         latency = t - job.created_t
-        self.completed_request_ids.add(job.request_id)
+        self.completed_request_ids.append(job.request_id)
         self.num_complete_jobs += 1
 
         logger.info(

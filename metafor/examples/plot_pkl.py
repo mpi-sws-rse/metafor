@@ -109,6 +109,77 @@ ax3.legend()
 plt.savefig(figure_name)
 plt.close()
 
+
+pickle_files = ["client_rho.pkl"]  # can be one or multiple files
+
+
+figure_name = 'plot_rho_multi.png'
+# Create 4x1 sub plots
+#plt.rcParams["figure.figsize"] = [6, 10]
+plt.rcParams["figure.autolayout"] = True
+
+ax = plt.GridSpec(1, 1)
+ax.update(wspace=0.5, hspace=0.5)
+cmap = plt.cm.tab10
+color="tab:blue"
+ax3 = plt.subplot(ax[0, 0])  # row 4, col 0
+color="tab:blue"
+data_list = []
+k=0
+cmap = plt.cm.tab10
+for file in pickle_files:
+    color = cmap(k) 
+    with open(file, "rb") as f:
+        data = pickle.load(f)
+        data = np.array(data)
+        time, rho = data.T
+        
+        ax3.plot(time, rho, color=color,label="Rho")
+        k=k+1
+ax3.set_xlabel("Time", fontsize=16)
+ax3.set_ylabel("Average Rho", fontsize=16,color=color)
+ax3.grid("on")
+ax3.set_xlim(0, max(time))
+ax3.tick_params(axis='y', labelcolor=color)
+ax3.legend()
+plt.savefig(figure_name)
+plt.close()
+
+
+
+pickle_files = ["server1_token_data.pkl","server2_token_data.pkl","server3_token_data.pkl","server4_token_data.pkl","server5_token_data.pkl"]
+
+figure_name = 'plot_token_multi.png'
+time = [i * step_time for i in list(range(0, len(qlen_ave)))]
+# Create 4x1 sub plots
+#plt.rcParams["figure.figsize"] = [6, 10]
+plt.rcParams["figure.autolayout"] = True
+
+ax = plt.GridSpec(1, 1)
+ax.update(wspace=0.5, hspace=0.5)
+cmap = plt.cm.tab10
+color="tab:blue"
+ax1 = plt.subplot(ax[0, 0])  # row 0, col 0
+data_list = []
+k=0
+for file in pickle_files:
+    color = cmap(k) 
+    with open(file, "rb") as f:
+        data = pickle.load(f)
+        data = np.array(data)
+        tr = data.T
+        
+        ax1.plot(tr, color=color,label=int(file[6]))
+        k=k+1
+ax1.set_xlabel("Time", fontsize=16)
+ax1.set_ylabel("Token rate", fontsize=16, color=color)
+ax1.grid("on")
+ax1.set_xlim(0, max(time))
+ax1.tick_params(axis='y', labelcolor=color)
+ax1.legend()
+
+plt.savefig(figure_name)
+plt.close()
 exit()
 
 

@@ -149,8 +149,12 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
                     'retry_origin','client_retries_used','server_retries_used',
                     'dropped_queue_full', 'dropped_token_bucket']]
             df.to_csv(f"data/{i+1}_{fn}", header=False, mode='a', index=False)
+
+            with open("server"+str(sid)+"_token_data.pkl", "wb") as f:
+                pickle.dump(servers[sid].token_data, f) 
          
-         
+        with open("data/client_rho.pkl", "wb") as f:
+            pickle.dump(clients[0].rho_data, f) 
 
     #exit()
     for i in range(1,len(servers)+1):
@@ -162,6 +166,7 @@ def run_sims(max_t: float, fn: str, num_runs: int, step_time: int, sim_fn, mean_
         with open("data/server"+str(i)+"/sim_data.pkl", "wb") as f:
             pickle.dump((step_time, latency_ave, latency_var, latency_std, runtime, qlen_ave,  qlen_var, qlen_std, rho), f)
 
+        
 # Simulation with unimodal exponential service time and timeout
 def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size: int, timeout_t: float,
                  max_retries: int, rho_fault: float, rho_reset: float, fault_start: float,
@@ -183,56 +188,37 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
     # 1. Create servers 
     servers: dict[str, Server] = {}
     prev_server = []
-    
-
-    # retry_policy = {
-    #     1: (8, 2),     # Auth (cheap, retry twice)
-    #     2: (12, 2),    # Gateway (retry twice)
-    #     3: (20, 1),    # Recommendation (rare retry)
-    #     4: (30, 1),    # Order (rare/no retry)
-    #     5: (40, 0)    # Database (never retry)
-    # }
-
-    # service_dists = {
-    #     1: ExponentialDistribution(1/0.3),     # Auth (mean 1)
-    #     2: ExponentialDistribution(1/0.5),     # Gateway (mean 1)
-    #     3: LogNormalDistribution(0.1,0.5),   # Recommendation (~ mean)
-    #     4: ExponentialDistribution(1/0.8),    # Order (mean 2)
-    #     5: LogNormalDistribution(0.2,0.5)    # Database (~ heavy tail)
-    # }
 
     retry_policy = {
-        1: (1, 3),
-        2: (2, 3),
-        3: (3, 2),     
-        4: (3, 2),
-        5: (5, 0),
-        
+        1: (1.0, 3),   
+        2: (0.9, 3),    
+        3: (1.5, 2),    
+        4: (1.4, 2),
+        5: (1.2, 0),   # no retries at DB — too expensive
     }
 
-    # service distributions — pass rate = 1/mean_service_time
     service_dists = {
         1: ExponentialDistribution(1/0.8),    
-        2: ExponentialDistribution(1/0.8),
-        3: ExponentialDistribution(1/0.5),
-        4: ExponentialDistribution(1/0.5),
-        5: ExponentialDistribution(1/0.5),
+        2: ExponentialDistribution(1/0.6),
+        3: ExponentialDistribution(1/1.2),
+        4: ExponentialDistribution(1/0.9),
+        5: ExponentialDistribution(1/1.0),
     }
 
     thread_pool = {
-        1: 3,   # Auth
-        2: 1,   # Gateway
-        3: 1,
-        4: 1,
-        5: 1
+        1: 3,
+        2: 2,   # gateway is the sole funnel — it needs headroom
+        3: 2,   # rec and order also merge into DB
+        4: 2,
+        5: 3,   # fan_in=2 means effective load is doubled
     }
 
     bucket_config = {
-        1: TokenBucket(capacity=100, refill_rate=5.0),
-        2: TokenBucket(capacity=80,  refill_rate=3.0),
-        3: TokenBucket(capacity=150, refill_rate=8.0),
-        4: TokenBucket(capacity=150, refill_rate=8.0),
-        5: TokenBucket(capacity=200, refill_rate=10.0),
+        1: TokenBucket(capacity=10, refill_rate=5.0),
+        2: TokenBucket(capacity=10, refill_rate=5.0),
+        3: TokenBucket(capacity=10, refill_rate=4.0),
+        4: TokenBucket(capacity=10, refill_rate=4.0),
+        5: TokenBucket(capacity=10, refill_rate=5.0),
     }
 
 
@@ -241,7 +227,7 @@ def make_sim_exp(mean_t: float, name: str, apiname: str, rho: float, queue_size:
     for i in dag.keys():
         timeout, retries = retry_policy[i]
         bucket = bucket_config.get(i)   # None means no rate limiting
-
+        #bucket = None
         server_name = f"server_{i}"
 
         if throttle==False:
