@@ -5,13 +5,14 @@ from metafor.analysis.koopman_experiments.exp_mixing_time_simulation import mixi
 from metafor.analysis.koopman_experiments.exp_mixing_time_learned import mixing_time_learned
 from metafor.analysis.koopman_experiments.exp_mixing_time_learned_all import mixing_time_learned_all
 
-import logging
-logging.disable(logging.CRITICAL)
+# import logging
+# logging.disable(logging.CRITICAL)
 
 """
 Part 1 : Data generation
 
 """
+# DAG representing server connections
 # DAG representing server connections
 dag = {
     1: [2],        # Auth → Gateway
@@ -21,18 +22,23 @@ dag = {
     5: []          # DB leaf
 }
 
+
+# import metafor.simulator.server as srv_mod
+# import inspect, os
+# print("server.py loaded from:", inspect.getfile(srv_mod))
+# exit()
 # Configuration
 total_time = 1000000 # maximum simulation time (in s) for all the simulations
 queue_size = 100 # maximum size of the arrivals queue
-mean_t = 0.8 # mean of the exponential distribution (in ms) related to processing time
-rho = 0.97  # ideally (0.7-0.9) server's utilization rate
-timeout_t = 10 # timeout after which the client retries, if the job is not done
+mean_t = 0.1 # mean of the exponential distribution (in ms) related to processing time
+rho = 0.25  # ideally (0.7-0.9) server's utilization rate
+timeout_t = 25 # timeout after which the client retries, if the job is not done
 max_retries = 3 # how many times should a client retry to send a job if it doesn't receive a response before the timeout
 runs = 1 # how many times should the simulation be run
 step_time = 0.5 # sampling time
-sim_time = 10000 # maximum simulation time for an individual simulation
+sim_time = 1000 # maximum simulation time for an individual simulation
 #rho_fault = np.random.uniform(rho,rho*10) # utilization rate during a fault
-rho_fault = rho*50 # utilization rate during a fault
+rho_fault = rho # utilization rate during a fault
 fault_start = [sim_time * .45, sim_time]  # start time for fault (last entry is not an actual fault time)
 rho_reset = rho * 5 / 5 # utilization rate after removing the fault
 fault_duration = sim_time * .1  # fault duration

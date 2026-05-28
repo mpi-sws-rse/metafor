@@ -1,10 +1,8 @@
-# Adapted from: https://github.com/mbrooker/simulator_example/blob/main/omission/omission.py
-
 import random
 from abc import ABC, abstractmethod
 from typing import Type
 
-from metafor.simulator.job import Job, Distribution, JobStatus, RetryOrigin
+from metafor.simulator.job import Job, Distribution, JobStatus, RetryOrigin, MixtureOfExponentials
 from collections import deque
 
 import logging
@@ -89,9 +87,32 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         self.num_complete_jobs = 0
 
         self.completed_request_ids: deque[str] = deque(maxlen=1000)
-        self.rho_data = []
 
+        
+        self._use_mixture = False
+        self.it_list = []
+        
 
+    def _next_interarrival(self, t: float) -> float:
+        """
+        Return the next inter-arrival time, respecting fault windows.
+        Works for both plain ExponentialDistribution and MixtureOfExponentials.
+        """
+        if isinstance(self.distribution, MixtureOfExponentials):
+            # Mixture handles rho internally via set_rho()
+            self.distribution.set_rho(self.rate_tps)
+            return self.distribution.sample()
+
+        else:
+            # Original class-based path — unchanged behaviour
+            if t < self.fault_start[0]:
+                return self.distribution(self.rate_tps).sample()
+            elif t < self.fault_start[0] + self.fault_duration:
+                return self.distribution(self.rate_tps_fault).sample()
+            else:
+                return self.distribution(self.rate_tps_reset).sample()
+            
+            
     def generate(self, t: float, payload=None):
         """
         This function is invoked when client requests a new job (job creation).
@@ -120,25 +141,19 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         
         logger.info(" New Job %s with id %s created at %f" % (self.apiname, job.request_id, t ))
 
-        # arrival rate — rate_tps = rho / mean_service_time, already a rate
-        if t < self.fault_start[0]: # must be modified when there are more instances of faults
-            next_t = t + self.distribution(self.rate_tps).sample()
-            self.rho_data.append((t,self.rate_tps))
-        elif t < self.fault_start[0] + self.fault_duration:
-            next_t = t + self.distribution(self.rate_tps_fault).sample()
-            self.rho_data.append((t,self.rate_tps_fault))
-        else:
-            next_t = t + self.distribution(self.rate_tps_reset).sample()
-            self.rho_data.append((t,self.rate_tps_reset))
+        # ---- single call replaces the branching distribution logic ----
+        iat =  self._next_interarrival(t)
+        next_t = t + iat
+        self.it_list.append(iat)
 
-
-        assert self.server is not None, "Server is not set for client " + self.name
+        #assert self.server is not None, "Server is not set for client " + self.name
         
         if self.server is None:
             return
         
         # Get the Job to be processed
         offered = self.server.offer(job, t)
+
 
         events = [(next_t, self.generate, payload)]
 
@@ -148,7 +163,7 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
                 events.extend(offered)
             else:
                 events.append(offered)
-
+                
         return events
         
     
@@ -163,15 +178,15 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         Returns:
             A retry job is scheduled at timeout if job is still under processing else None.
         """
-        ####################################################
-        # DESIGN : We use independent retries per server (from the client’s perspective, 
-        # there is one request.)
-       
         # check by request_id, not object status
         if job.request_id in self.completed_request_ids:
             return None
         
         logger.info("Client timeout called at %f with job %s with id %s" % (t, job.name, job.request_id))
+        
+        ####################################################
+        # DESIGN : We use independent retries per server (from the client’s perspective, 
+        # there is one request.)
         
         if job.status in {JobStatus.COMPLETED, JobStatus.DROPPED, JobStatus.FORWARDED}:
             return None
@@ -211,7 +226,11 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
 
 
     def on_complete(self, t, job):
-
+        
+        if job.request_id in self.completed_request_ids:
+            logger.info(f"Duplicate on_complete ignored for {job.request_id}")
+            return None
+        
         job.status = JobStatus.COMPLETED
         job.completed_t = t
 
@@ -225,4 +244,5 @@ class OpenLoopClientWithTimeout(OpenLoopClient):
         )
 
         return None
+
 
